@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: chorotega-postgres
+    environment:
+      POSTGRES_DB: chorotega_emarket
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/postgres/migrations/V1__create_initial_schema.sql:/docker-entrypoint-initdb.d/01-create-schema.sql
+      - ./database/postgres/seeds/V1__seed_initial_data.sql:/docker-entrypoint-initdb.d/02-seed-data.sql
+
+  mongodb:
+    image: mongo:7
+    container_name: chorotega-mongodb
+    environment:
+      MONGO_INITDB_DATABASE: chorotega_emarket
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./database/mongodb/seeds/seed-bitacora-pedidos.js:/docker-entrypoint-initdb.d/01-seed-bitacora-pedidos.js
+
+volumes:
+  postgres_data:
+  mongo_data:
