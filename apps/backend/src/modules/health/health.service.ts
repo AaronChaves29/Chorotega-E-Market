@@ -2,7 +2,7 @@ import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
 @Injectable()
-export class DatabaseService {
+export class HealthService {
   constructor(private readonly dataSource: DataSource) {}
 
   async checkConnection() {
