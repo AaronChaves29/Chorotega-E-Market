@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { DatabaseController } from './database.controller';
 import { DatabaseService } from './database.service';
 import { DatabaseModule } from './database.module';
+import { ProductsModule } from './modules/products/products.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { DatabaseModule } from './database.module';
       },
     }),
     DatabaseModule,
+    ProductsModule,
   ],
   controllers: [DatabaseController],
   providers: [DatabaseService],
