@@ -41,6 +41,9 @@ jobs:
       - name: Ejecutar linter
         run: npm run lint
 
+      - name: Ejecutar pruebas
+        run: npm run test
+
       - name: Compilar backend
         run: npm run build
 
