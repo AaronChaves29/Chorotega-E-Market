@@ -135,6 +135,65 @@ La tabla `entrega` relaciona un pedido con el repartidor encargado de realizar l
 
 ---
 
+## 3.1 Justificación de la tercera forma normal
+
+El modelo relacional de Chorotega E-Market se diseñó siguiendo los principios de la tercera forma normal (3FN). Cada tabla representa una entidad o relación específica del dominio, y sus atributos dependen de la clave primaria correspondiente, no de otros atributos que no sean claves.
+
+La separación de la información en las nueve tablas evita repetir datos innecesariamente y reduce anomalías durante la inserción, actualización y eliminación de registros.
+
+### Separación entre categoría y producto
+
+La información de las categorías se almacena en la tabla `categoria`. La tabla `producto` no repite el nombre ni la descripción de la categoría, sino que conserva únicamente la clave foránea `id_categoria`.
+
+Si el nombre y la descripción de la categoría se almacenaran en cada producto, sería necesario repetir esos datos en múltiples filas. Un cambio en el nombre de una categoría obligaría a actualizar todos sus productos y una actualización incompleta podría generar valores inconsistentes.
+
+Esta separación permite crear o modificar una categoría una sola vez y relacionarla con varios productos mediante su identificador.
+
+### Separación de barrio y pedido
+
+La tabla `barrio` almacena la información general de cada zona de entrega, incluyendo su nombre, tarifa vigente y estado. La tabla `pedido` se relaciona con ella mediante la clave foránea `id_barrio`.
+
+Si el nombre y los datos del barrio se escribieran directamente en cada pedido, se repetiría la misma información y podrían producirse diferencias ortográficas o valores inconsistentes.
+
+El campo `pedido.tarifa_envio` se conserva como un dato histórico de la transacción. Aunque la tarifa vigente también se encuentra en `barrio.tarifa_envio`, ambas columnas representan datos diferentes: una corresponde a la tarifa actual del barrio y la otra a la tarifa que se cobró cuando se realizó un pedido específico. Si la tarifa del barrio cambia, los totales de los pedidos anteriores deben mantenerse sin modificaciones.
+
+### Separación entre usuario y repartidor
+
+La tabla `usuario` almacena la información general compartida por las personas registradas, como nombre, apellido, correo, teléfono, rol y estado.
+
+La tabla `repartidor` contiene únicamente los datos propios de ese perfil, como el medio de transporte y la disponibilidad. La relación se establece mediante la clave foránea `id_usuario`.
+
+Esta separación evita agregar a todos los usuarios campos que solamente tienen sentido para quienes desempeñan el rol de repartidor. También evita repetir en `repartidor` la información personal que ya está almacenada en `usuario`.
+
+### Relación entre pedido y producto
+
+Un pedido puede contener varios productos y un producto puede aparecer en distintos pedidos. Esta relación de muchos a muchos se resuelve mediante la tabla intermedia `detalle_pedido`.
+
+Cada fila de `detalle_pedido` representa la inclusión de un producto específico dentro de un pedido y almacena la cantidad, el precio unitario aplicado y el subtotal correspondiente.
+
+Esta estructura evita almacenar una lista de productos dentro de una sola columna de `pedido` y permite consultar, relacionar y validar individualmente cada producto comprado. Además, la restricción única compuesta por `id_pedido` e `id_producto` impide que el mismo producto se repita en líneas diferentes de un mismo pedido.
+
+### Precio unitario como dato histórico
+
+El campo `detalle_pedido.precio_unitario` conserva el precio aplicado en el momento de la compra. Aunque el precio actual del producto también se almacena en `producto.precio`, los dos campos representan hechos diferentes.
+
+`producto.precio` representa el precio vigente en el catálogo, mientras que `detalle_pedido.precio_unitario` representa el precio acordado en una transacción específica.
+
+Esta copia es intencional y necesaria para conservar el historial de las compras. Si el precio actual de un producto cambia, los subtotales y totales de los pedidos anteriores deben permanecer iguales. Por esa razón, el precio unitario del detalle no se considera una redundancia accidental, sino un dato histórico propio del pedido.
+
+### Anomalías evitadas
+
+La organización del modelo evita los siguientes problemas:
+
+- **Anomalías de inserción:** una categoría, un barrio o un usuario pueden registrarse sin necesidad de crear inmediatamente un producto, un pedido o un perfil de repartidor.
+- **Anomalías de actualización:** los datos generales de categorías, barrios y usuarios se modifican en un solo lugar, en vez de actualizarse en múltiples filas repetidas.
+- **Anomalías de eliminación:** eliminar un producto o un pedido no elimina la información general de su categoría, barrio o usuario relacionado.
+- **Inconsistencias en las relaciones:** las claves foráneas garantizan que los registros relacionados existan, mientras que las restricciones `UNIQUE` y `CHECK` protegen reglas adicionales del dominio.
+
+Por estas razones, cada dato se almacena en la tabla que representa su significado y depende de la clave correspondiente. El modelo cumple con el propósito de la tercera forma normal y conserva únicamente duplicaciones históricas justificadas por las necesidades transaccionales del sistema.
+
+---
+
 ## 4. Índices
 
 Se agregaron índices sobre columnas utilizadas frecuentemente para relacionar y consultar información.
