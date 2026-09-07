@@ -39,7 +39,7 @@ describe('ProductsService', () => {
 
   it('debe obtener todos los productos', async () => {
     const products: Product[] = [
-      {
+      Object.assign(new Product(), {
         idProducto: 1,
         idTienda: 1,
         idCategoria: 1,
@@ -49,7 +49,7 @@ describe('ProductsService', () => {
         cantidadDisponible: 18,
         estado: 'ACTIVO',
         fechaPublicacion: new Date(),
-      },
+      }),
     ];
 
     findMock.mockResolvedValue(products);
@@ -71,7 +71,7 @@ describe('ProductsService', () => {
       estado: 'ACTIVO',
     };
 
-    const product: Product = {
+    const product: Product = Object.assign(new Product(), {
       idProducto: 4,
       idTienda: 1,
       idCategoria: 1,
@@ -81,7 +81,7 @@ describe('ProductsService', () => {
       cantidadDisponible: 12,
       estado: 'ACTIVO',
       fechaPublicacion: new Date(),
-    };
+    });
 
     createMock.mockReturnValue(product);
     saveMock.mockResolvedValue(product);
