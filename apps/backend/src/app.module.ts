@@ -5,6 +5,7 @@ import { ProductsModule } from './modules/products/products.module';
 import { HealthModule } from './modules/health/health.module';
 import { HealthController } from './modules/health/health.controller';
 import { HealthService } from './modules/health/health.service';
+import { createDatabaseOptions } from './database/database.options';
 
 @Module({
   imports: [
@@ -14,26 +15,13 @@ import { HealthService } from './modules/health/health.service';
 
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
-        const databaseUrl = configService.get<string>('DATABASE_URL');
-
-        if (!databaseUrl) {
-          throw new Error(
-            'La variable de entorno DATABASE_URL no está configurada.',
-          );
-        }
-
-        return {
-          type: 'postgres',
-          url: databaseUrl,
-          autoLoadEntities: true,
-          synchronize: false,
-          ssl: {
-            rejectUnauthorized: false,
-          },
-        };
-      },
+      useFactory: (configService: ConfigService) =>
+        createDatabaseOptions(
+          configService.get<string>('DATABASE_URL'),
+          configService.get<string>('DATABASE_SSL'),
+        ),
     }),
+
     HealthModule,
     ProductsModule,
   ],
