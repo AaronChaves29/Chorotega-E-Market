@@ -72,39 +72,128 @@ db.bitacora_pedidos.createIndex(
   }
 );
 
-const bitacoraPedido1 = {
-  pedidoId: 1,
-  eventos: [
-    {
-      tipo: "PEDIDO_CREADO",
-      fecha: new Date("2026-08-21T14:00:00Z"),
-      detalle: "El cliente creó el pedido"
-    },
-    {
-      tipo: "PEDIDO_CONFIRMADO",
-      fecha: new Date("2026-08-21T14:05:00Z"),
-      detalle: "El pedido fue confirmado correctamente"
-    },
-    {
-      tipo: "INVENTARIO_ACTUALIZADO",
-      fecha: new Date("2026-08-21T14:06:00Z"),
-      detalle: "Se descontaron las cantidades compradas del inventario"
-    },
-    {
-      tipo: "PEDIDO_EN_PREPARACION",
-      fecha: new Date("2026-08-21T14:20:00Z"),
-      detalle: "La tienda comenzó a preparar el pedido"
-    },
-    {
-      tipo: "REPARTIDOR_ASIGNADO",
-      fecha: new Date("2026-08-21T15:00:00Z"),
-      detalle: "Se asignó un repartidor al pedido"
-    }
-  ]
-};
+const bitacorasPedidos = [
+  {
+    pedidoId: 1,
+    eventos: [
+      {
+        tipo: "PEDIDO_CREADO",
+        fecha: new Date("2026-08-21T14:00:00Z"),
+        detalle: "El cliente creó el pedido"
+      },
+      {
+        tipo: "PEDIDO_CONFIRMADO",
+        fecha: new Date("2026-08-21T14:05:00Z"),
+        detalle: "El pedido fue confirmado correctamente"
+      },
+      {
+        tipo: "INVENTARIO_ACTUALIZADO",
+        fecha: new Date("2026-08-21T14:06:00Z"),
+        detalle: "Se descontaron las cantidades compradas del inventario"
+      },
+      {
+        tipo: "PEDIDO_EN_PREPARACION",
+        fecha: new Date("2026-08-21T14:20:00Z"),
+        detalle: "La tienda comenzó a preparar el pedido"
+      },
+      {
+        tipo: "REPARTIDOR_ASIGNADO",
+        fecha: new Date("2026-08-21T15:00:00Z"),
+        detalle: "Se asignó un repartidor al pedido"
+      },
+      {
+        tipo: "PEDIDO_EN_CAMINO",
+        fecha: new Date("2026-08-21T15:20:00Z"),
+        detalle: "El repartidor inició el traslado del pedido"
+      }
+    ]
+  },
+  {
+    pedidoId: 2,
+    eventos: [
+      {
+        tipo: "PEDIDO_CREADO",
+        fecha: new Date("2026-08-22T09:00:00Z"),
+        detalle: "El cliente creó el pedido"
+      },
+      {
+        tipo: "PEDIDO_CANCELADO",
+        fecha: new Date("2026-08-22T09:10:00Z"),
+        detalle: "El cliente canceló el pedido antes de su preparación"
+      }
+    ]
+  },
+  {
+    pedidoId: 3,
+    eventos: [
+      {
+        tipo: "PEDIDO_CREADO",
+        fecha: new Date("2026-08-23T10:00:00Z"),
+        detalle: "El cliente creó el pedido"
+      },
+      {
+        tipo: "PEDIDO_CONFIRMADO",
+        fecha: new Date("2026-08-23T10:05:00Z"),
+        detalle: "La tienda confirmó el pedido"
+      },
+      {
+        tipo: "INVENTARIO_ACTUALIZADO",
+        fecha: new Date("2026-08-23T10:06:00Z"),
+        detalle: "Se actualizó el inventario del producto solicitado"
+      },
+      {
+        tipo: "PEDIDO_EN_PREPARACION",
+        fecha: new Date("2026-08-23T10:20:00Z"),
+        detalle: "La tienda comenzó a preparar el pedido"
+      }
+    ]
+  },
+  {
+    pedidoId: 4,
+    eventos: [
+      {
+        tipo: "PEDIDO_CREADO",
+        fecha: new Date("2026-08-24T11:00:00Z"),
+        detalle: "El cliente creó el pedido"
+      },
+      {
+        tipo: "PEDIDO_CONFIRMADO",
+        fecha: new Date("2026-08-24T11:05:00Z"),
+        detalle: "La tienda confirmó el pedido"
+      },
+      {
+        tipo: "INVENTARIO_ACTUALIZADO",
+        fecha: new Date("2026-08-24T11:06:00Z"),
+        detalle: "Se actualizó el inventario del producto solicitado"
+      },
+      {
+        tipo: "PEDIDO_EN_PREPARACION",
+        fecha: new Date("2026-08-24T11:20:00Z"),
+        detalle: "La tienda preparó el pedido para su entrega"
+      },
+      {
+        tipo: "REPARTIDOR_ASIGNADO",
+        fecha: new Date("2026-08-24T11:30:00Z"),
+        detalle: "Se asignó un repartidor al pedido"
+      },
+      {
+        tipo: "PEDIDO_EN_CAMINO",
+        fecha: new Date("2026-08-24T12:00:00Z"),
+        detalle: "El repartidor inició el traslado del pedido"
+      },
+      {
+        tipo: "PEDIDO_ENTREGADO",
+        fecha: new Date("2026-08-24T13:00:00Z"),
+        detalle: "El pedido fue entregado correctamente al cliente"
+      }
+    ]
+  }
+];
 
-db.bitacora_pedidos.replaceOne(
-  { pedidoId: bitacoraPedido1.pedidoId },
-  bitacoraPedido1,
-  { upsert: true }
-);
+for (const bitacora of bitacorasPedidos) {
+  db.bitacora_pedidos.replaceOne(
+    { pedidoId: bitacora.pedidoId },
+    bitacora,
+    { upsert: true }
+  );
+}
