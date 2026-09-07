@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 jobs:
-    backend:
+  backend:
     name: Build Backend
     runs-on: ubuntu-latest
 
@@ -81,29 +81,6 @@ jobs:
 
       - name: Ejecutar pruebas
         run: npm run test
-
-    steps:
-      - name: Obtener código del repositorio
-        uses: actions/checkout@v6
-
-      - name: Configurar Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: apps/backend/package-lock.json
-
-      - name: Instalar dependencias
-        run: npm ci
-
-      - name: Ejecutar linter
-        run: npm run lint
-
-      - name: Ejecutar pruebas
-        run: npm run test
-
-      - name: Compilar backend
-        run: npm run build
 
   frontend:
     name: Build Frontend
