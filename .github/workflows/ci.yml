@@ -6,6 +6,7 @@ on:
       - main
       - develop
       - "feature/**"
+      - "feat/**"
 
   pull_request:
     branches:
@@ -16,13 +17,70 @@ permissions:
   contents: read
 
 jobs:
-  backend:
+    backend:
     name: Build Backend
     runs-on: ubuntu-latest
 
     defaults:
       run:
         working-directory: apps/backend
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/chorotega_ci
+      DATABASE_SSL: "false"
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: chorotega_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d chorotega_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Obtener código del repositorio
+        uses: actions/checkout@v6
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/backend/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar linter
+        run: npm run lint
+
+      - name: Compilar backend
+        run: npm run build
+
+      - name: Ejecutar migraciones
+        run: npm run migration:run
+
+      - name: Mostrar historial de migraciones
+        run: npm run migration:show
+
+      - name: Cargar datos de ejemplo
+        env:
+          POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
+        run: |
+          docker exec -i "$POSTGRES_CONTAINER_ID" \
+            psql -X -U postgres -d chorotega_ci \
+            -v ON_ERROR_STOP=1 --single-transaction -f - \
+            < ../../database/postgres/seeds/V1__seed_initial_data.sql
+
+      - name: Ejecutar pruebas
+        run: npm run test
 
     steps:
       - name: Obtener código del repositorio
