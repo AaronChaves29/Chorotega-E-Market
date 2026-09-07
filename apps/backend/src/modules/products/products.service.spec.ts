@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { Product } from './entities/product.entity';
 import { ProductsService } from './products.service';
+import { ProductsRepository } from './repositories/products.repository';
 
 describe('ProductsService', () => {
   let service: ProductsService;
 
-  let findMock: jest.MockedFunction<() => Promise<Product[]>>;
-  let createMock: jest.MockedFunction<(data: Partial<Product>) => Product>;
-  let saveMock: jest.MockedFunction<(product: Product) => Promise<Product>>;
+  let findMock: jest.MockedFunction<ProductsRepository['findAll']>;
+  let createMock: jest.MockedFunction<ProductsRepository['createEntity']>;
+  let saveMock: jest.MockedFunction<ProductsRepository['save']>;
 
   beforeEach(async () => {
     findMock = jest.fn();
@@ -20,10 +20,10 @@ describe('ProductsService', () => {
       providers: [
         ProductsService,
         {
-          provide: getRepositoryToken(Product),
+          provide: ProductsRepository,
           useValue: {
-            find: findMock,
-            create: createMock,
+            findAll: findMock,
+            createEntity: createMock,
             save: saveMock,
           },
         },
@@ -100,5 +100,46 @@ describe('ProductsService', () => {
 
     expect(saveMock).toHaveBeenCalledWith(product);
     expect(result).toEqual(product);
+  });
+
+  it('debe conservar los valores por defecto y convertir el precio del DTO', async () => {
+    const dto = {
+      idTienda: 2,
+      idCategoria: 3,
+      nombre: 'Miel Chorotega',
+      precio: 3500.5,
+      cantidadDisponible: 0,
+    };
+    const data = {
+      ...dto,
+      descripcion: null,
+      precio: '3500.5',
+      estado: 'ACTIVO',
+    };
+    const entity = Object.assign(new Product(), data);
+    const saved = Object.assign(new Product(), data, { idProducto: 4 });
+    createMock.mockReturnValue(entity);
+    saveMock.mockResolvedValue(saved);
+
+    expect(await service.create(dto)).toBe(saved);
+    expect(createMock).toHaveBeenCalledWith(data);
+    expect(saveMock).toHaveBeenCalledWith(entity);
+  });
+
+  it('debe propagar un error al guardar el producto', async () => {
+    const error = new Error('No se pudo guardar el producto');
+    createMock.mockReturnValue(new Product());
+    saveMock.mockRejectedValue(error);
+
+    await expect(
+      service.create({
+        idTienda: 1,
+        idCategoria: 1,
+        nombre: 'Miel Chorotega',
+        precio: 3500,
+        cantidadDisponible: 12,
+      }),
+    ).rejects.toBe(error);
+    expect(saveMock).toHaveBeenCalledTimes(1);
   });
 });

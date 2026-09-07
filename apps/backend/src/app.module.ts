@@ -6,6 +6,9 @@ import { HealthModule } from './modules/health/health.module';
 import { HealthController } from './modules/health/health.controller';
 import { HealthService } from './modules/health/health.service';
 import { createDatabaseOptions } from './database/database.options';
+import { UsersModule } from './modules/users/users.module';
+import { StoresModule } from './modules/stores/stores.module';
+import { CategoriesModule } from './modules/categories/categories.module';
 
 @Module({
   imports: [
@@ -24,6 +27,9 @@ import { createDatabaseOptions } from './database/database.options';
 
     HealthModule,
     ProductsModule,
+    UsersModule,
+    StoresModule,
+    CategoriesModule,
   ],
   controllers: [HealthController],
   providers: [HealthService],
