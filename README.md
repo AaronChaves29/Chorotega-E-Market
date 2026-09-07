@@ -7,68 +7,68 @@ Chorotega E-Market es una plataforma web tipo marketplace diseñada para impulsa
 ## Tecnologías
 
 ### Frontend
+
 - Next.js
 - TypeScript
 - Tailwind CSS
 
 ### Backend
+
 - NestJS
 - TypeScript
 - TypeORM
 
 ### Bases de datos
+
 - PostgreSQL
 - MongoDB
 - Supabase
 
-PostgreSQL se utiliza para almacenar la información estructurada y transaccional del sistema.
+PostgreSQL almacena la información estructurada y transaccional del sistema.
 
-MongoDB se utiliza para almacenar la bitácora de eventos relacionados con los pedidos.
+MongoDB almacena la bitácora de eventos relacionados con los pedidos.
 
 Supabase se utiliza como servicio de PostgreSQL y para la autenticación de usuarios.
 
 ### Autenticación
+
 - Supabase Auth
 - Google OAuth 2.0
 - JSON Web Tokens (JWT)
 
 ### Herramientas
+
 - Git
 - GitHub
 - Docker
 - Docker Compose
+- GitHub Actions
 
 ## Estructura del proyecto
 
-```text
-Chorotega-E-Market/
-│
-├── apps/
-│   ├── backend/
-│   └── frontend/
-│
-├── database/
-│   ├── postgres/
-│   │   ├── migrations/
-│   │   └── seeds/
-│   └── mongodb/
-│       └── seeds/
-│
-├── docs/
-├── .github/
-├── docker-compose.yml
-└── README.md
-```
+- `apps/backend/`: aplicación NestJS.
+  - `src/database/database.options.ts`: configuración compartida de PostgreSQL.
+  - `src/database/data-source.ts`: DataSource para la CLI de TypeORM.
+  - `src/database/migrations/`: migraciones administradas por TypeORM.
+  - `src/modules/`: módulos del backend.
+- `apps/frontend/`: aplicación Next.js.
+- `database/postgres/migrations/`: SQL original del esquema, conservado como referencia.
+- `database/postgres/seeds/`: datos de ejemplo de PostgreSQL.
+- `database/mongodb/seeds/`: inicialización de la bitácora de pedidos.
+- `docs/`: documentación técnica y diagramas.
+- `.github/workflows/`: configuración de integración continua.
+- `docker-compose.yml`: servicios locales de bases de datos.
+- `README.md`: instrucciones generales del proyecto.
 
 ## Requisitos
 
 Para ejecutar el proyecto se necesita:
 
-- Node.js 22
-- npm
-- Docker
-- Docker Compose
-- Git
+- Node.js 22.
+- npm.
+- Docker.
+- Docker Compose.
+- Git.
 
 Para utilizar los servicios configurados en Supabase se requiere acceso al proyecto correspondiente.
 
@@ -77,63 +77,74 @@ Para utilizar los servicios configurados en Supabase se requiere acceso al proye
 ### 1. Clonar el repositorio
 
 ```bash
-git clone <URL_DEL_REPOSITORIO>
+git clone https://github.com/AaronChaves29/Chorotega-E-Market.git
 cd Chorotega-E-Market
 ```
 
 ### 2. Instalar dependencias del backend
 
+Desde la raíz del proyecto:
+
 ```bash
 cd apps/backend
-npm install
+npm ci
 ```
 
 ### 3. Instalar dependencias del frontend
 
-Desde la raíz del proyecto:
+Desde la raíz del proyecto, en otra terminal:
 
 ```bash
 cd apps/frontend
-npm install
+npm ci
 ```
 
 ## Variables de entorno
 
 El backend utiliza variables de entorno para configurar la aplicación.
 
-Dentro de:
+El archivo `apps/backend/.env.example` sirve como referencia para crear `apps/backend/.env`.
 
-```text
-apps/backend/
+### PostgreSQL local
+
+Ejemplo para utilizar PostgreSQL de Docker:
+
+```env
+PORT=3000
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/chorotega_emarket
+DATABASE_SSL=false
 ```
 
-se incluye el archivo:
+### PostgreSQL de Supabase
 
-```text
-.env.example
-```
-
-Este archivo sirve como referencia para crear el archivo `.env`.
-
-Ejemplo:
+Configura la URL de conexión del proyecto correspondiente y habilita SSL:
 
 ```env
 PORT=3000
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
+DATABASE_SSL=true
 ```
 
-Se debe crear un archivo `.env` dentro de `apps/backend` y completar los valores correspondientes.
+Completa también las demás variables que requieran las funcionalidades de Supabase, tomando como referencia `.env.example`.
+
+El backend y la CLI de TypeORM comparten las opciones de conexión mediante `database.options.ts`.
+
+La configuración mantiene:
+
+- `synchronize: false`: desactiva la modificación automática del esquema a partir de las entidades.
+- `migrationsRun: false`: las migraciones se ejecutan mediante comandos explícitos.
+
+Los comandos de migración deben ejecutarse desde `apps/backend`. El DataSource de la CLI carga el `.env` de esa carpeta y respeta las variables ya definidas en el entorno del proceso.
 
 El archivo `.env` contiene información sensible y no debe subirse al repositorio.
 
 ## Bases de datos con Docker
 
-El proyecto utiliza Docker Compose para levantar PostgreSQL y MongoDB de forma local.
-
-Desde la raíz del proyecto ejecutar:
+Desde la raíz del proyecto:
 
 ```bash
 docker compose up -d
+docker compose ps
 ```
 
 Este comando levanta:
@@ -143,53 +154,172 @@ Este comando levanta:
 | PostgreSQL | 5432 |
 | MongoDB | 27017 |
 
-Durante la creación inicial de los contenedores también se ejecutan automáticamente las migraciones y los datos seed configurados para ambas bases de datos.
+Ambos servicios tienen healthchecks. Antes de continuar, comprueba que aparezcan como `healthy`.
 
-Para verificar los servicios:
+PostgreSQL inicia sin ejecutar automáticamente el esquema ni los seeds. Las tablas se crean mediante TypeORM y los datos de ejemplo se cargan después.
+
+MongoDB conserva su script de inicialización, que se ejecuta cuando su directorio de datos se inicializa por primera vez.
+
+### Crear el esquema de PostgreSQL
+
+Los siguientes comandos corresponden a una base local nueva, sin tablas creadas previamente por el SQL de inicialización.
+
+Desde la raíz del proyecto:
 
 ```bash
-docker compose ps
+cd apps/backend
 ```
 
-Para detenerlos:
+Consulta las migraciones disponibles:
+
+```bash
+DATABASE_URL='postgresql://postgres:postgres@localhost:5432/chorotega_emarket' DATABASE_SSL=false npm run migration:show
+```
+
+Ejecuta las migraciones pendientes:
+
+```bash
+DATABASE_URL='postgresql://postgres:postgres@localhost:5432/chorotega_emarket' DATABASE_SSL=false npm run migration:run
+```
+
+Comprueba su estado:
+
+```bash
+DATABASE_URL='postgresql://postgres:postgres@localhost:5432/chorotega_emarket' DATABASE_SSL=false npm run migration:show
+```
+
+Estas variables se aplican únicamente a cada comando y seleccionan explícitamente PostgreSQL local, aunque el `.env` apunte a Supabase.
+
+TypeORM registra las migraciones aplicadas en `typeorm_migrations`. Las migraciones registradas no se vuelven a ejecutar al repetir `migration:run`.
+
+### Bases existentes del mecanismo anterior
+
+Si el volumen conserva tablas creadas mediante el antiguo SQL de `docker-entrypoint-initdb.d`, la migración inicial no debe ejecutarse directamente sobre ellas, porque intentaría crear tablas que ya existen.
+
+Es necesario planificar la incorporación de esa base al historial de migraciones, revisando primero que su esquema coincida con la migración inicial.
+
+No elimines el volumen para resolver esta situación si contiene datos que deban conservarse.
+
+### Cargar los datos de ejemplo
+
+Ejecuta este paso una sola vez sobre el esquema recién creado, antes de agregar otros datos.
+
+Desde `apps/backend`:
+
+```bash
+docker compose -f ../../docker-compose.yml exec -T postgres \
+  psql -X -U postgres -d chorotega_emarket \
+  -v ON_ERROR_STOP=1 --single-transaction -f - \
+  < ../../database/postgres/seeds/V1__seed_initial_data.sql
+```
+
+La carga se ejecuta en una transacción y se detiene si ocurre un error. El cliente `psql` utilizado pertenece al contenedor PostgreSQL.
+
+El seed utiliza identificadores iniciales y actualiza existencias. No es idempotente: no debe repetirse sobre una base poblada. Si falla, revisa la causa antes de reintentarlo.
+
+La carga inicial genera:
+
+| Tabla | Registros |
+| --- | ---: |
+| `usuario` | 3 |
+| `tienda` | 1 |
+| `categoria` | 2 |
+| `barrio` | 2 |
+| `producto` | 2 |
+| `repartidor` | 1 |
+| `pedido` | 1 |
+| `detalle_pedido` | 2 |
+| `entrega` | 1 |
+
+Después de aplicar los movimientos del seed, las existencias quedan en 18 unidades de Cafe Chorotega y 9 unidades de Artesania de madera.
+
+### Detener los servicios
+
+Desde la raíz del proyecto:
 
 ```bash
 docker compose down
 ```
 
-Para detenerlos y eliminar los volúmenes:
+Este comando conserva los volúmenes y sus datos.
 
-```bash
-docker compose down -v
+## Migraciones TypeORM
+
+Las migraciones administradas por TypeORM se encuentran en:
+
+```text
+apps/backend/src/database/migrations/
 ```
 
-> `docker compose down -v` elimina los datos almacenados localmente en los volúmenes de Docker.
+La migración inicial contiene las nueve tablas del negocio, sus restricciones y sus índices.
+
+El SQL ubicado en `database/postgres/migrations/` se conserva como referencia del esquema original y ya no se monta como script de inicialización de PostgreSQL.
+
+Los siguientes comandos están disponibles desde `apps/backend`:
+
+| Comando | Función |
+| --- | --- |
+| `npm run migration:create -- src/database/migrations/NombreCambio` | Crear una migración vacía para escribir sus operaciones. |
+| `npm run migration:generate -- src/database/migrations/NombreCambio` | Generar una migración comparando las entidades con la base configurada. |
+| `npm run migration:run` | Aplicar las migraciones pendientes. |
+| `npm run migration:show` | Mostrar el estado de las migraciones. |
+| `npm run migration:revert` | Revertir la última migración aplicada mediante su método `down`. |
+
+Los comandos que se conectan a una base utilizan la configuración de entorno del backend. Confirma el destino antes de ejecutarlos.
+
+Antes de generar una migración automáticamente, verifica que los mapeos de entidades estén completos y revisa el SQL generado.
+
+La reversión de la migración inicial elimina las nueve tablas del negocio y sus datos. Debe comprobarse en una base de prueba antes de utilizarla en otros entornos.
 
 ## Verificar PostgreSQL
 
-Para acceder a PostgreSQL:
+Desde la raíz del proyecto:
 
 ```bash
-docker exec -it chorotega-postgres psql -U postgres -d chorotega_emarket
+docker compose exec postgres psql -U postgres -d chorotega_emarket
 ```
 
-Dentro de PostgreSQL se pueden listar las tablas con:
+Dentro de PostgreSQL, lista las tablas:
 
 ```sql
 \dt
 ```
 
-La base contiene las siguientes tablas:
+Después de ejecutar la migración inicial, la base contiene:
 
-- usuario
-- tienda
-- categoria
-- producto
-- barrio
-- pedido
-- detalle_pedido
-- repartidor
-- entrega
+- `usuario`
+- `tienda`
+- `categoria`
+- `producto`
+- `barrio`
+- `pedido`
+- `detalle_pedido`
+- `repartidor`
+- `entrega`
+
+Además, `typeorm_migrations` almacena el historial de migraciones aplicadas:
+
+```sql
+SELECT id, timestamp, name
+FROM typeorm_migrations
+ORDER BY id;
+```
+
+El esquema inicial del negocio contiene:
+
+| Elemento | Cantidad |
+| --- | ---: |
+| Claves primarias | 9 |
+| Claves foráneas | 11 |
+| Restricciones `UNIQUE` | 6 |
+| Restricciones `CHECK` | 20 |
+| Índices explícitos adicionales | 8 |
+
+Entre las reglas protegidas por la base se encuentran:
+
+- El total del pedido debe ser igual a `subtotal + tarifa_envio`.
+- El subtotal del detalle debe ser igual a `cantidad * precio_unitario`.
+- Un producto no puede repetirse dentro del mismo pedido.
 
 Para salir:
 
@@ -199,25 +329,25 @@ Para salir:
 
 ## Verificar MongoDB
 
-Para acceder a MongoDB:
+Desde la raíz del proyecto:
 
 ```bash
-docker exec -it chorotega-mongodb mongosh
+docker compose exec mongodb mongosh
 ```
 
-Seleccionar la base:
+Selecciona la base:
 
 ```javascript
 use chorotega_emarket
 ```
 
-Listar las colecciones:
+Lista las colecciones:
 
 ```javascript
 show collections
 ```
 
-Consultar la bitácora de pedidos:
+Consulta la bitácora de pedidos:
 
 ```javascript
 db.bitacora_pedidos.find().pretty()
@@ -233,47 +363,37 @@ exit
 
 ## Ejecutar el backend
 
-Desde:
+Comprueba primero que la base seleccionada en el `.env` esté disponible y tenga el esquema correspondiente.
 
-```text
-apps/backend/
-```
-
-ejecutar:
+Desde `apps/backend`:
 
 ```bash
 npm run start:dev
 ```
 
-Por defecto, el backend utiliza el puerto:
+Por defecto, el backend utiliza el puerto `3000` o el valor definido mediante `PORT`.
 
-```text
-3000
-```
-
-o el valor definido mediante la variable de entorno `PORT`.
+Si el `.env` apunta a Supabase, el backend se conectará a Supabase. Las variables temporales utilizadas en los comandos de migración local no modifican ese archivo.
 
 ## Ejecutar el frontend
 
-Desde:
-
-```text
-apps/frontend/
-```
-
-ejecutar:
+Desde `apps/frontend`:
 
 ```bash
 npm run dev
 ```
 
+Utiliza la dirección y el puerto que indique la terminal.
+
 ## Verificación del backend
 
-Con el backend en ejecución se puede utilizar el endpoint de health check configurado en el proyecto para comprobar la conexión con la base de datos.
+Con el backend en ejecución, utiliza el endpoint de health check para comprobar la conexión con la base configurada:
 
 ```text
 GET http://localhost:3000/api/database/health
 ```
+
+Si cambiaste `PORT`, ajusta la dirección.
 
 ## Calidad del código
 
@@ -298,11 +418,21 @@ npm run build
 
 ## Integración continua
 
-El proyecto utiliza GitHub Actions para verificar automáticamente la calidad del código.
+GitHub Actions ejecuta jobs independientes para backend y frontend.
 
-El pipeline ejecuta comprobaciones independientes para frontend y backend, incluyendo compilación y análisis de código.
+El job del backend:
 
-Las pruebas automáticas del backend también forman parte del proceso de integración continua una vez configuradas en el pipeline.
+1. Inicia PostgreSQL 16 con una base vacía y espera su healthcheck.
+2. Instala dependencias, ejecuta el linter y compila.
+3. Ejecuta las migraciones TypeORM y muestra su estado.
+4. Carga los seeds por separado en una transacción.
+5. Ejecuta las pruebas del backend.
+
+La conexión del CI utiliza su propio PostgreSQL y no depende de Supabase.
+
+El job del frontend instala dependencias, ejecuta el linter y compila.
+
+El workflow se activa con pushes a `main`, `develop`, `feature/**` y `feat/**`, y con pull requests hacia `main` o `develop`.
 
 ## Integrantes
 
