@@ -33,7 +33,7 @@ export class OrderDetail {
   @Column({ name: 'id_pedido', type: 'int' })
   idPedido!: number;
 
-  @ManyToOne(() => Order, {
+  @ManyToOne(() => Order, (order) => order.detalles, {
     nullable: false,
     eager: false,
     cascade: false,
