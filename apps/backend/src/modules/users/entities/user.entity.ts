@@ -8,6 +8,8 @@ import {
 } from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Store } from '../../stores/entities/store.entity';
+import { Courier } from '../../couriers/entities/courier.entity';
+import { Order } from '../../orders/entities/order.entity';
 
 @Entity('usuario')
 @Unique('usuario_auth_id_key', ['authId'])
@@ -55,4 +57,10 @@ export class User {
 
   @OneToMany(() => Store, (store) => store.emprendedor)
   tiendas!: Relation<Store[]>;
+
+  @OneToMany(() => Order, (order) => order.cliente)
+  pedidos!: Relation<Order[]>;
+
+  @OneToMany(() => Courier, (courier) => courier.usuario)
+  repartidor!: Relation<Courier> | null;
 }
