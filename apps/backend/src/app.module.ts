@@ -9,6 +9,7 @@ import { createDatabaseOptions } from './database/database.options';
 import { UsersModule } from './modules/users/users.module';
 import { StoresModule } from './modules/stores/stores.module';
 import { CategoriesModule } from './modules/categories/categories.module';
+import { OrderAuditsModule } from './modules/order-audits/order-audits.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { CategoriesModule } from './modules/categories/categories.module';
     UsersModule,
     StoresModule,
     CategoriesModule,
+    OrderAuditsModule,
   ],
   controllers: [HealthController],
   providers: [HealthService],
