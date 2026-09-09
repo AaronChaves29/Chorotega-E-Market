@@ -5,11 +5,13 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Category } from '../../categories/entities/category.entity';
 import { Store } from '../../stores/entities/store.entity';
+import { OrderDetail } from '../../order-details/entities/order-detail.entity';
 
 @Entity('producto')
 @Index('idx_producto_tienda', ['idTienda'])
@@ -80,4 +82,7 @@ export class Product {
     default: () => 'CURRENT_TIMESTAMP',
   })
   fechaPublicacion!: Date;
+
+  @OneToMany(() => OrderDetail, (orderDetail) => orderDetail.producto)
+  detallesPedido!: Relation<OrderDetail[]>;
 }

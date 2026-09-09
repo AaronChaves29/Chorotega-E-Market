@@ -11,6 +11,7 @@ import {
 import type { Relation } from 'typeorm';
 import { Product } from '../../products/entities/product.entity';
 import { User } from '../../users/entities/user.entity';
+import { Order } from '../../orders/entities/order.entity';
 
 @Entity('tienda')
 @Index('idx_tienda_emprendedor', ['idEmprendedor'])
@@ -67,4 +68,7 @@ export class Store {
 
   @OneToMany(() => Product, (product) => product.tienda)
   productos!: Relation<Product[]>;
+
+  @OneToMany(() => Order, (order) => order.tienda)
+  pedidos!: Relation<Order[]>;
 }
