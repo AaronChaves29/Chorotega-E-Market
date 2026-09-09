@@ -28,7 +28,7 @@ export class Delivery {
   @Column({ name: 'id_pedido', type: 'int' })
   idPedido!: number;
 
-  @ManyToOne(() => Order, {
+  @ManyToOne(() => Order, (order) => order.entregas, {
     nullable: false,
     eager: false,
     cascade: false,

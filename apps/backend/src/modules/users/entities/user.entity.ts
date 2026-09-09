@@ -3,6 +3,7 @@ import {
   Column,
   Entity,
   OneToMany,
+  OneToOne,
   PrimaryGeneratedColumn,
   Unique,
 } from 'typeorm';
@@ -61,6 +62,6 @@ export class User {
   @OneToMany(() => Order, (order) => order.cliente)
   pedidos!: Relation<Order[]>;
 
-  @OneToMany(() => Courier, (courier) => courier.usuario)
+  @OneToOne(() => Courier, (courier) => courier.usuario)
   repartidor!: Relation<Courier> | null;
 }

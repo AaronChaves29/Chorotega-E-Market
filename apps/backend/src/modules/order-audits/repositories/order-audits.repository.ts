@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Collection } from 'mongodb';
 import type { OrderAudit, OrderAuditEvent } from '../models/order-audit.model';
-import { MongoDatabaseService } from 'src/database/mongodb/mongodb-database.service';
+import { MongoDatabaseService } from '../../../database/mongodb/mongodb-database.service';
 
 @Injectable()
 export class OrderAuditsRepository {
