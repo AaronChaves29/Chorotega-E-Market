@@ -18,6 +18,14 @@ export class OrdersRepository extends TypeOrmBaseRepository<
     return { idPedido: id };
   }
 
+  findAllWithDetails(): Promise<Order[]> {
+    return this.repository
+      .createQueryBuilder('pedido')
+      .leftJoinAndSelect('pedido.detalles', 'detalle')
+      .orderBy('pedido.idPedido', 'ASC')
+      .getMany();
+  }
+
   async search(filters: OrderSearchFilters): Promise<Order[]> {
     const query = this.repository
       .createQueryBuilder('pedido')

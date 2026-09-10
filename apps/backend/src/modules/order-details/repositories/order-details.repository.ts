@@ -21,4 +21,10 @@ export class OrderDetailsRepository extends TypeOrmBaseRepository<
   ): FindOptionsWhere<OrderDetail> {
     return { idDetalle: id };
   }
+
+  findByOrderId(idPedido: number): Promise<OrderDetail[]> {
+    return this.repository.find({
+      where: { idPedido },
+    });
+  }
 }
