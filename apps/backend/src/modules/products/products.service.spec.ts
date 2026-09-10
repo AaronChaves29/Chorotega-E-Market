@@ -10,11 +10,19 @@ describe('ProductsService', () => {
   let findMock: jest.MockedFunction<ProductsRepository['findAll']>;
   let createMock: jest.MockedFunction<ProductsRepository['createEntity']>;
   let saveMock: jest.MockedFunction<ProductsRepository['save']>;
+  let availableByStoreMock: jest.MockedFunction<
+    ProductsRepository['findAvailableByStore']
+  >;
+  let activeByCategoryMock: jest.MockedFunction<
+    ProductsRepository['findActiveByCategory']
+  >;
 
   beforeEach(async () => {
     findMock = jest.fn();
     createMock = jest.fn();
     saveMock = jest.fn();
+    availableByStoreMock = jest.fn();
+    activeByCategoryMock = jest.fn();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -25,6 +33,8 @@ describe('ProductsService', () => {
             findAll: findMock,
             createEntity: createMock,
             save: saveMock,
+            findAvailableByStore: availableByStoreMock,
+            findActiveByCategory: activeByCategoryMock,
           },
         },
       ],
@@ -35,6 +45,45 @@ describe('ProductsService', () => {
 
   it('debe estar definido', () => {
     expect(service).toBeDefined();
+  });
+
+  it('debe delegar la búsqueda de productos disponibles de la tienda', async () => {
+    const products = [Object.assign(new Product(), { idProducto: 2 })];
+    availableByStoreMock.mockResolvedValue(products);
+
+    expect(await service.findAvailableByStore(7)).toBe(products);
+    expect(availableByStoreMock).toHaveBeenCalledWith(7);
+    expect(availableByStoreMock).toHaveBeenCalledTimes(1);
+    expect(findMock).not.toHaveBeenCalled();
+    expect(activeByCategoryMock).not.toHaveBeenCalled();
+  });
+
+  it('debe delegar la búsqueda de productos activos de la categoría', async () => {
+    const products = [Object.assign(new Product(), { idProducto: 3 })];
+    activeByCategoryMock.mockResolvedValue(products);
+
+    expect(await service.findActiveByCategory(9)).toBe(products);
+    expect(activeByCategoryMock).toHaveBeenCalledWith(9);
+    expect(activeByCategoryMock).toHaveBeenCalledTimes(1);
+    expect(findMock).not.toHaveBeenCalled();
+    expect(availableByStoreMock).not.toHaveBeenCalled();
+  });
+
+  it('debe conservar las listas vacías de ambas consultas', async () => {
+    availableByStoreMock.mockResolvedValue([]);
+    activeByCategoryMock.mockResolvedValue([]);
+
+    expect(await service.findAvailableByStore(7)).toEqual([]);
+    expect(await service.findActiveByCategory(9)).toEqual([]);
+  });
+
+  it('debe propagar los errores de ambas consultas', async () => {
+    const error = new Error('No se pudo consultar el catálogo');
+    availableByStoreMock.mockRejectedValue(error);
+    activeByCategoryMock.mockRejectedValue(error);
+
+    await expect(service.findAvailableByStore(7)).rejects.toBe(error);
+    await expect(service.findActiveByCategory(9)).rejects.toBe(error);
   });
 
   it('debe obtener todos los productos', async () => {

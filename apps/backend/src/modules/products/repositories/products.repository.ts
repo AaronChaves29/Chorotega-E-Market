@@ -32,4 +32,27 @@ export class ProductsRepository extends TypeOrmBaseRepository<
   createEntity(data: NewProductData): Product {
     return this.repository.create(data);
   }
+
+  findAvailableByStore(idTienda: Product['idTienda']): Promise<Product[]> {
+    return this.repository
+      .createQueryBuilder('producto')
+      .where('producto.idTienda = :idTienda', { idTienda })
+      .andWhere('producto.estado = :estado', { estado: 'ACTIVO' })
+      .andWhere('producto.cantidadDisponible > :cantidadMinima', {
+        cantidadMinima: 0,
+      })
+      .orderBy('producto.idProducto', 'ASC')
+      .getMany();
+  }
+
+  findActiveByCategory(
+    idCategoria: Product['idCategoria'],
+  ): Promise<Product[]> {
+    return this.repository
+      .createQueryBuilder('producto')
+      .where('producto.idCategoria = :idCategoria', { idCategoria })
+      .andWhere('producto.estado = :estado', { estado: 'ACTIVO' })
+      .orderBy('producto.idProducto', 'ASC')
+      .getMany();
+  }
 }

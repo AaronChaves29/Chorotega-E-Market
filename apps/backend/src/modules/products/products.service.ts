@@ -11,6 +11,16 @@ export class ProductsService {
     return this.productsRepository.findAll();
   }
 
+  findAvailableByStore(idTienda: Product['idTienda']): Promise<Product[]> {
+    return this.productsRepository.findAvailableByStore(idTienda);
+  }
+
+  findActiveByCategory(
+    idCategoria: Product['idCategoria'],
+  ): Promise<Product[]> {
+    return this.productsRepository.findActiveByCategory(idCategoria);
+  }
+
   async create(createProductDto: CreateProductDto): Promise<Product> {
     const product = this.productsRepository.createEntity({
       idTienda: createProductDto.idTienda,
