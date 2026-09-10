@@ -2,9 +2,11 @@
 
 ## Resultado y base auditada
 
-Resultado: **incompleto frente al requisito literal de validación automática
-del esquema de la guía**, aunque las seis pruebas funcionales están aprobadas
-y el CI integrado está en verde. Fecha: 10 de septiembre de 2026.
+Resultado: **listo: validación automática aprobada con cero diferencias de
+esquema**. Pasan 13 pruebas unitarias y nueve de integración (seis funcionales
+y tres de infraestructura). La ejecución remota del nuevo PR sigue por confirmar;
+el CI verde citado abajo corresponde a la auditoría integrada anterior.
+Fecha: 10 de septiembre de 2026.
 Base auditada: develop, commit `9bdbd6e7371da172ea7ba0268b1ee614e7aa2d4d`.
 Se partió de un árbol limpio, se actualizó por avance directo y se creó
 `docs/lab3-final-validation`.
@@ -16,35 +18,150 @@ Testcontainers en CI. La página PDF 3 desarrolla la rúbrica y prohíbe editar
 migraciones aplicadas. La adaptación a NestJS/TypeORM está documentada en
 [ADR-001](../../adr/ADR-001-Seleccion-Stack-Tecnologico.md).
 
+## Validación automática del esquema
+
+Base de esta comprobación: `develop` en `f8fa94f`, con la auditoría anterior
+integrada; rama `test/typeorm-schema-validation`.
+
+La nueva prueba
+`apps/backend/test/integration/typeorm-schema-validation.integration-spec.ts`
+reutiliza `withPostgresTestDatabase`: inicia PostgreSQL 16 con puerto dinámico,
+crea el DataSource exclusivo y aplica las dos migraciones reales. Mantiene
+`synchronize: false`, comprueba nueve metadatos y que ninguna entidad quede
+excluida de la comparación mediante `metadata.synchronize: false`.
+
+En TypeORM 1.1.0 existe la API:
+
+```typescript
+const { upQueries } = await dataSource.driver.createSchemaBuilder().log();
+```
+
+`log()` consulta el esquema, activa el registro SQL en memoria y devuelve el DDL
+propuesto sin ejecutarlo. La prueba lanza un error con todas las consultas y sus
+parámetros si `upQueries` no está vacío. No filtra ni normaliza resultados para
+aceptarlos. El helper destruye el DataSource y detiene el contenedor en `finally`,
+incluso cuando esta comprobación falla.
+
+El patrón existente `test/integration/**/*.integration-spec.ts` descubre la
+prueba automáticamente. El workflow ya ejecuta `npm run test:integration`; no
+necesita otro paso. Cualquier diferencia que aparezca en el futuro hará fallar
+la prueba y el paso de integración de CI.
+
+### Diagnóstico anterior a la nueva migración
+
+Consultas capturadas antes de aplicar la nueva migración, todas con parámetros `[]`:
+
+```sql
+ALTER TABLE "pedido" ALTER COLUMN "fecha_creacion" SET DEFAULT now()
+ALTER TABLE "entrega" ALTER COLUMN "fecha_asignacion" SET DEFAULT now()
+ALTER TABLE "usuario" ALTER COLUMN "fecha_creacion" SET DEFAULT now()
+ALTER TABLE "tienda" ALTER COLUMN "fecha_creacion" SET DEFAULT now()
+ALTER TABLE "producto" ALTER COLUMN "fecha_publicacion" SET DEFAULT now()
+```
+
+| Entidad  | Archivo dentro de apps/backend/src/modules | Propiedad        | Columna física             |
+| -------- | ------------------------------------------ | ---------------- | -------------------------- |
+| Order    | orders/entities/order.entity.ts            | fechaCreacion    | pedido.fecha_creacion      |
+| Delivery | deliveries/entities/delivery.entity.ts     | fechaAsignacion  | entrega.fecha_asignacion   |
+| User     | users/entities/user.entity.ts              | fechaCreacion    | usuario.fecha_creacion     |
+| Store    | stores/entities/store.entity.ts            | fechaCreacion    | tienda.fecha_creacion      |
+| Product  | products/entities/product.entity.ts        | fechaPublicacion | producto.fecha_publicacion |
+
+Las cinco entidades declaran `default: () => 'CURRENT_TIMESTAMP'`, igual que
+la migración inicial. No hay un mapeo faltante demostrado. La comparación textual
+del driver produce ruido entre expresiones equivalentes en PostgreSQL:
+
+- `PostgresDriver.normalizeDefault` llama a `normalizeDatetimeFunction` y convierte
+  el default de metadatos `CURRENT_TIMESTAMP` a `now()`.
+- `PostgresQueryRunner` conserva `CURRENT_TIMESTAMP` al leer el default real.
+- `PostgresDriver.defaultEqual` compara las representaciones textuales.
+
+Se comprobó con el driver instalado que `CURRENT_TIMESTAMP`, `current_timestamp`
+y `now()` como funciones default de metadatos producen todos `now()`. Por tanto,
+cambiar únicamente las cinco declaraciones a `now()` no resolvería el problema.
+No se alteraron metadatos, la migración inicial ni dependencias.
+
+Fuentes: [driver oficial TypeORM 1.1.0](https://github.com/typeorm/typeorm/blob/1.1.0/src/driver/postgres/PostgresDriver.ts)
+y [equivalencia documentada por PostgreSQL 16](https://www.postgresql.org/docs/16/functions-datetime.html#FUNCTIONS-DATETIME-CURRENT).
+
+### Corrección versionada
+
+Se agrega `apps/backend/src/database/migrations/1788998400000-AlignTimestampDefaults.ts`.
+Su método `up` establece `now()` en los cinco defaults identificados arriba,
+sin actualizar datos ni cambiar tipos, nulabilidad, índices o relaciones.
+`down` restaura `CURRENT_TIMESTAMP` en esas mismas columnas. La migración inicial
+permanece intacta y la semántica temporal sigue siendo el inicio de la transacción.
+
+`postgres-test-database.ts` registra explícitamente ambas migraciones, en orden.
+Las pruebas de limpieza e infraestructura ahora exigen ambos registros en
+`typeorm_migrations`. La configuración normal de la CLI ya descubre la nueva
+migración mediante el patrón existente; no se cambió el workflow ni se ejecutó
+la CLI contra bases persistentes. Una base existente debe aplicar esta migración
+por el proceso habitual de despliegue; esta ejecución solo la aplicó en contenedores.
+
+La prueba compara el `upQueries` original completo y exige longitud cero.
+No hay filtros de SQL, listas de diferencias permitidas, normalización de
+resultados, mocks del schema builder ni sincronización automática.
+
+### Resultado exacto después de la corrección
+
+Comandos ejecutados desde `apps/backend`: Prettier sobre archivos afectados,
+`npm run lint`, `npx tsc --noEmit --incremental false -p tsconfig.json`,
+`npm run build`, `npm test -- --runInBand` y `npm run test:integration`.
+
+| Comprobación                               | Resultado                                                                      |
+| ------------------------------------------ | ------------------------------------------------------------------------------ |
+| Prettier, npm run lint, TypeScript y build | Correctos                                                                      |
+| npm test -- --runInBand                    | 2 suites, 13 unitarias aprobadas, 0 fallidas; 0,613 s                          |
+| npm run test:integration                   | 4 suites aprobadas; 9 pruebas aprobadas, 0 fallidas; 7,451 s                   |
+| Funcionales                                | 6 aprobadas: 3 catálogo y 3 pedidos                                            |
+| Infraestructura                            | 3 aprobadas: esquema/migraciones, limpieza ante fallo y compatibilidad TypeORM |
+| Diferencias finales                        | `upQueries = []`; 0 operaciones propuestas                                     |
+| git diff --check                           | Correcto                                                                       |
+| Recursos temporales                        | Sin contenedores activos ni contenedores etiquetados restantes                 |
+
+Se comprobó adicionalmente `up → down → up` en otro contenedor temporal:
+
+- Tras `up`: cero diferencias.
+- Tras `undoLastMigration()`: los cinco defaults vuelven a `CURRENT_TIMESTAMP`
+  según `information_schema.columns`, y el schema builder propone las cinco
+  operaciones originales.
+- Tras `runMigrations()`: cero diferencias y ninguna migración pendiente.
+
+Esta comprobación temporal de reversión no aumenta el conteo de pruebas Jest.
+La ejecución inicial en rojo (ocho aprobadas y una fallida) demostró que la prueba
+no acepta las diferencias. La ejecución actual en verde demuestra que las dos
+migraciones producen un esquema que TypeORM no propone modificar.
+
 ## Matriz de requisitos
 
 Las rutas de esta matriz son relativas a la raíz. `src/` y `test/` se refieren
 al backend, dentro de `apps/backend/`.
 
-| Requisito                                                       | Archivos                                                                                                               | Evidencia                                                                                                                   | Estado     | Corrección necesaria                                                                                   |
-| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------ |
-| Nueve entidades, tablas y columnas                              | `src/modules/*/entities/*.entity.ts`                                                                                   | 9 tablas y 61 columnas; comparación contra PostgreSQL recién migrado                                                        | Completo   | Ninguna                                                                                                |
-| PK, FK, restricciones, índices, defaults                        | Entidades y `src/database/migrations/1788732000000-CreateInitialSchema.ts`                                             | 9 PK, 11 FK, 6 UNIQUE, 20 CHECK, 8 índices adicionales                                                                      | Completo   | Diferencias equivalentes de defaults explicadas abajo                                                  |
-| Relaciones directas e inversas sin carga automática ni cascadas | Las nueve entidades                                                                                                    | 22 relaciones con inversa; eager y cascadas desactivados en metadatos                                                       | Completo   | Ninguna                                                                                                |
-| Validación automática equivalente a ddl-auto=validate           | `src/database/database.options.ts`, configuración de CI y pruebas                                                      | synchronize:false no compara el esquema; las pruebas verifican tablas y migración, no toda su correspondencia con metadatos | Incompleto | Definir y automatizar la comparación sin DDL; la comparación puntual de esta auditoría no la sustituye |
-| Contrato y base genérica                                        | `src/common/repositories/base.repository.ts`, `typeorm-base.repository.ts`                                             | Genéricos entidad/ID; CRUD real mediante CategoriesRepository                                                               | Completo   | Ninguna                                                                                                |
-| Nueve repositorios PostgreSQL                                   | `src/modules/*/repositories/*.repository.ts`                                                                           | Cada whereId utiliza su PK real y hereda la base                                                                            | Completo   | Ninguna                                                                                                |
-| Repositorio MongoDB                                             | `src/modules/order-audits/repositories/order-audits.repository.ts`                                                     | Lectura real por pedidoId; save con upsert y appendEvent implementados                                                      | Completo   | No comparte el contrato CRUD de TypeORM; la guía no exige esa interfaz para MongoDB                    |
-| Registro e inyección NestJS                                     | `src/modules/*/*.module.ts`, `src/app.module.ts`, `src/database/mongodb/*.ts`                                          | 10 repositorios resueltos mediante módulos reales; lecturas en ambos motores                                                | Completo   | Ninguna                                                                                                |
-| Dos consultas fijas                                             | `src/modules/products/repositories/products.repository.ts`, `products.service.ts`                                      | SQL parametrizado, filtros y resultados; 3 pruebas funcionales del catálogo                                                 | Completo   | Actualizada documentación histórica                                                                    |
-| Dos consultas dinámicas                                         | `src/modules/orders/repositories/orders.repository.ts`, `src/modules/deliveries/repositories/deliveries.repository.ts` | search de pedidos y entregas, parámetros y resultados reales                                                                | Completo   | Añadida evidencia con seeds actuales                                                                   |
-| N+1 anterior y corrección                                       | OrdersRepository, OrderDetailsRepository, `docs/laboratory/lab-03/n-plus-one.md`                                       | 5 SELECT antes y 1 después, mismos pedidos y detalles                                                                       | Completo   | Escenario actual diferenciado del histórico                                                            |
-| PostgreSQL 16 temporal, URL dinámica y migraciones              | `test/support/postgres-test-database.ts`                                                                               | Imagen postgres:16, DataSource exclusivo, synchronize:false, runMigrations                                                  | Completo   | Ninguna                                                                                                |
-| Aislamiento y limpieza                                          | `test/integration/catalog-repositories.integration-spec.ts`, `orders.integration-spec.ts`                              | TRUNCATE de negocio tras cada prueba; historial conservado; stop en afterAll                                                | Completo   | Corregida ausencia de limpieza entre pruebas de pedidos y cierre seguro si falla el inicio             |
-| Seis pruebas funcionales                                        | Las dos suites funcionales anteriores                                                                                  | 3 catálogo + 3 pedidos, aprobadas                                                                                           | Completo   | Ninguna prueba nueva; corregidos hooks                                                                 |
-| Infraestructura separada                                        | `test/integration/postgres-infrastructure.integration-spec.ts`                                                         | 2 pruebas aprobadas; no cuentan dentro de las seis                                                                          | Completo   | Ninguna                                                                                                |
-| CI y Node compatible                                            | `.github/workflows/ci.yml`, `apps/backend/package.json`                                                                | Node 22.22.0; npm ci, lint, build, unitarias e integración; frontend preservado                                             | Completo   | Ninguna                                                                                                |
-| Sintaxis CI y Compose                                           | `.github/workflows/ci.yml`, `docker-compose.yml`                                                                       | Parseo YAML sin duplicados y docker compose config --quiet                                                                  | Completo   | Ninguna                                                                                                |
-| Migración inicial e historial                                   | `src/database/data-source.ts`, migración inicial y helper                                                              | TypeORM crea typeorm_migrations y registra la migración real                                                                | Completo   | No se ejecutó la CLI que carga .env                                                                    |
-| Seeds separados y coherentes                                    | `database/postgres/seeds/V1__seed_initial_data.sql`, `database/mongodb/seeds/seed-bitacora-pedidos.js`                 | 4 pedidos y 4 bitácoras, IDs 1–4, en motores temporales nuevos                                                              | Completo   | Corregidas cifras antiguas del README                                                                  |
-| Healthchecks                                                    | `docker-compose.yml`                                                                                                   | pg_isready y ping con mongosh, intervalos y reintentos configurados                                                         | Completo   | Se validó configuración; no se arrancó Compose                                                         |
-| JSON Schema e índice único MongoDB                              | `database/mongodb/seeds/seed-bitacora-pedidos.js`                                                                      | Validador strict/error e índice uq_bitacora_pedido_id; rechazos 121 y 11000 comprobados                                     | Completo   | Ninguna                                                                                                |
-| Explicación de 3FN                                              | `docs/laboratory/lab-02/documento-tecnico.md`, apartado 3.1                                                            | Separación de entidades, datos históricos y excepciones de importes derivados                                               | Completo   | Corregida afirmación de 3FN estricta para todas las columnas                                           |
+| Requisito                                                       | Archivos                                                                                                                            | Evidencia                                                                               | Estado   | Corrección necesaria                                                                       |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------ |
+| Nueve entidades, tablas y columnas                              | `src/modules/*/entities/*.entity.ts`                                                                                                | 9 tablas y 61 columnas; comparación contra PostgreSQL recién migrado                    | Completo | Ninguna                                                                                    |
+| PK, FK, restricciones, índices, defaults                        | Entidades y `src/database/migrations/1788732000000-CreateInitialSchema.ts`                                                          | 9 PK, 11 FK, 6 UNIQUE, 20 CHECK, 8 índices adicionales                                  | Completo | Diferencias equivalentes de defaults explicadas abajo                                      |
+| Relaciones directas e inversas sin carga automática ni cascadas | Las nueve entidades                                                                                                                 | 22 relaciones con inversa; eager y cascadas desactivados en metadatos                   | Completo | Ninguna                                                                                    |
+| Validación automática equivalente a ddl-auto=validate           | `test/integration/typeorm-schema-validation.integration-spec.ts`, `src/database/migrations/1788998400000-AlignTimestampDefaults.ts` | upQueries vacío tras ambas migraciones; prueba descubierta por CI                       | Completo | Defaults alineados por una nueva migración; inicial intacta                                |
+| Contrato y base genérica                                        | `src/common/repositories/base.repository.ts`, `typeorm-base.repository.ts`                                                          | Genéricos entidad/ID; CRUD real mediante CategoriesRepository                           | Completo | Ninguna                                                                                    |
+| Nueve repositorios PostgreSQL                                   | `src/modules/*/repositories/*.repository.ts`                                                                                        | Cada whereId utiliza su PK real y hereda la base                                        | Completo | Ninguna                                                                                    |
+| Repositorio MongoDB                                             | `src/modules/order-audits/repositories/order-audits.repository.ts`                                                                  | Lectura real por pedidoId; save con upsert y appendEvent implementados                  | Completo | No comparte el contrato CRUD de TypeORM; la guía no exige esa interfaz para MongoDB        |
+| Registro e inyección NestJS                                     | `src/modules/*/*.module.ts`, `src/app.module.ts`, `src/database/mongodb/*.ts`                                                       | 10 repositorios resueltos mediante módulos reales; lecturas en ambos motores            | Completo | Ninguna                                                                                    |
+| Dos consultas fijas                                             | `src/modules/products/repositories/products.repository.ts`, `products.service.ts`                                                   | SQL parametrizado, filtros y resultados; 3 pruebas funcionales del catálogo             | Completo | Actualizada documentación histórica                                                        |
+| Dos consultas dinámicas                                         | `src/modules/orders/repositories/orders.repository.ts`, `src/modules/deliveries/repositories/deliveries.repository.ts`              | search de pedidos y entregas, parámetros y resultados reales                            | Completo | Añadida evidencia con seeds actuales                                                       |
+| N+1 anterior y corrección                                       | OrdersRepository, OrderDetailsRepository, `docs/laboratory/lab-03/n-plus-one.md`                                                    | 5 SELECT antes y 1 después, mismos pedidos y detalles                                   | Completo | Escenario actual diferenciado del histórico                                                |
+| PostgreSQL 16 temporal, URL dinámica y migraciones              | `test/support/postgres-test-database.ts`                                                                                            | Imagen postgres:16, DataSource exclusivo, synchronize:false, runMigrations              | Completo | Ninguna                                                                                    |
+| Aislamiento y limpieza                                          | `test/integration/catalog-repositories.integration-spec.ts`, `orders.integration-spec.ts`                                           | TRUNCATE de negocio tras cada prueba; historial conservado; stop en afterAll            | Completo | Corregida ausencia de limpieza entre pruebas de pedidos y cierre seguro si falla el inicio |
+| Seis pruebas funcionales                                        | Las dos suites funcionales anteriores                                                                                               | 3 catálogo + 3 pedidos, aprobadas                                                       | Completo | Ninguna prueba nueva; corregidos hooks                                                     |
+| Infraestructura separada                                        | `test/integration/postgres-infrastructure.integration-spec.ts`, `typeorm-schema-validation.integration-spec.ts`                     | 3 pruebas aprobadas; no cuentan dentro de las seis funcionales                          | Completo | Ninguna                                                                                    |
+| CI y Node compatible                                            | `.github/workflows/ci.yml`, `apps/backend/package.json`                                                                             | Node 22.22.0; npm ci, lint, build, unitarias e integración; frontend preservado         | Completo | Ninguna                                                                                    |
+| Sintaxis CI y Compose                                           | `.github/workflows/ci.yml`, `docker-compose.yml`                                                                                    | Parseo YAML sin duplicados y docker compose config --quiet                              | Completo | Ninguna                                                                                    |
+| Migración inicial e historial                                   | `src/database/data-source.ts`, migración inicial y helper                                                                           | TypeORM crea typeorm_migrations y registra la migración real                            | Completo | No se ejecutó la CLI que carga .env                                                        |
+| Seeds separados y coherentes                                    | `database/postgres/seeds/V1__seed_initial_data.sql`, `database/mongodb/seeds/seed-bitacora-pedidos.js`                              | 4 pedidos y 4 bitácoras, IDs 1–4, en motores temporales nuevos                          | Completo | Corregidas cifras antiguas del README                                                      |
+| Healthchecks                                                    | `docker-compose.yml`                                                                                                                | pg_isready y ping con mongosh, intervalos y reintentos configurados                     | Completo | Se validó configuración; no se arrancó Compose                                             |
+| JSON Schema e índice único MongoDB                              | `database/mongodb/seeds/seed-bitacora-pedidos.js`                                                                                   | Validador strict/error e índice uq_bitacora_pedido_id; rechazos 121 y 11000 comprobados | Completo | Ninguna                                                                                    |
+| Explicación de 3FN                                              | `docs/laboratory/lab-02/documento-tecnico.md`, apartado 3.1                                                                         | Separación de entidades, datos históricos y excepciones de importes derivados           | Completo | Corregida afirmación de 3FN estricta para todas las columnas                               |
 
 ## Mapeo y repositorios
 
@@ -77,7 +194,8 @@ consulten automáticamente al accederlas.
 `synchronize: false` evita cambios automáticos; **no equivale por sí solo a
 `ddl-auto=validate`**. Esta auditoría contrastó metadatos y esquema mediante
 `dataSource.driver.createSchemaBuilder().log()`, sin ejecutar su DDL.
-El resultado contiene únicamente cinco propuestas equivalentes de defaults:
+En la auditoría anterior, antes de agregar AlignTimestampDefaults, el resultado
+contenía únicamente cinco propuestas equivalentes de defaults:
 
 ```sql
 ALTER TABLE "pedido" ALTER COLUMN "fecha_creacion" SET DEFAULT now();
@@ -90,10 +208,9 @@ ALTER TABLE "producto" ALTER COLUMN "fecha_publicacion" SET DEFAULT now();
 La migración y las entidades expresan CURRENT_TIMESTAMP, que TypeORM normaliza
 como now(). PostgreSQL documenta ambas formas como
 [equivalentes](https://www.postgresql.org/docs/16/functions-datetime.html#FUNCTIONS-DATETIME-CURRENT).
-No se modificaron esas columnas ni la migración. No existe una comprobación
-automática de equivalencia completa al arrancar la aplicación: la evidencia
-corresponde al esquema recién migrado auditado y a las pruebas, no a cualquier
-base externa.
+La migración adicional alinea ahora esos cinco defaults y la prueba exige cero
+operaciones. La validación automática se realiza en integración/CI sobre PostgreSQL
+recién migrado; no al arrancar la aplicación ni contra cualquier base externa.
 
 ## SQL real de las cuatro consultas
 
@@ -277,7 +394,7 @@ almacenados, excepciones controladas mediante CHECK. La igualdad entre subtotal
 del pedido y suma de detalles debe mantenerla la lógica transaccional; no se
 atribuye al esquema una restricción entre tablas que no existe.
 
-## Pruebas y comandos ejecutados
+## Pruebas y comandos de la auditoría anterior
 
 Desde `apps/backend`:
 
@@ -346,7 +463,7 @@ funcionales anteriores ya incluyen la corrección de aislamiento de pedidos.
 Las modificaciones posteriores son documentales; no requieren repetir consultas
 sobre bases temporales sin cambios de código.
 
-## CI confirmado
+## CI confirmado de la auditoría anterior
 
 El [run 34524662009](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/34524662009)
 corresponde al commit auditado de develop y terminó en success. La API pública
@@ -363,7 +480,7 @@ integración. El workflow se activa en PR hacia develop; el push de esta rama
 `docs/` no coincide con los filtros de push actuales. La ejecución remota de
 esta revisión deberá confirmarse al abrir el PR.
 
-## Cambios y límites de la auditoría
+## Cambios y límites de la auditoría anterior
 
 - Corregidos únicamente los hooks de aislamiento y cierre de orders.integration-spec.ts.
 - Actualizados los conteos y pendientes documentales, las referencias personales,
@@ -375,10 +492,8 @@ esta revisión deberá confirmarse al abrir el PR.
 - Se cerraron DataSource, clientes MongoDB y contenedores, incluso mediante bloques
   finally en la auditoría complementaria. No quedaron recursos temporales activos.
 
-Queda definir cómo cumplir la validación automática del esquema equivalente a
-ddl-auto=validate en la adaptación TypeORM: al iniciar, en CI o mediante una
-comprobación de integración dedicada. ADR-001 aprueba el stack, pero no documenta
-que ese requisito se haya dispensado. No se añadió un mecanismo nuevo ni se
-modificó la arquitectura durante esta auditoría. También queda confirmar el CI
-de este PR. La consistencia transaccional futura entre pedidos y sus totales
-no forma parte de este bloque ni se presenta como validada por los CHECK actuales.
+La comprobación automática ya está aprobada en la suite de integración mediante
+la nueva migración de defaults, tal como se documenta al principio. No se
+modificaron entidades ni la migración inicial. Queda comprobar el CI de este PR;
+el run citado de la auditoría anterior no incluye la nueva prueba. Las ramas
+`test/` no activan los filtros actuales de push, pero un PR hacia develop sí.

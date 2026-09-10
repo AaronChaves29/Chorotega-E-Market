@@ -435,7 +435,9 @@ Al finalizar, incluso si falla una prueba, se cierra TypeORM y se elimina el
 contenedor temporal. La primera ejecución puede tardar más al descargar imágenes.
 
 Actualmente hay 13 pruebas unitarias, seis funcionales de integración
-(tres del catálogo y tres de pedidos) y dos de infraestructura.
+(tres del catálogo y tres de pedidos) y tres de infraestructura: nueve de
+integración en total. La validación automática exige que el schema builder de
+TypeORM no proponga cambios después de aplicar las migraciones reales.
 Los casos y la evidencia se describen en
 [Pruebas de integración del catálogo](docs/laboratory/lab-03/catalog-integration-tests.md)
 y [Validación final del Laboratorio 3](docs/laboratory/lab-03/validacion-final.md).

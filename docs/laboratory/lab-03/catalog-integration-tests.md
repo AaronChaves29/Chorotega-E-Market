@@ -4,14 +4,16 @@
 
 `apps/backend/test/integration/catalog-repositories.integration-spec.ts` agrega
 tres pruebas funcionales con los repositorios reales del catálogo y PostgreSQL 16.
-Reutiliza `test/support/postgres-test-database.ts`, el DataSource de pruebas y la
-migración real `CreateInitialSchema1788732000000`, con `synchronize: false`.
+Reutiliza `test/support/postgres-test-database.ts`, el DataSource de pruebas y las
+migraciones reales `CreateInitialSchema1788732000000` y
+`AlignTimestampDefaults1788998400000`, con `synchronize: false`.
 No utiliza mocks ni modifica código de producción.
 
 Después de actualizar `develop` (`ddf46df`) se encontraron dos pruebas de
 infraestructura y ninguna prueba funcional de integración. Actualmente hay
 seis funcionales (tres del catálogo y tres en `orders.integration-spec.ts`)
-y dos de infraestructura, ocho en total, tras integrar la suite de pedidos.
+y tres de infraestructura, nueve en total, incluida la validación automática
+del esquema.
 
 ## Casos cubiertos
 
@@ -53,15 +55,16 @@ actuales.
   Las operaciones verificadas siguen siendo las de los repositorios reales.
 - `afterEach` ejecuta `TRUNCATE ... RESTART IDENTITY` sobre las nueve tablas de
   negocio del contenedor, incluso si falla una aserción. Conserva
-  `typeorm_migrations` y comprueba que la migración inicial sigue registrada.
+  `typeorm_migrations` y comprueba que ambas migraciones siguen registradas.
   No cambia ni elimina el esquema.
 - `afterAll` llama a `stop()`, que cierra el DataSource y detiene y elimina el
   contenedor. El helper existente también limpia si falla la inicialización.
   Un cierre forzado del proceso depende de la limpieza auxiliar de Testcontainers.
 
 El estado se limita a esta suite; no hay un singleton compartido entre archivos.
-Las dos pruebas de infraestructura existentes verifican las tablas, migraciones
-y limpieza, incluido un fallo intencional. No cuentan como pruebas funcionales.
+Las tres pruebas de infraestructura verifican tablas, migraciones, limpieza
+(incluido un fallo intencional) y compatibilidad del esquema con los metadatos
+TypeORM. No cuentan como pruebas funcionales.
 
 ## Ejecución local y CI
 
@@ -115,5 +118,6 @@ corregido.
 
 Los resultados anteriores pertenecen al bloque inicial del catálogo. La
 [validación final](validacion-final.md) registra la ejecución conjunta de las seis
-funcionales y dos de infraestructura, así como el CI integrado aprobado con
-Node 22.22.0. No se modifican consultas, endpoints, MongoDB ni esquema.
+funcionales y tres de infraestructura, así como el CI anterior aprobado con
+Node 22.22.0. La nueva migración solo alinea defaults; el CI del PR que incorpora
+la tercera prueba de infraestructura debe confirmarse.
