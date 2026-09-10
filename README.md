@@ -64,7 +64,7 @@ Supabase se utiliza como servicio de PostgreSQL y para la autenticación de usua
 
 Para ejecutar el proyecto se necesita:
 
-- Node.js 22.
+- Node.js 22.22.0 o superior (CI del backend utiliza 22.22.0).
 - npm.
 - Docker.
 - Docker Compose.
@@ -149,10 +149,10 @@ docker compose ps
 
 Este comando levanta:
 
-| Servicio | Puerto |
-| --- | --- |
-| PostgreSQL | 5432 |
-| MongoDB | 27017 |
+| Servicio   | Puerto |
+| ---------- | ------ |
+| PostgreSQL | 5432   |
+| MongoDB    | 27017  |
 
 Ambos servicios tienen healthchecks. Antes de continuar, comprueba que aparezcan como `healthy`.
 
@@ -219,17 +219,17 @@ El seed utiliza identificadores iniciales y actualiza existencias. No es idempot
 
 La carga inicial genera:
 
-| Tabla | Registros |
-| --- | ---: |
-| `usuario` | 3 |
-| `tienda` | 1 |
-| `categoria` | 2 |
-| `barrio` | 2 |
-| `producto` | 2 |
-| `repartidor` | 1 |
-| `pedido` | 1 |
-| `detalle_pedido` | 2 |
-| `entrega` | 1 |
+| Tabla            | Registros |
+| ---------------- | --------: |
+| `usuario`        |         3 |
+| `tienda`         |         1 |
+| `categoria`      |         2 |
+| `barrio`         |         2 |
+| `producto`       |         2 |
+| `repartidor`     |         1 |
+| `pedido`         |         1 |
+| `detalle_pedido` |         2 |
+| `entrega`        |         1 |
 
 Después de aplicar los movimientos del seed, las existencias quedan en 18 unidades de Cafe Chorotega y 9 unidades de Artesania de madera.
 
@@ -257,13 +257,13 @@ El SQL ubicado en `database/postgres/migrations/` se conserva como referencia de
 
 Los siguientes comandos están disponibles desde `apps/backend`:
 
-| Comando | Función |
-| --- | --- |
-| `npm run migration:create -- src/database/migrations/NombreCambio` | Crear una migración vacía para escribir sus operaciones. |
+| Comando                                                              | Función                                                                 |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `npm run migration:create -- src/database/migrations/NombreCambio`   | Crear una migración vacía para escribir sus operaciones.                |
 | `npm run migration:generate -- src/database/migrations/NombreCambio` | Generar una migración comparando las entidades con la base configurada. |
-| `npm run migration:run` | Aplicar las migraciones pendientes. |
-| `npm run migration:show` | Mostrar el estado de las migraciones. |
-| `npm run migration:revert` | Revertir la última migración aplicada mediante su método `down`. |
+| `npm run migration:run`                                              | Aplicar las migraciones pendientes.                                     |
+| `npm run migration:show`                                             | Mostrar el estado de las migraciones.                                   |
+| `npm run migration:revert`                                           | Revertir la última migración aplicada mediante su método `down`.        |
 
 Los comandos que se conectan a una base utilizan la configuración de entorno del backend. Confirma el destino antes de ejecutarlos.
 
@@ -307,13 +307,13 @@ ORDER BY id;
 
 El esquema inicial del negocio contiene:
 
-| Elemento | Cantidad |
-| --- | ---: |
-| Claves primarias | 9 |
-| Claves foráneas | 11 |
-| Restricciones `UNIQUE` | 6 |
-| Restricciones `CHECK` | 20 |
-| Índices explícitos adicionales | 8 |
+| Elemento                       | Cantidad |
+| ------------------------------ | -------: |
+| Claves primarias               |        9 |
+| Claves foráneas                |       11 |
+| Restricciones `UNIQUE`         |        6 |
+| Restricciones `CHECK`          |       20 |
+| Índices explícitos adicionales |        8 |
 
 Entre las reglas protegidas por la base se encuentran:
 
@@ -416,6 +416,27 @@ npm run lint
 npm run build
 ```
 
+### Pruebas de integración del backend
+
+Desde `apps/backend`, con Docker activo:
+
+```bash
+npm test -- --runInBand
+npm run test:integration
+```
+
+`npm test` ejecuta las pruebas unitarias sin requerir Docker.
+`npm run test:integration` descubre `test/integration/**/*.integration-spec.ts`
+y utiliza PostgreSQL 16 temporal con puertos dinámicos mediante Testcontainers.
+El helper ejecuta las migraciones reales con `synchronize: false`, sin cargar
+`.env`, usar Supabase, Docker Compose ni la base de desarrollo o sus seeds.
+Al finalizar, incluso si falla una prueba, se cierra TypeORM y se elimina el
+contenedor temporal. La primera ejecución puede tardar más al descargar imágenes.
+
+Actualmente hay tres pruebas funcionales del catálogo y dos de infraestructura.
+Los casos y la evidencia se describen en
+[Pruebas de integración del catálogo](docs/laboratory/lab-03/catalog-integration-tests.md).
+
 ## Integración continua
 
 GitHub Actions ejecuta jobs independientes para backend y frontend.
@@ -426,7 +447,13 @@ El job del backend:
 2. Instala dependencias, ejecuta el linter y compila.
 3. Ejecuta las migraciones TypeORM y muestra su estado.
 4. Carga los seeds por separado en una transacción.
-5. Ejecuta las pruebas del backend.
+5. Ejecuta las pruebas unitarias del backend.
+6. Ejecuta la suite de integración con Testcontainers, que crea sus propios
+   contenedores y no utiliza el servicio PostgreSQL de las validaciones anteriores.
+
+El backend fija Node.js 22.22.0, compatible con la versión de Testcontainers
+instalada. Un fallo de integración hace fallar el job. El patrón de Jest descubre
+automáticamente nuevas pruebas de integración cuando se incorporen.
 
 La conexión del CI utiliza su propio PostgreSQL y no depende de Supabase.
 
