@@ -1,5 +1,9 @@
 # Evidencia y corrección del problema N+1
 
+La evidencia original corresponde a un escenario de datos específico. La
+[validación final](validacion-final.md) agrega una ejecución reproducida sobre
+los seeds actuales en bases temporales, con SQL y resultados capturados.
+
 ## 1. Objetivo
 
 El objetivo de esta evidencia es demostrar un problema de consultas N+1 al recuperar pedidos y sus respectivos detalles, así como la corrección aplicada mediante una consulta optimizada con `LEFT JOIN`.
@@ -281,10 +285,10 @@ Los mismos pedidos y detalles fueron recuperados correctamente, pero ya no fue n
 
 ## 7. Comparación antes y después
 
-| Escenario | Consulta de pedidos | Consultas adicionales de detalles | Total |
-|---|---:|---:|---:|
-| Antes de la corrección | 1 | 3 | 4 |
-| Después de la corrección | 1 con `LEFT JOIN` | 0 | 1 |
+| Escenario                | Consulta de pedidos | Consultas adicionales de detalles | Total |
+| ------------------------ | ------------------: | --------------------------------: | ----: |
+| Antes de la corrección   |                   1 |                                 3 |     4 |
+| Después de la corrección |   1 con `LEFT JOIN` |                                 0 |     1 |
 
 ### Antes
 

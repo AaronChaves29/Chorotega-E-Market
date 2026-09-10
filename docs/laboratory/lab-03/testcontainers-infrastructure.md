@@ -7,8 +7,8 @@ El paquete incluye `testcontainers` de forma transitiva; no hace falta instalar
 otro cliente PostgreSQL porque TypeORM ya utiliza `pg`.
 
 Esta versión requiere Node.js >=22.22 y un motor Docker accesible. El entorno
-local utiliza Node 26.0.0 y el workflow existente selecciona Node 22. No se
-modifican versiones existentes ni el workflow de CI.
+de auditoría utiliza Node 26.0.0 y el workflow fija Node 22.22.0. La ejecución
+de integración ya está incorporada al CI.
 
 La implementación sigue el [módulo PostgreSQL oficial de Testcontainers](https://node.testcontainers.org/modules/postgresql/).
 Su `getConnectionUri()` proporciona la URL correspondiente al contenedor iniciado,
@@ -89,8 +89,8 @@ afterAll(async () => {
 
 `stop()` admite llamadas repetidas y espera la misma limpieza si ya está en curso.
 Cada invocación de inicio crea recursos propios; no existe un singleton ni estado
-global que compartan archivos de pruebas. Las futuras suites pueden reutilizar
-esta configuración para sus seis pruebas funcionales.
+global que compartan archivos de pruebas. Las suites de catálogo y pedidos
+reutilizan esta configuración para sus seis pruebas funcionales.
 
 Las pruebas que compartan una base deben gestionar sus propios datos y limpieza
 entre casos. La utilidad no trunca tablas ni abre transacciones automáticamente.
@@ -108,12 +108,12 @@ La segunda provoca un error intencional dentro del callback y comprueba que el
 error se propaga y los recursos se cierran igualmente. Son pruebas de
 infraestructura; no cuentan como pruebas funcionales del catálogo.
 
-Las pruebas funcionales, la preparación de sus casos de datos y la ejecución de
-integración en CI quedan fuera del alcance de este cambio. Un cierre forzado del
+Las seis pruebas funcionales gestionan sus datos mediante hooks de limpieza y
+se ejecutan junto con estas dos comprobaciones en CI. Un cierre forzado del
 proceso o del motor Docker no puede ejecutar `finally`; se conserva habilitada
 la limpieza auxiliar de Testcontainers para recursos abandonados.
 
-## Resultado de la verificación local
+## Evidencia histórica de la infraestructura
 
 Verificado el 9 de septiembre de 2026 con Node 26.0.0, Jest 30.4.2,
 ts-jest 29.4.12, TypeORM 1.1.0 y TypeScript 5.9.3:
@@ -130,5 +130,5 @@ ts-jest 29.4.12, TypeORM 1.1.0 y TypeScript 5.9.3:
 
 No quedaron contenedores temporales activos, incluido el auxiliar de limpieza.
 No se modificó el contenedor de desarrollo. Las versiones de dependencias ya
-presentes en el lockfile permanecieron iguales. La ejecución en Node 22 y la
-incorporación al workflow de CI aún no se han verificado en este bloque.
+presentes en el lockfile permanecieron iguales. La [validación final](validacion-final.md)
+contiene el conteo actual y la confirmación del CI integrado con Node 22.22.0.

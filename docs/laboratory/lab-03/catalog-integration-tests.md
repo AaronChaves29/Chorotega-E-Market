@@ -9,9 +9,9 @@ migración real `CreateInitialSchema1788732000000`, con `synchronize: false`.
 No utiliza mocks ni modifica código de producción.
 
 Después de actualizar `develop` (`ddf46df`) se encontraron dos pruebas de
-infraestructura y ninguna prueba funcional de integración. Con este cambio hay
-tres funcionales y dos de infraestructura, cinco en total. El requisito del
-laboratorio de seis pruebas funcionales todavía necesita tres adicionales.
+infraestructura y ninguna prueba funcional de integración. Actualmente hay
+seis funcionales (tres del catálogo y tres en `orders.integration-spec.ts`)
+y dos de infraestructura, ocho en total, tras integrar la suite de pedidos.
 
 ## Casos cubiertos
 
@@ -88,10 +88,10 @@ Testcontainers utiliza Docker del runner para crear sus propios recursos y no
 consume ese servicio ni sus seeds. El job del frontend conserva su configuración.
 
 La configuración de Jest ya descubre automáticamente los archivos nuevos que
-cumplan el patrón; cuando se integren las otras tres pruebas funcionales, CI
-las ejecutará sin una lista manual de suites.
+cumplan el patrón y ejecuta las seis pruebas funcionales integradas sin una
+lista manual de suites.
 
-## Verificación real
+## Evidencia histórica del bloque de catálogo
 
 Ejecución local del 10 de septiembre de 2026 con Node.js 26.0.0:
 
@@ -113,7 +113,7 @@ fixture. Se corrigió únicamente la preparación de datos con QueryBuilder y se
 repitieron las verificaciones; los resultados de la tabla corresponden al código
 corregido.
 
-La ejecución remota de GitHub Actions y la ejecución bajo Node 22.22.0 aún deben
-confirmarse en CI; los resultados anteriores pertenecen al entorno local.
-Las tres pruebas funcionales restantes, cambios de consultas dinámicas, N+1,
-MongoDB, endpoints y esquema quedan fuera del alcance de este cambio.
+Los resultados anteriores pertenecen al bloque inicial del catálogo. La
+[validación final](validacion-final.md) registra la ejecución conjunta de las seis
+funcionales y dos de infraestructura, así como el CI integrado aprobado con
+Node 22.22.0. No se modifican consultas, endpoints, MongoDB ni esquema.

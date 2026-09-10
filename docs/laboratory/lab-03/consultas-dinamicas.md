@@ -1,5 +1,9 @@
 # Consultas dinámicas de negocio
 
+La evidencia original corresponde a un escenario de datos específico. La
+[validación final](validacion-final.md) agrega una ejecución reproducida sobre
+los seeds actuales en bases temporales, con SQL y resultados capturados.
+
 ## Laboratorio 3 — Chorotega E-Market
 
 Este documento presenta la evidencia de las consultas dinámicas de negocio implementadas para los dominios de **pedidos** y **entregas**.
@@ -36,12 +40,12 @@ La consulta se construye mediante `QueryBuilder` y agrega las condiciones corres
 
 La consulta permite utilizar los siguientes filtros:
 
-| Filtro | Descripción |
-|---|---|
-| `estado` | Estado actual del pedido |
-| `idCliente` | Identificador del cliente |
-| `idTienda` | Identificador de la tienda |
-| `idBarrio` | Identificador del barrio de entrega |
+| Filtro       | Descripción                         |
+| ------------ | ----------------------------------- |
+| `estado`     | Estado actual del pedido            |
+| `idCliente`  | Identificador del cliente           |
+| `idTienda`   | Identificador de la tienda          |
+| `idBarrio`   | Identificador del barrio de entrega |
 | `fechaDesde` | Fecha mínima de creación del pedido |
 | `fechaHasta` | Fecha máxima de creación del pedido |
 
@@ -238,13 +242,13 @@ Al igual que en la consulta de pedidos, las condiciones se agregan dinámicament
 
 La consulta permite utilizar:
 
-| Filtro | Descripción |
-|---|---|
-| `estado` | Estado actual de la entrega |
-| `idPedido` | Identificador del pedido |
+| Filtro         | Descripción                  |
+| -------------- | ---------------------------- |
+| `estado`       | Estado actual de la entrega  |
+| `idPedido`     | Identificador del pedido     |
 | `idRepartidor` | Identificador del repartidor |
-| `fechaDesde` | Fecha mínima de asignación |
-| `fechaHasta` | Fecha máxima de asignación |
+| `fechaDesde`   | Fecha mínima de asignación   |
+| `fechaHasta`   | Fecha máxima de asignación   |
 
 Los filtros pueden utilizarse individualmente o combinarse.
 
@@ -405,10 +409,10 @@ Esto permite reutilizar un único método `search()` para diferentes necesidades
 
 # 3. Comparación de las consultas verificadas
 
-| Consulta | Filtros utilizados en la evidencia | Relaciones cargadas | Resultado |
-|---|---|---|---|
-| Pedidos | `estado`, `idBarrio` | cliente, tienda, barrio | 1 pedido |
-| Entregas | `estado`, `idRepartidor` | pedido, repartidor | 2 entregas |
+| Consulta | Filtros utilizados en la evidencia | Relaciones cargadas     | Resultado  |
+| -------- | ---------------------------------- | ----------------------- | ---------- |
+| Pedidos  | `estado`, `idBarrio`               | cliente, tienda, barrio | 1 pedido   |
+| Entregas | `estado`, `idRepartidor`           | pedido, repartidor      | 2 entregas |
 
 En ambos casos se comprobó que TypeORM construye el SQL utilizando únicamente los filtros proporcionados.
 
