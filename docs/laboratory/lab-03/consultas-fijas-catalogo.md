@@ -5,13 +5,13 @@
 La guía del Laboratorio 3, página 2 del PDF (página impresa 1), apartado
 «Qué entregar», pide cuatro consultas de negocio con su SQL generado documentado:
 dos en JPQL y dos dinámicas con Criteria/Specifications. En el stack NestJS/TypeORM
-del proyecto, las dos consultas fijas asignadas a Aaron se expresan con
+del proyecto, las dos consultas fijas del catálogo se expresan con
 QueryBuilder parametrizado. La guía no exige endpoints para estas consultas.
 
 Este bloque agrega únicamente `findAvailableByStore` y `findActiveByCategory`
 en `ProductsRepository` y delegaciones del mismo nombre en `ProductsService`.
 No cambia el controlador, DTO, API existente, entidades, esquema ni migraciones.
-Las consultas dinámicas y el caso N+1 que trabaja Sofía quedan fuera del alcance.
+Las consultas dinámicas y el caso N+1 se documentan por separado.
 
 ## Consulta 1: productos disponibles de una tienda
 
@@ -97,7 +97,7 @@ Los valores se envían separados del SQL; `$1`, `$2` y `$3` son sus posiciones.
 Cambiar el identificador modifica los parámetros, no concatena valores en la
 consulta. Ambas operaciones devuelven `Product[]` y conservan `precio` como string.
 
-## Cómo se obtuvo la evidencia
+## Cómo se obtuvo la evidencia histórica
 
 Comprobación realizada el 9 de septiembre de 2026, con TypeORM 1.1.0, en la base
 local existente `chorotega_migrations_test`, host `localhost`, puerto `5432`,
@@ -140,8 +140,8 @@ La primera compilación detectó que faltaba instalar `mongodb`, ya declarado en
 lockfile por el trabajo integrado. Se ejecutó `npm ci` y las comprobaciones pasaron;
 no se cambiaron `package.json`, el lockfile ni las versiones declaradas.
 
-Los datos locales contienen únicamente productos activos con existencias. Por eso
-esta lectura no demuestra con filas reales la exclusión de estados inactivos ni
-el límite de cero existencias: las pruebas unitarias verifican las condiciones
-generadas, y los casos de datos completos quedan para las pruebas de integración
-con Testcontainers del siguiente bloque. No se implementó Testcontainers aquí.
+Los datos de aquella lectura contenían únicamente productos activos con existencias.
+Los casos de inactivos y existencias cero ya se verifican con Testcontainers en
+`catalog-repositories.integration-spec.ts`. La [validación final](validacion-final.md)
+registra SQL, parámetros y resultados con los seeds actuales (existencias 17 y 8);
+las cifras anteriores corresponden al escenario histórico del 9 de septiembre.

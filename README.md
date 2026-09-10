@@ -227,11 +227,12 @@ La carga inicial genera:
 | `barrio`         |         2 |
 | `producto`       |         2 |
 | `repartidor`     |         1 |
-| `pedido`         |         1 |
-| `detalle_pedido` |         2 |
-| `entrega`        |         1 |
+| `pedido`         |         4 |
+| `detalle_pedido` |         5 |
+| `entrega`        |         2 |
 
-Después de aplicar los movimientos del seed, las existencias quedan en 18 unidades de Cafe Chorotega y 9 unidades de Artesania de madera.
+Después de aplicar los movimientos del seed, las existencias quedan en 17 unidades de Cafe Chorotega y 8 unidades de Artesania de madera.
+El seed MongoDB contiene cuatro bitácoras, correspondientes a los pedidos 1 a 4.
 
 ### Detener los servicios
 
@@ -433,9 +434,11 @@ El helper ejecuta las migraciones reales con `synchronize: false`, sin cargar
 Al finalizar, incluso si falla una prueba, se cierra TypeORM y se elimina el
 contenedor temporal. La primera ejecución puede tardar más al descargar imágenes.
 
-Actualmente hay tres pruebas funcionales del catálogo y dos de infraestructura.
+Actualmente hay 13 pruebas unitarias, seis funcionales de integración
+(tres del catálogo y tres de pedidos) y dos de infraestructura.
 Los casos y la evidencia se describen en
-[Pruebas de integración del catálogo](docs/laboratory/lab-03/catalog-integration-tests.md).
+[Pruebas de integración del catálogo](docs/laboratory/lab-03/catalog-integration-tests.md)
+y [Validación final del Laboratorio 3](docs/laboratory/lab-03/validacion-final.md).
 
 ## Integración continua
 
@@ -460,8 +463,3 @@ La conexión del CI utiliza su propio PostgreSQL y no depende de Supabase.
 El job del frontend instala dependencias, ejecuta el linter y compila.
 
 El workflow se activa con pushes a `main`, `develop`, `feature/**` y `feat/**`, y con pull requests hacia `main` o `develop`.
-
-## Integrantes
-
-- Sofía Sánchez Jiménez
-- Aaron Chaves Baltodano

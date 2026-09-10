@@ -20,27 +20,26 @@ decisión del proyecto, no una lista de métodos impuesta por el profesor:
 
 `BaseRepository<TEntity, TId>` es el contrato independiente del ORM.
 `TypeOrmBaseRepository<TEntity, TId>` comparte la implementación para TypeORM.
-El futuro repositorio MongoDB podrá implementar el contrato sin heredar esta
-implementación; no se implementa en B2.
+El subdominio MongoDB dispone de `OrderAuditsRepository`, con operaciones
+específicas por `pedidoId`. No hereda la base TypeORM ni implementa este contrato
+CRUD: usa el driver MongoDB y devuelve `void` en `save`.
 
-No se agregan filtros de negocio, paginación, endpoints ni repositorios concretos.
-`ProductsService` continúa usando el repositorio de TypeORM hasta el bloque de
-repositorios específicos.
+La base no agrega filtros de negocio, paginación ni endpoints. Los nueve
+repositorios PostgreSQL la utilizan; `ProductsService` inyecta `ProductsRepository`.
 
 ## Genéricos e identificadores
 
 `TEntity` representa la entidad y `TId` el tipo de su identificador. Por ejemplo,
-para productos serán `Product` y `Product['idProducto']` (actualmente `number`).
+para productos son `Product` y `Product['idProducto']` (actualmente `number`).
 El compilador conserva esos tipos en los parámetros y resultados.
 
 Las claves del catálogo son `idUsuario`, `idTienda`, `idCategoria` e
 `idProducto`, todas numéricas. No se supone que exista una propiedad `id`.
-Cada repositorio concreto implementará `whereId` para traducir el identificador
+Cada repositorio concreto implementa `whereId` para traducir el identificador
 a su columna de entidad. Este método debe devolver exclusivamente la condición
 de la clave primaria completa, nunca un filtro vacío o de negocio.
 
-Ejemplo de uso futuro en NestJS (documentación, todavía no registrado ni creado
-como repositorio del catálogo):
+Extracto del patrón utilizado por `ProductsRepository` en NestJS:
 
 ```typescript
 @Injectable()
@@ -58,14 +57,15 @@ export class ProductsRepository extends TypeOrmBaseRepository<
 }
 ```
 
-El módulo registrará el repositorio concreto como proveedor y conservará
-`TypeOrmModule.forFeature([Product])`. El servicio podrá inyectar ese proveedor.
+El módulo registra el repositorio concreto como proveedor y conserva
+`TypeOrmModule.forFeature([Product])`. El servicio inyecta ese proveedor.
 La interfaz genérica no es un token de inyección: los tipos TypeScript no existen
 en ejecución. La clase base recibe el repositorio por constructor y no abre
 conexiones por su cuenta.
 
-Para guardar un producto nuevo, el repositorio concreto podrá construirlo con
-`repository.create(...)` y pasarlo a `save`. `create` solo construye el objeto;
+Para guardar un producto nuevo, el repositorio concreto lo construye mediante
+`createEntity`, que usa `repository.create(...)`, y luego se pasa a `save`.
+`create` solo construye el objeto;
 `save` persiste los datos. El precio de `Product` continúa siendo `string`.
 
 ## Comportamiento y límites
@@ -80,14 +80,13 @@ convertirse en `false`. Esta base no decide reglas de autorización, bajas lógi
 ni respuestas HTTP.
 
 La implementación no cambia cascadas, esquema, migraciones ni configuración de
-conexión. La base TypeORM se utilizará para los repositorios PostgreSQL; no se
+conexión. La base TypeORM se utiliza para los repositorios PostgreSQL; no se
 afirma compatibilidad de su implementación con MongoDB.
 
-Las pruebas de integración con Testcontainers y la adopción desde repositorios
-concretos corresponden a bloques posteriores. Las pruebas unitarias existentes
-de `ProductsService` usan mocks y no sustituyen esas pruebas de integración.
+La persistencia se verifica con Testcontainers mediante `CategoriesRepository`.
+Las pruebas unitarias existentes de `ProductsService` usan mocks y no sustituyen esas pruebas de integración.
 
-## Verificación de este bloque
+## Evidencia histórica de B2
 
 - `npm run build` y `tsc --noEmit --incremental false -p tsconfig.json`: correctos.
 - ESLint y Prettier sobre los archivos nuevos: correctos.
@@ -103,4 +102,5 @@ de `ProductsService` usan mocks y no sustituyen esas pruebas de integración.
 
 Las comprobaciones temporales no forman parte de la suite ni se agregan al
 repositorio. No se cargó `.env` ni se ejecutaron escrituras contra PostgreSQL;
-la verificación real de `save` y `deleteById` queda para las pruebas de integración.
+la verificación real de `save` y `deleteById` se incorporó después en
+`catalog-repositories.integration-spec.ts`. Véase la [validación final](validacion-final.md).

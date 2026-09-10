@@ -2,7 +2,7 @@
 
 ## Alcance
 
-Este bloque implementa los cuatro repositorios del catálogo asignados a Aaron.
+Este bloque implementa los cuatro repositorios del catálogo.
 Se construye sobre B2, integrado en `upstream/develop` mediante el PR #27
 (`4a60c91`), y reutiliza `TypeOrmBaseRepository` sin modificarla.
 
@@ -42,7 +42,7 @@ ejecución. La API y el DTO existentes permanecen sin cambios.
 El `Repository<Product>` de TypeORM permanece protegido dentro de la base.
 Los servicios utilizan las operaciones públicas del repositorio concreto.
 
-## Verificación local
+## Evidencia histórica de B3
 
 - Prettier y ESLint sobre los archivos afectados: correctos.
 - `npm run build` y `tsc --noEmit --incremental false -p tsconfig.json`: correctos.
@@ -69,24 +69,20 @@ la carga de `.env`. No se conectó a Supabase ni se ejecutaron seeds, migracione
 escrituras o eliminaciones. El script temporal no forma parte de la suite.
 
 Las cinco pruebas unitarias usan mocks; no prueban persistencia real. La
-verificación real de `save` y `deleteById`, y las pruebas con Testcontainers,
-siguen pendientes para integración.
+verificación real de `save` y `deleteById` se incorporó después en las pruebas
+con Testcontainers. Los resultados actuales están en la [validación final](validacion-final.md).
 
-## Coordinación pendiente
+## Repositorios integrados
 
-La guía exige repositorios específicos por entidad, incluido MongoDB. Este bloque
-completa solamente los cuatro del catálogo; el requisito global sigue pendiente.
+Además del catálogo, existen `NeighborhoodsRepository`, `OrdersRepository`,
+`OrderDetailsRepository`, `CouriersRepository` y `DeliveriesRepository`, cada uno
+con su módulo NestJS y su entidad PostgreSQL. Los nueve utilizan la base genérica.
 
-En el backend integrado que se inspeccionó no aparecen las entidades ni los
-repositorios de Barrio, Pedido, DetallePedido, Repartidor y Entrega, asignados a
-Sofía. Las carpetas `orders` y `deliveries` contienen únicamente `.gitkeep`.
-Esto describe lo disponible en la rama integrada, no el posible trabajo local
-o en otras ramas de Sofía. Se deben coordinar esos cinco repositorios y sus
-módulos, además de las relaciones necesarias con las entidades del catálogo.
+`OrderAuditsRepository` implementa las operaciones específicas de la colección
+MongoDB `bitacora_pedidos`: lectura por `pedidoId`, reemplazo con upsert y adición
+de eventos. Utiliza `MongoDatabaseService` mediante `OrderAuditsModule` y no hereda
+la implementación TypeORM.
 
-También falta un repositorio backend para la colección MongoDB `bitacora_pedidos`.
-Existe el seed de esa colección, pero no un modelo ni repositorio backend en esta
-rama. Su responsable y adaptación al contrato genérico deben coordinarse con el
-equipo; no se implementan en B3 ni se modifican archivos de Sofía.
-
-Las consultas de negocio y el caso N+1 quedan para los bloques siguientes.
+Las cuatro consultas de negocio, la corrección N+1 y las seis pruebas funcionales
+están integradas. Esta documentación conserva arriba la evidencia de B3 y no
+representa el conteo de pruebas actual.

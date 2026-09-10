@@ -137,7 +137,7 @@ La tabla `entrega` relaciona un pedido con el repartidor encargado de realizar l
 
 ## 3.1 Justificación de la tercera forma normal
 
-El modelo relacional de Chorotega E-Market se diseñó siguiendo los principios de la tercera forma normal (3FN). Cada tabla representa una entidad o relación específica del dominio, y sus atributos dependen de la clave primaria correspondiente, no de otros atributos que no sean claves.
+El modelo relacional de Chorotega E-Market separa las entidades y relaciones siguiendo los principios de la tercera forma normal (3FN). Conserva excepciones explícitas para importes calculados, por lo que no se afirma que todas las columnas cumplan una 3FN estricta.
 
 La separación de la información en las nueve tablas evita repetir datos innecesariamente y reduce anomalías durante la inserción, actualización y eliminación de registros.
 
@@ -181,6 +181,18 @@ El campo `detalle_pedido.precio_unitario` conserva el precio aplicado en el mome
 
 Esta copia es intencional y necesaria para conservar el historial de las compras. Si el precio actual de un producto cambia, los subtotales y totales de los pedidos anteriores deben permanecer iguales. Por esa razón, el precio unitario del detalle no se considera una redundancia accidental, sino un dato histórico propio del pedido.
 
+### Importes calculados: desnormalización controlada
+
+`detalle_pedido.subtotal` se obtiene de `cantidad * precio_unitario`, y
+`pedido.total` de `subtotal + tarifa_envio`. Al almacenar esos resultados existen
+dependencias entre atributos que no son claves; son excepciones a una 3FN
+estricta, distintas de los precios y tarifas históricos.
+Las restricciones `chk_detalle_subtotal_calculado` y
+`chk_pedido_total_calculado` impiden inconsistencias en esas fórmulas.
+`pedido.subtotal` agrega los detalles, pero su igualdad con esa suma no está
+protegida por un CHECK entre tablas; debe mantenerla la operación transaccional.
+Esta precisión describe el esquema existente, sin cambiarlo.
+
 ### Anomalías evitadas
 
 La organización del modelo evita los siguientes problemas:
@@ -190,7 +202,7 @@ La organización del modelo evita los siguientes problemas:
 - **Anomalías de eliminación:** eliminar un producto o un pedido no elimina la información general de su categoría, barrio o usuario relacionado.
 - **Inconsistencias en las relaciones:** las claves foráneas garantizan que los registros relacionados existan, mientras que las restricciones `UNIQUE` y `CHECK` protegen reglas adicionales del dominio.
 
-Por estas razones, cada dato se almacena en la tabla que representa su significado y depende de la clave correspondiente. El modelo cumple con el propósito de la tercera forma normal y conserva únicamente duplicaciones históricas justificadas por las necesidades transaccionales del sistema.
+Por estas razones, cada dato se almacena en la tabla que representa su significado y depende de la clave correspondiente. La separación sigue el propósito de la tercera forma normal y conserva datos históricos e importes calculados con las excepciones y controles descritos.
 
 ---
 

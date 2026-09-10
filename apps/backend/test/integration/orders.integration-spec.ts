@@ -19,7 +19,7 @@ import { Product } from '../../src/modules/products/entities/product.entity';
 import { OrdersRepository } from '../../src/modules/orders/repositories/orders.repository';
 
 describe('Orders integration', () => {
-  let database: PostgresTestDatabase;
+  let database: PostgresTestDatabase | undefined;
   let dataSource: DataSource;
 
   let userRepository: Repository<User>;
@@ -45,8 +45,22 @@ describe('Orders integration', () => {
     orderDetailRepository = dataSource.getRepository(OrderDetail);
   });
 
+  afterEach(async () => {
+    if (!database) return;
+    // Conserva el esquema y el historial de migraciones del contenedor de pruebas.
+    await database.dataSource.query(`
+      TRUNCATE TABLE entrega, detalle_pedido, pedido, repartidor,
+        barrio, producto, categoria, tienda, usuario RESTART IDENTITY
+    `);
+    expect(
+      await database.dataSource.query<{ name: string }[]>(
+        'SELECT name FROM typeorm_migrations ORDER BY id',
+      ),
+    ).toEqual([{ name: 'CreateInitialSchema1788732000000' }]);
+  });
+
   afterAll(async () => {
-    await database.stop();
+    await database?.stop();
   });
 
   it('should persist and retrieve an order from PostgreSQL', async () => {
