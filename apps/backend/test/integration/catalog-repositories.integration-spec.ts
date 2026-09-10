@@ -46,7 +46,10 @@ describe('Repositorios del catálogo: integración funcional', () => {
       await database.dataSource.query<{ name: string }[]>(
         'SELECT name FROM typeorm_migrations ORDER BY id',
       ),
-    ).toEqual([{ name: 'CreateInitialSchema1788732000000' }]);
+    ).toEqual([
+      { name: 'CreateInitialSchema1788732000000' },
+      { name: 'AlignTimestampDefaults1788998400000' },
+    ]);
   });
 
   afterAll(async () => {

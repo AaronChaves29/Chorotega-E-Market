@@ -7,6 +7,7 @@ import {
 import { DataSource } from 'typeorm';
 import { createDatabaseOptions } from '../../src/database/database.options';
 import { CreateInitialSchema1788732000000 } from '../../src/database/migrations/1788732000000-CreateInitialSchema';
+import { AlignTimestampDefaults1788998400000 } from '../../src/database/migrations/1788998400000-AlignTimestampDefaults';
 import { Category } from '../../src/modules/categories/entities/category.entity';
 import { Courier } from '../../src/modules/couriers/entities/courier.entity';
 import { Delivery } from '../../src/modules/deliveries/entities/delivery.entity';
@@ -83,7 +84,10 @@ export async function startPostgresTestDatabase(): Promise<PostgresTestDatabase>
         Courier,
         Delivery,
       ],
-      migrations: [CreateInitialSchema1788732000000],
+      migrations: [
+        CreateInitialSchema1788732000000,
+        AlignTimestampDefaults1788998400000,
+      ],
       extra: { connectionTimeoutMillis: 10_000 },
     });
     await dataSource.initialize();

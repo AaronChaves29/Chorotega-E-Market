@@ -46,8 +46,10 @@ pruebas. La prueba e2e preexistente tampoco forma parte del comando de integraci
    Reutiliza la función pura `createDatabaseOptions`, pero nunca importa
    `src/database/data-source.ts`, `AppModule` ni módulos de configuración que
    carguen `.env`. No toma `DATABASE_URL` ni `DATABASE_SSL` del entorno.
-3. Registra explícitamente las nueve entidades y la clase real
-   `CreateInitialSchema1788732000000`. No copia SQL ni utiliza archivos compilados
+3. Registra explícitamente las nueve entidades y las migraciones reales
+   `CreateInitialSchema1788732000000` y `AlignTimestampDefaults1788998400000`.
+   La segunda alinea cinco defaults con `now()` sin editar la inicial.
+   No copia SQL ni utiliza archivos compilados
    descubiertos mediante un patrón de búsqueda.
 4. Conserva `synchronize: false` y `migrationsRun: false`; después de
    `initialize()` llama explícitamente a `runMigrations()`.
@@ -100,7 +102,7 @@ explícitos del helper y las expectativas del esquema cuando corresponda.
 ## Comprobaciones de infraestructura
 
 La primera prueba verifica PostgreSQL 16, las nueve tablas del negocio,
-`typeorm_migrations`, el registro de la migración inicial y la ausencia de
+`typeorm_migrations`, el registro de ambas migraciones y la ausencia de
 migraciones pendientes. Después comprueba que el `DataSource` está cerrado y que
 ya no se pueden ejecutar comandos en el contenedor detenido.
 
@@ -108,8 +110,13 @@ La segunda provoca un error intencional dentro del callback y comprueba que el
 error se propaga y los recursos se cierran igualmente. Son pruebas de
 infraestructura; no cuentan como pruebas funcionales del catálogo.
 
+La tercera prueba, `typeorm-schema-validation.integration-spec.ts`, llama a
+`dataSource.driver.createSchemaBuilder().log()` y exige `upQueries` vacío tras
+las dos migraciones. Si existen diferencias, muestra el SQL propuesto y falla.
+No ejecuta ese DDL ni filtra diferencias; `synchronize: false` se conserva.
+
 Las seis pruebas funcionales gestionan sus datos mediante hooks de limpieza y
-se ejecutan junto con estas dos comprobaciones en CI. Un cierre forzado del
+se ejecutan junto con estas tres comprobaciones en CI. Un cierre forzado del
 proceso o del motor Docker no puede ejecutar `finally`; se conserva habilitada
 la limpieza auxiliar de Testcontainers para recursos abandonados.
 

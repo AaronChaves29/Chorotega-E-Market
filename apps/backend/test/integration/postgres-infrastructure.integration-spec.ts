@@ -40,6 +40,7 @@ describe('Infraestructura PostgreSQL con Testcontainers', () => {
       );
       expect(migrations).toEqual([
         { name: 'CreateInitialSchema1788732000000' },
+        { name: 'AlignTimestampDefaults1788998400000' },
       ]);
       expect(await dataSource.showMigrations()).toBe(false);
       return database;
