@@ -10,6 +10,11 @@ import { UsersModule } from './modules/users/users.module';
 import { StoresModule } from './modules/stores/stores.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { OrderAuditsModule } from './modules/order-audits/order-audits.module';
+import { CouriersModule } from './modules/couriers/couriers.module';
+import { DeliveriesModule } from './modules/deliveries/deliveries.module';
+import { NeighborhoodsModule } from './modules/neighborhoods/neighborhoods.module';
+import { OrderDetailsModule } from './modules/order-details/order-details.module';
+import { OrdersModule } from './modules/orders/orders.module';
 
 @Module({
   imports: [
@@ -32,6 +37,11 @@ import { OrderAuditsModule } from './modules/order-audits/order-audits.module';
     StoresModule,
     CategoriesModule,
     OrderAuditsModule,
+    CouriersModule,
+    DeliveriesModule,
+    NeighborhoodsModule,
+    OrderDetailsModule,
+    OrdersModule,
   ],
   controllers: [HealthController],
   providers: [HealthService],
