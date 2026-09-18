@@ -18,6 +18,16 @@ export class DeliveriesRepository extends TypeOrmBaseRepository<
     return { idEntrega: id };
   }
 
+  findActiveByOrderId(idPedido: number): Promise<Delivery | null> {
+    return this.repository
+      .createQueryBuilder('entrega')
+      .where('entrega.idPedido = :idPedido', { idPedido })
+      .andWhere('entrega.estado IN (:...estados)', {
+        estados: ['ASIGNADA', 'EN_CAMINO'],
+      })
+      .getOne();
+  }
+
   async search(filters: DeliverySearchFilters): Promise<Delivery[]> {
     const query = this.repository
       .createQueryBuilder('entrega')
