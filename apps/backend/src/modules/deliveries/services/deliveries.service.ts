@@ -13,6 +13,10 @@ import { InvalidDeliveryStateException } from '../exceptions/invalid-delivery-st
 import { AssignDeliveryDto } from '../dtos/assign-delivery.dto';
 import { DeliveryResponseDto } from '../dtos/delivery-response.dto';
 import { DeliveryMapper } from '../mappers/delivery.mapper';
+import { NeighborhoodsRepository } from 'src/modules/neighborhoods/repositories/neighborhoods.repository';
+import { InvalidDeliveryAddressException } from '../exceptions/invalid-delivery-address.exception';
+import { NeighborhoodNotFoundException } from '../exceptions/neighborhood-not-found.exception';
+import { InactiveNeighborhoodException } from '../exceptions/inactive-neighborhood.exception';
 
 @Injectable()
 export class DeliveriesService {
@@ -20,6 +24,7 @@ export class DeliveriesService {
     private readonly deliveriesRepository: DeliveriesRepository,
     private readonly ordersRepository: OrdersRepository,
     private readonly couriersRepository: CouriersRepository,
+    private readonly neighborhoodsRepository: NeighborhoodsRepository,
   ) {}
 
   async assignDelivery(dto: AssignDeliveryDto): Promise<DeliveryResponseDto> {
@@ -32,6 +37,22 @@ export class DeliveriesService {
 
     if (order.estado !== 'PREPARANDO') {
       throw new InvalidOrderStateException(order.estado);
+    }
+
+    if (!order.direccionEntrega?.trim()) {
+      throw new InvalidDeliveryAddressException();
+    }
+
+    const neighborhood = await this.neighborhoodsRepository.findById(
+      order.idBarrio,
+    );
+
+    if (!neighborhood) {
+      throw new NeighborhoodNotFoundException(order.idBarrio);
+    }
+
+    if (neighborhood.estado !== 'ACTIVO') {
+      throw new InactiveNeighborhoodException(order.idBarrio);
     }
 
     const activeDelivery =
