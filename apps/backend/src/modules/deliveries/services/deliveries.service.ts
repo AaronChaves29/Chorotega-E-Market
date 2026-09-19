@@ -10,6 +10,9 @@ import { CourierNotAvailableException } from '../exceptions/courier-not-availabl
 import { Delivery } from '../entities/delivery.entity';
 import { DeliveryNotFoundException } from '../exceptions/delivery-not-found.exception';
 import { InvalidDeliveryStateException } from '../exceptions/invalid-delivery-state.exception';
+import { AssignDeliveryDto } from '../dtos/assign-delivery.dto';
+import { DeliveryResponseDto } from '../dtos/delivery-response.dto';
+import { DeliveryMapper } from '../mappers/delivery.mapper';
 
 @Injectable()
 export class DeliveriesService {
@@ -19,10 +22,8 @@ export class DeliveriesService {
     private readonly couriersRepository: CouriersRepository,
   ) {}
 
-  async assignDelivery(
-    idPedido: number,
-    idRepartidor: number,
-  ): Promise<Delivery> {
+  async assignDelivery(dto: AssignDeliveryDto): Promise<DeliveryResponseDto> {
+    const { idPedido, idRepartidor } = dto;
     const order = await this.ordersRepository.findById(idPedido);
 
     if (!order) {
@@ -63,10 +64,10 @@ export class DeliveriesService {
     courier.disponibilidad = 'OCUPADO';
     await this.couriersRepository.save(courier);
 
-    return savedDelivery;
+    return DeliveryMapper.toResponseDto(savedDelivery);
   }
 
-  async startDelivery(idEntrega: number): Promise<Delivery> {
+  async startDelivery(idEntrega: number): Promise<DeliveryResponseDto> {
     const delivery = await this.deliveriesRepository.findById(idEntrega);
 
     if (!delivery) {
@@ -89,10 +90,10 @@ export class DeliveriesService {
     const savedDelivery = await this.deliveriesRepository.save(delivery);
     await this.ordersRepository.save(order);
 
-    return savedDelivery;
+    return DeliveryMapper.toResponseDto(savedDelivery);
   }
 
-  async completeDelivery(idEntrega: number): Promise<Delivery> {
+  async completeDelivery(idEntrega: number): Promise<DeliveryResponseDto> {
     const delivery = await this.deliveriesRepository.findById(idEntrega);
 
     if (!delivery) {
@@ -128,10 +129,10 @@ export class DeliveriesService {
     await this.ordersRepository.save(order);
     await this.couriersRepository.save(courier);
 
-    return savedDelivery;
+    return DeliveryMapper.toResponseDto(savedDelivery);
   }
 
-  async cancelDelivery(idEntrega: number): Promise<Delivery> {
+  async cancelDelivery(idEntrega: number): Promise<DeliveryResponseDto> {
     const delivery = await this.deliveriesRepository.findById(idEntrega);
 
     if (!delivery) {
@@ -156,6 +157,6 @@ export class DeliveriesService {
     const savedDelivery = await this.deliveriesRepository.save(delivery);
     await this.couriersRepository.save(courier);
 
-    return savedDelivery;
+    return DeliveryMapper.toResponseDto(savedDelivery);
   }
 }
