@@ -13,7 +13,7 @@ import { InvalidDeliveryStateException } from '../exceptions/invalid-delivery-st
 import { AssignDeliveryDto } from '../dtos/assign-delivery.dto';
 import { DeliveryResponseDto } from '../dtos/delivery-response.dto';
 import { DeliveryMapper } from '../mappers/delivery.mapper';
-import { NeighborhoodsRepository } from 'src/modules/neighborhoods/repositories/neighborhoods.repository';
+import { NeighborhoodsRepository } from '../../neighborhoods/repositories/neighborhoods.repository';
 import { InvalidDeliveryAddressException } from '../exceptions/invalid-delivery-address.exception';
 import { NeighborhoodNotFoundException } from '../exceptions/neighborhood-not-found.exception';
 import { InactiveNeighborhoodException } from '../exceptions/inactive-neighborhood.exception';
