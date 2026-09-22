@@ -1,3 +1,4 @@
+import type { DataSource, EntityManager, Repository } from 'typeorm';
 import { Courier } from '../../couriers/entities/courier.entity';
 import { CouriersRepository } from '../../couriers/repositories/couriers.repository';
 import { Neighborhood } from '../../neighborhoods/entities/neighborhood.entity';
@@ -24,6 +25,13 @@ describe('DeliveriesService', () => {
   let couriersRepository: jest.Mocked<CouriersRepository>;
   let neighborhoodsRepository: jest.Mocked<NeighborhoodsRepository>;
 
+  let dataSource: jest.Mocked<DataSource>;
+  let entityManager: jest.Mocked<EntityManager>;
+
+  let transactionalDeliveriesRepository: jest.Mocked<Repository<Delivery>>;
+  let transactionalOrdersRepository: jest.Mocked<Repository<Order>>;
+  let transactionalCouriersRepository: jest.Mocked<Repository<Courier>>;
+
   beforeEach(() => {
     deliveriesRepository = {
       findById: jest.fn(),
@@ -45,11 +53,49 @@ describe('DeliveriesService', () => {
       findById: jest.fn(),
     } as unknown as jest.Mocked<NeighborhoodsRepository>;
 
+    transactionalDeliveriesRepository = {
+      save: jest.fn(),
+    } as unknown as jest.Mocked<Repository<Delivery>>;
+
+    transactionalOrdersRepository = {
+      save: jest.fn(),
+    } as unknown as jest.Mocked<Repository<Order>>;
+
+    transactionalCouriersRepository = {
+      save: jest.fn(),
+    } as unknown as jest.Mocked<Repository<Courier>>;
+
+    entityManager = {
+      getRepository: jest.fn((entity) => {
+        if (entity === Delivery) {
+          return transactionalDeliveriesRepository;
+        }
+
+        if (entity === Order) {
+          return transactionalOrdersRepository;
+        }
+
+        if (entity === Courier) {
+          return transactionalCouriersRepository;
+        }
+
+        throw new Error('Repositorio transaccional no configurado.');
+      }),
+    } as unknown as jest.Mocked<EntityManager>;
+
+    dataSource = {
+      transaction: jest.fn(
+        (callback: (manager: EntityManager) => Promise<unknown>) =>
+          callback(entityManager),
+      ),
+    } as unknown as jest.Mocked<DataSource>;
+
     service = new DeliveriesService(
       deliveriesRepository,
       ordersRepository,
       couriersRepository,
       neighborhoodsRepository,
+      dataSource,
     );
   });
 
@@ -85,8 +131,8 @@ describe('DeliveriesService', () => {
       neighborhoodsRepository.findById.mockResolvedValue(neighborhood);
       deliveriesRepository.findActiveByOrderId.mockResolvedValue(null);
       couriersRepository.findById.mockResolvedValue(courier);
-      deliveriesRepository.save.mockResolvedValue(savedDelivery);
-      couriersRepository.save.mockResolvedValue(courier);
+      transactionalDeliveriesRepository.save.mockResolvedValue(savedDelivery);
+      transactionalCouriersRepository.save.mockResolvedValue(courier);
 
       const result = await service.assignDelivery({
         idPedido: 1,
@@ -103,8 +149,19 @@ describe('DeliveriesService', () => {
       });
 
       expect(courier.disponibilidad).toBe('OCUPADO');
-      expect(deliveriesRepository.save.mock.calls).toHaveLength(1);
-      expect(couriersRepository.save.mock.calls).toContainEqual([courier]);
+
+      expect(dataSource.transaction.mock.calls).toHaveLength(1);
+
+      expect(transactionalDeliveriesRepository.save.mock.calls).toContainEqual([
+        expect.any(Delivery),
+      ]);
+
+      expect(transactionalCouriersRepository.save.mock.calls).toContainEqual([
+        courier,
+      ]);
+
+      expect(deliveriesRepository.save.mock.calls).toHaveLength(0);
+      expect(couriersRepository.save.mock.calls).toHaveLength(0);
     });
 
     it('debe rechazar un pedido inexistente', async () => {
@@ -260,11 +317,13 @@ describe('DeliveriesService', () => {
 
       deliveriesRepository.findById.mockResolvedValue(delivery);
       ordersRepository.findById.mockResolvedValue(order);
-      deliveriesRepository.save.mockImplementation((value) =>
-        Promise.resolve(value),
+
+      transactionalDeliveriesRepository.save.mockImplementation((value) =>
+        Promise.resolve(value as Delivery),
       );
-      ordersRepository.save.mockImplementation((value) =>
-        Promise.resolve(value),
+
+      transactionalOrdersRepository.save.mockImplementation((value) =>
+        Promise.resolve(value as Order),
       );
 
       const result = await service.startDelivery(1);
@@ -273,8 +332,18 @@ describe('DeliveriesService', () => {
       expect(delivery.estado).toBe('EN_CAMINO');
       expect(order.estado).toBe('EN_CAMINO');
 
-      expect(deliveriesRepository.save.mock.calls).toContainEqual([delivery]);
-      expect(ordersRepository.save.mock.calls).toContainEqual([order]);
+      expect(dataSource.transaction.mock.calls).toHaveLength(1);
+
+      expect(transactionalDeliveriesRepository.save.mock.calls).toContainEqual([
+        delivery,
+      ]);
+
+      expect(transactionalOrdersRepository.save.mock.calls).toContainEqual([
+        order,
+      ]);
+
+      expect(deliveriesRepository.save.mock.calls).toHaveLength(0);
+      expect(ordersRepository.save.mock.calls).toHaveLength(0);
     });
 
     it('debe rechazar iniciar una entrega que no esté ASIGNADA', async () => {
@@ -294,7 +363,7 @@ describe('DeliveriesService', () => {
   });
 
   describe('completeDelivery', () => {
-    it('debe completar una entrega correctamente', async () => {
+    it('debe completar una entrega correctamente dentro de una transacción', async () => {
       const delivery = {
         idEntrega: 1,
         idPedido: 1,
@@ -318,14 +387,16 @@ describe('DeliveriesService', () => {
       ordersRepository.findById.mockResolvedValue(order);
       couriersRepository.findById.mockResolvedValue(courier);
 
-      deliveriesRepository.save.mockImplementation((value) =>
-        Promise.resolve(value),
+      transactionalDeliveriesRepository.save.mockImplementation((value) =>
+        Promise.resolve(value as Delivery),
       );
-      ordersRepository.save.mockImplementation((value) =>
-        Promise.resolve(value),
+
+      transactionalOrdersRepository.save.mockImplementation((value) =>
+        Promise.resolve(value as Order),
       );
-      couriersRepository.save.mockImplementation((value) =>
-        Promise.resolve(value),
+
+      transactionalCouriersRepository.save.mockImplementation((value) =>
+        Promise.resolve(value as Courier),
       );
 
       const result = await service.completeDelivery(1);
@@ -336,9 +407,23 @@ describe('DeliveriesService', () => {
       expect(order.estado).toBe('ENTREGADO');
       expect(courier.disponibilidad).toBe('DISPONIBLE');
 
-      expect(deliveriesRepository.save.mock.calls).toContainEqual([delivery]);
-      expect(ordersRepository.save.mock.calls).toContainEqual([order]);
-      expect(couriersRepository.save.mock.calls).toContainEqual([courier]);
+      expect(dataSource.transaction.mock.calls).toHaveLength(1);
+
+      expect(transactionalDeliveriesRepository.save.mock.calls).toContainEqual([
+        delivery,
+      ]);
+
+      expect(transactionalOrdersRepository.save.mock.calls).toContainEqual([
+        order,
+      ]);
+
+      expect(transactionalCouriersRepository.save.mock.calls).toContainEqual([
+        courier,
+      ]);
+
+      expect(deliveriesRepository.save.mock.calls).toHaveLength(0);
+      expect(ordersRepository.save.mock.calls).toHaveLength(0);
+      expect(couriersRepository.save.mock.calls).toHaveLength(0);
     });
 
     it('debe rechazar completar una entrega que no esté EN_CAMINO', async () => {
@@ -354,6 +439,8 @@ describe('DeliveriesService', () => {
       await expect(service.completeDelivery(1)).rejects.toBeInstanceOf(
         InvalidDeliveryStateException,
       );
+
+      expect(dataSource.transaction.mock.calls).toHaveLength(0);
     });
 
     it('debe rechazar completar la entrega si el repartidor no existe', async () => {
@@ -376,6 +463,8 @@ describe('DeliveriesService', () => {
       await expect(service.completeDelivery(1)).rejects.toBeInstanceOf(
         CourierNotFoundException,
       );
+
+      expect(dataSource.transaction.mock.calls).toHaveLength(0);
     });
   });
 
@@ -397,11 +486,13 @@ describe('DeliveriesService', () => {
 
       deliveriesRepository.findById.mockResolvedValue(delivery);
       couriersRepository.findById.mockResolvedValue(courier);
-      deliveriesRepository.save.mockImplementation((value) =>
-        Promise.resolve(value),
+
+      transactionalDeliveriesRepository.save.mockImplementation((value) =>
+        Promise.resolve(value as Delivery),
       );
-      couriersRepository.save.mockImplementation((value) =>
-        Promise.resolve(value),
+
+      transactionalCouriersRepository.save.mockImplementation((value) =>
+        Promise.resolve(value as Courier),
       );
 
       const result = await service.cancelDelivery(1);
@@ -410,8 +501,18 @@ describe('DeliveriesService', () => {
       expect(delivery.estado).toBe('CANCELADA');
       expect(courier.disponibilidad).toBe('DISPONIBLE');
 
-      expect(deliveriesRepository.save.mock.calls).toContainEqual([delivery]);
-      expect(couriersRepository.save.mock.calls).toContainEqual([courier]);
+      expect(dataSource.transaction.mock.calls).toHaveLength(1);
+
+      expect(transactionalDeliveriesRepository.save.mock.calls).toContainEqual([
+        delivery,
+      ]);
+
+      expect(transactionalCouriersRepository.save.mock.calls).toContainEqual([
+        courier,
+      ]);
+
+      expect(deliveriesRepository.save.mock.calls).toHaveLength(0);
+      expect(couriersRepository.save.mock.calls).toHaveLength(0);
     });
 
     it('debe rechazar cancelar una entrega que ya esté EN_CAMINO', async () => {

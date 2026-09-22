@@ -17,6 +17,9 @@ import { NeighborhoodsRepository } from '../../neighborhoods/repositories/neighb
 import { InvalidDeliveryAddressException } from '../exceptions/invalid-delivery-address.exception';
 import { NeighborhoodNotFoundException } from '../exceptions/neighborhood-not-found.exception';
 import { InactiveNeighborhoodException } from '../exceptions/inactive-neighborhood.exception';
+import { DataSource } from 'typeorm';
+import { Order } from '../../orders/entities/order.entity';
+import { Courier } from '../../couriers/entities/courier.entity';
 
 @Injectable()
 export class DeliveriesService {
@@ -25,6 +28,7 @@ export class DeliveriesService {
     private readonly ordersRepository: OrdersRepository,
     private readonly couriersRepository: CouriersRepository,
     private readonly neighborhoodsRepository: NeighborhoodsRepository,
+    private readonly dataSource: DataSource,
   ) {}
 
   async assignDelivery(dto: AssignDeliveryDto): Promise<DeliveryResponseDto> {
@@ -80,10 +84,17 @@ export class DeliveriesService {
     delivery.fechaAsignacion = new Date();
     delivery.fechaEntrega = null;
 
-    const savedDelivery = await this.deliveriesRepository.save(delivery);
-
     courier.disponibilidad = 'OCUPADO';
-    await this.couriersRepository.save(courier);
+
+    const savedDelivery = await this.dataSource.transaction(async (manager) => {
+      const transactionalDeliveriesRepository = manager.getRepository(Delivery);
+      const transactionalCouriersRepository = manager.getRepository(Courier);
+      const saved = await transactionalDeliveriesRepository.save(delivery);
+
+      await transactionalCouriersRepository.save(courier);
+
+      return saved;
+    });
 
     return DeliveryMapper.toResponseDto(savedDelivery);
   }
@@ -108,8 +119,17 @@ export class DeliveriesService {
     delivery.estado = 'EN_CAMINO';
     order.estado = 'EN_CAMINO';
 
-    const savedDelivery = await this.deliveriesRepository.save(delivery);
-    await this.ordersRepository.save(order);
+    const savedDelivery = await this.dataSource.transaction(async (manager) => {
+      const transactionalDeliveriesRepository = manager.getRepository(Delivery);
+
+      const transactionalOrdersRepository = manager.getRepository(Order);
+
+      const saved = await transactionalDeliveriesRepository.save(delivery);
+
+      await transactionalOrdersRepository.save(order);
+
+      return saved;
+    });
 
     return DeliveryMapper.toResponseDto(savedDelivery);
   }
@@ -143,12 +163,20 @@ export class DeliveriesService {
     delivery.fechaEntrega = new Date();
 
     order.estado = 'ENTREGADO';
-
     courier.disponibilidad = 'DISPONIBLE';
 
-    const savedDelivery = await this.deliveriesRepository.save(delivery);
-    await this.ordersRepository.save(order);
-    await this.couriersRepository.save(courier);
+    const savedDelivery = await this.dataSource.transaction(async (manager) => {
+      const transactionalDeliveriesRepository = manager.getRepository(Delivery);
+      const transactionalOrdersRepository = manager.getRepository(Order);
+      const transactionalCouriersRepository = manager.getRepository(Courier);
+
+      const saved = await transactionalDeliveriesRepository.save(delivery);
+
+      await transactionalOrdersRepository.save(order);
+      await transactionalCouriersRepository.save(courier);
+
+      return saved;
+    });
 
     return DeliveryMapper.toResponseDto(savedDelivery);
   }
@@ -175,8 +203,16 @@ export class DeliveriesService {
     delivery.estado = 'CANCELADA';
     courier.disponibilidad = 'DISPONIBLE';
 
-    const savedDelivery = await this.deliveriesRepository.save(delivery);
-    await this.couriersRepository.save(courier);
+    const savedDelivery = await this.dataSource.transaction(async (manager) => {
+      const transactionalDeliveriesRepository = manager.getRepository(Delivery);
+      const transactionalCouriersRepository = manager.getRepository(Courier);
+
+      const saved = await transactionalDeliveriesRepository.save(delivery);
+
+      await transactionalCouriersRepository.save(courier);
+
+      return saved;
+    });
 
     return DeliveryMapper.toResponseDto(savedDelivery);
   }
