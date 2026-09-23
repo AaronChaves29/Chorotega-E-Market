@@ -1,8 +1,12 @@
-import type { DataSource, EntityManager, Repository } from 'typeorm';
+import type {
+  DataSource,
+  EntityManager,
+  Repository,
+  SelectQueryBuilder,
+} from 'typeorm';
 import { Courier } from '../../couriers/entities/courier.entity';
 import { CouriersRepository } from '../../couriers/repositories/couriers.repository';
 import { Neighborhood } from '../../neighborhoods/entities/neighborhood.entity';
-import { NeighborhoodsRepository } from '../../neighborhoods/repositories/neighborhoods.repository';
 import { Order } from '../../orders/entities/order.entity';
 import { OrdersRepository } from '../../orders/repositories/orders.repository';
 import { Delivery } from '../entities/delivery.entity';
@@ -13,6 +17,9 @@ import { InactiveNeighborhoodException } from '../exceptions/inactive-neighborho
 import { InvalidDeliveryAddressException } from '../exceptions/invalid-delivery-address.exception';
 import { InvalidDeliveryStateException } from '../exceptions/invalid-delivery-state.exception';
 import { InvalidOrderStateException } from '../exceptions/invalid-order-state.exception';
+import { InvalidAssignmentInputException } from '../exceptions/invalid-assignment-input.exception';
+import { NeighborhoodNotFoundException } from '../exceptions/neighborhood-not-found.exception';
+import type { AssignDeliveryDto } from '../dtos/assign-delivery.dto';
 import { OrderNotFoundException } from '../exceptions/order-not-found.exception';
 import { DeliveriesRepository } from '../repositories/deliveries.repository';
 import { DeliveriesService } from './deliveries.service';
@@ -23,7 +30,10 @@ describe('DeliveriesService', () => {
   let deliveriesRepository: jest.Mocked<DeliveriesRepository>;
   let ordersRepository: jest.Mocked<OrdersRepository>;
   let couriersRepository: jest.Mocked<CouriersRepository>;
-  let neighborhoodsRepository: jest.Mocked<NeighborhoodsRepository>;
+  let transactionalNeighborhoodsRepository: jest.Mocked<
+    Repository<Neighborhood>
+  >;
+  let activeDeliveryQuery: jest.Mocked<SelectQueryBuilder<Delivery>>;
 
   let dataSource: jest.Mocked<DataSource>;
   let entityManager: jest.Mocked<EntityManager>;
@@ -49,19 +59,27 @@ describe('DeliveriesService', () => {
       save: jest.fn(),
     } as unknown as jest.Mocked<CouriersRepository>;
 
-    neighborhoodsRepository = {
-      findById: jest.fn(),
-    } as unknown as jest.Mocked<NeighborhoodsRepository>;
+    transactionalNeighborhoodsRepository = {
+      findOneBy: jest.fn(),
+    } as unknown as jest.Mocked<Repository<Neighborhood>>;
+    activeDeliveryQuery = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn(),
+    } as unknown as jest.Mocked<SelectQueryBuilder<Delivery>>;
 
     transactionalDeliveriesRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(activeDeliveryQuery),
       save: jest.fn(),
     } as unknown as jest.Mocked<Repository<Delivery>>;
 
     transactionalOrdersRepository = {
+      findOne: jest.fn(),
       save: jest.fn(),
     } as unknown as jest.Mocked<Repository<Order>>;
 
     transactionalCouriersRepository = {
+      findOne: jest.fn(),
       save: jest.fn(),
     } as unknown as jest.Mocked<Repository<Courier>>;
 
@@ -79,6 +97,8 @@ describe('DeliveriesService', () => {
           return transactionalCouriersRepository;
         }
 
+        if (entity === Neighborhood)
+          return transactionalNeighborhoodsRepository;
         throw new Error('Repositorio transaccional no configurado.');
       }),
     } as unknown as jest.Mocked<EntityManager>;
@@ -94,12 +114,75 @@ describe('DeliveriesService', () => {
       deliveriesRepository,
       ordersRepository,
       couriersRepository,
-      neighborhoodsRepository,
       dataSource,
     );
   });
 
   describe('assignDelivery', () => {
+    it.each([
+      ['pedido como texto', { idPedido: '1', idRepartidor: 1 }],
+      ['repartidor como texto', { idPedido: 1, idRepartidor: '1' }],
+      ['pedido cero', { idPedido: 0, idRepartidor: 1 }],
+      ['repartidor negativo', { idPedido: 1, idRepartidor: -1 }],
+      ['pedido fraccionario', { idPedido: 1.5, idRepartidor: 1 }],
+      ['repartidor fraccionario', { idPedido: 1, idRepartidor: 1.5 }],
+      ['pedido fuera de int', { idPedido: 2_147_483_648, idRepartidor: 1 }],
+      ['repartidor fuera de int', { idPedido: 1, idRepartidor: 2_147_483_648 }],
+      ['identificador ausente', { idPedido: 1 }],
+      ['valor no numérico', { idPedido: Number.NaN, idRepartidor: 1 }],
+      [
+        'propiedad adicional',
+        { idPedido: 1, idRepartidor: 1, estado: 'ASIGNADA' },
+      ],
+      ['objeto nulo', null],
+      ['arreglo', []],
+      ['valor primitivo', '1'],
+    ])('rechaza %s antes de consultar o escribir', async (_name, input) => {
+      await expect(
+        service.assignDelivery(input as AssignDeliveryDto),
+      ).rejects.toBeInstanceOf(InvalidAssignmentInputException);
+      expect(dataSource.transaction.mock.calls).toHaveLength(0);
+      expect(ordersRepository.findById.mock.calls).toHaveLength(0);
+      expect(transactionalDeliveriesRepository.save.mock.calls).toHaveLength(0);
+      expect(transactionalCouriersRepository.save.mock.calls).toHaveLength(0);
+    });
+
+    it('rechaza un barrio inexistente sin escribir', async () => {
+      transactionalOrdersRepository.findOne.mockResolvedValue(
+        Object.assign(new Order(), {
+          idPedido: 1,
+          estado: 'PREPARANDO',
+          direccionEntrega: 'Nicoya',
+          idBarrio: 1,
+        }),
+      );
+      transactionalNeighborhoodsRepository.findOneBy.mockResolvedValue(null);
+      await expect(
+        service.assignDelivery({ idPedido: 1, idRepartidor: 1 }),
+      ).rejects.toBeInstanceOf(NeighborhoodNotFoundException);
+      expect(transactionalDeliveriesRepository.save.mock.calls).toHaveLength(0);
+    });
+
+    it('rechaza un repartidor inexistente sin escribir', async () => {
+      transactionalOrdersRepository.findOne.mockResolvedValue(
+        Object.assign(new Order(), {
+          idPedido: 1,
+          estado: 'PREPARANDO',
+          direccionEntrega: 'Nicoya',
+          idBarrio: 1,
+        }),
+      );
+      transactionalNeighborhoodsRepository.findOneBy.mockResolvedValue(
+        Object.assign(new Neighborhood(), { estado: 'ACTIVO' }),
+      );
+      activeDeliveryQuery.getOne.mockResolvedValue(null);
+      transactionalCouriersRepository.findOne.mockResolvedValue(null);
+      await expect(
+        service.assignDelivery({ idPedido: 1, idRepartidor: 1 }),
+      ).rejects.toBeInstanceOf(CourierNotFoundException);
+      expect(transactionalDeliveriesRepository.save.mock.calls).toHaveLength(0);
+    });
+
     it('debe asignar una entrega correctamente', async () => {
       const order = {
         idPedido: 1,
@@ -127,10 +210,12 @@ describe('DeliveriesService', () => {
         fechaEntrega: null,
       } as Delivery;
 
-      ordersRepository.findById.mockResolvedValue(order);
-      neighborhoodsRepository.findById.mockResolvedValue(neighborhood);
-      deliveriesRepository.findActiveByOrderId.mockResolvedValue(null);
-      couriersRepository.findById.mockResolvedValue(courier);
+      transactionalOrdersRepository.findOne.mockResolvedValue(order);
+      transactionalNeighborhoodsRepository.findOneBy.mockResolvedValue(
+        neighborhood,
+      );
+      activeDeliveryQuery.getOne.mockResolvedValue(null);
+      transactionalCouriersRepository.findOne.mockResolvedValue(courier);
       transactionalDeliveriesRepository.save.mockResolvedValue(savedDelivery);
       transactionalCouriersRepository.save.mockResolvedValue(courier);
 
@@ -150,6 +235,19 @@ describe('DeliveriesService', () => {
 
       expect(courier.disponibilidad).toBe('OCUPADO');
 
+      expect(transactionalOrdersRepository.findOne.mock.calls).toEqual([
+        [{ where: { idPedido: 1 }, lock: { mode: 'pessimistic_write' } }],
+      ]);
+      expect(transactionalCouriersRepository.findOne.mock.calls).toEqual([
+        [{ where: { idRepartidor: 1 }, lock: { mode: 'pessimistic_write' } }],
+      ]);
+      expect(ordersRepository.findById.mock.calls).toHaveLength(0);
+      expect(couriersRepository.findById.mock.calls).toHaveLength(0);
+      expect(deliveriesRepository.findActiveByOrderId.mock.calls).toHaveLength(
+        0,
+      );
+      expect(result).not.toBeInstanceOf(Delivery);
+
       expect(dataSource.transaction.mock.calls).toHaveLength(1);
 
       expect(transactionalDeliveriesRepository.save.mock.calls).toContainEqual([
@@ -165,7 +263,7 @@ describe('DeliveriesService', () => {
     });
 
     it('debe rechazar un pedido inexistente', async () => {
-      ordersRepository.findById.mockResolvedValue(null);
+      transactionalOrdersRepository.findOne.mockResolvedValue(null);
 
       await expect(
         service.assignDelivery({
@@ -181,7 +279,7 @@ describe('DeliveriesService', () => {
         estado: 'CONFIRMADO',
       } as Order;
 
-      ordersRepository.findById.mockResolvedValue(order);
+      transactionalOrdersRepository.findOne.mockResolvedValue(order);
 
       await expect(
         service.assignDelivery({
@@ -199,7 +297,7 @@ describe('DeliveriesService', () => {
         idBarrio: 1,
       } as Order;
 
-      ordersRepository.findById.mockResolvedValue(order);
+      transactionalOrdersRepository.findOne.mockResolvedValue(order);
 
       await expect(
         service.assignDelivery({
@@ -222,8 +320,10 @@ describe('DeliveriesService', () => {
         estado: 'INACTIVO',
       } as Neighborhood;
 
-      ordersRepository.findById.mockResolvedValue(order);
-      neighborhoodsRepository.findById.mockResolvedValue(neighborhood);
+      transactionalOrdersRepository.findOne.mockResolvedValue(order);
+      transactionalNeighborhoodsRepository.findOneBy.mockResolvedValue(
+        neighborhood,
+      );
 
       await expect(
         service.assignDelivery({
@@ -253,11 +353,11 @@ describe('DeliveriesService', () => {
         estado: 'ASIGNADA',
       } as Delivery;
 
-      ordersRepository.findById.mockResolvedValue(order);
-      neighborhoodsRepository.findById.mockResolvedValue(neighborhood);
-      deliveriesRepository.findActiveByOrderId.mockResolvedValue(
-        activeDelivery,
+      transactionalOrdersRepository.findOne.mockResolvedValue(order);
+      transactionalNeighborhoodsRepository.findOneBy.mockResolvedValue(
+        neighborhood,
       );
+      activeDeliveryQuery.getOne.mockResolvedValue(activeDelivery);
 
       await expect(
         service.assignDelivery({
@@ -285,10 +385,12 @@ describe('DeliveriesService', () => {
         disponibilidad: 'OCUPADO',
       } as Courier;
 
-      ordersRepository.findById.mockResolvedValue(order);
-      neighborhoodsRepository.findById.mockResolvedValue(neighborhood);
-      deliveriesRepository.findActiveByOrderId.mockResolvedValue(null);
-      couriersRepository.findById.mockResolvedValue(courier);
+      transactionalOrdersRepository.findOne.mockResolvedValue(order);
+      transactionalNeighborhoodsRepository.findOneBy.mockResolvedValue(
+        neighborhood,
+      );
+      activeDeliveryQuery.getOne.mockResolvedValue(null);
+      transactionalCouriersRepository.findOne.mockResolvedValue(courier);
 
       await expect(
         service.assignDelivery({

@@ -14,7 +14,6 @@ import { Delivery } from '../../src/modules/deliveries/entities/delivery.entity'
 import { DeliveriesRepository } from '../../src/modules/deliveries/repositories/deliveries.repository';
 import { OrdersRepository } from '../../src/modules/orders/repositories/orders.repository';
 import { CouriersRepository } from '../../src/modules/couriers/repositories/couriers.repository';
-import { NeighborhoodsRepository } from '../../src/modules/neighborhoods/repositories/neighborhoods.repository';
 import { DeliveriesService } from '../../src/modules/deliveries/services/deliveries.service';
 
 describe('Deliveries transaction rollback integration', () => {
@@ -44,15 +43,11 @@ describe('Deliveries transaction rollback integration', () => {
     const deliveriesRepository = new DeliveriesRepository(deliveryRepository);
     const ordersRepository = new OrdersRepository(orderRepository);
     const couriersRepository = new CouriersRepository(courierRepository);
-    const neighborhoodsRepository = new NeighborhoodsRepository(
-      neighborhoodRepository,
-    );
 
     deliveriesService = new DeliveriesService(
       deliveriesRepository,
       ordersRepository,
       couriersRepository,
-      neighborhoodsRepository,
       dataSource,
     );
   });
