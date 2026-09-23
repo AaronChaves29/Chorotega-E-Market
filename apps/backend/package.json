@@ -80,7 +80,26 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "collectCoverageFrom": [
-      "**/*.(t|j)s"
+      "modules/{orders,deliveries}/**/*.ts",
+      "!**/entities/**",
+      "!**/repositories/**",
+      "!**/interfaces/**",
+      "!**/*.module.ts",
+      "!**/*.spec.ts"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "statements": 70,
+        "branches": 70,
+        "functions": 70,
+        "lines": 70
+      }
+    },
+    "coverageReporters": [
+      "text",
+      "html",
+      "lcov",
+      "json-summary"
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"

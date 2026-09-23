@@ -64,6 +64,16 @@ describe('ProductsRepository: consultas fijas', () => {
       });
   }
 
+  it('bloquea los productos solicitados con parámetros y orden por ID', async () => {
+    const execute = captureQuery([]);
+    expect(await repository.findByIdsForUpdate([5, 2])).toEqual([]);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(sql.slice(sql.indexOf(' WHERE '))).toBe(
+      ' WHERE "producto"."id_producto" IN ($1, $2) ORDER BY "producto"."id_producto" ASC FOR UPDATE',
+    );
+    expect(parameters).toEqual([5, 2]);
+  });
+
   it.each([7, 42])(
     'filtra la tienda %i, estado y existencias con parámetros y orden estable',
     async (idTienda) => {

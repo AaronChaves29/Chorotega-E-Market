@@ -79,8 +79,8 @@ jobs:
             -v ON_ERROR_STOP=1 --single-transaction -f - \
             < ../../database/postgres/seeds/V1__seed_initial_data.sql
 
-      - name: Ejecutar pruebas unitarias
-        run: npm test -- --runInBand
+      - name: Ejecutar pruebas unitarias y cobertura de negocio
+        run: npm run test:cov -- --runInBand
 
       - name: Ejecutar pruebas de integración con Testcontainers
         run: npm run test:integration
