@@ -33,6 +33,16 @@ export class ProductsRepository extends TypeOrmBaseRepository<
     return this.repository.create(data);
   }
 
+  // Requiere una transacción activa. El orden reduce bloqueos cruzados entre pedidos.
+  findByIdsForUpdate(ids: Product['idProducto'][]): Promise<Product[]> {
+    return this.repository
+      .createQueryBuilder('producto')
+      .where('producto.idProducto IN (:...ids)', { ids })
+      .orderBy('producto.idProducto', 'ASC')
+      .setLock('pessimistic_write')
+      .getMany();
+  }
+
   findAvailableByStore(idTienda: Product['idTienda']): Promise<Product[]> {
     return this.repository
       .createQueryBuilder('producto')
