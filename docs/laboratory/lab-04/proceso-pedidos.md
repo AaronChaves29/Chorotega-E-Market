@@ -137,8 +137,9 @@ Este proceso solo ejecuta `PENDIENTE → CONFIRMADO`. La función rechaza por de
 cancelación antes de autorizarla explícitamente. La función no consulta entregas
 ni implementa esa operación. No existe `PREPARANDO → CANCELADO`.
 
-El patrón se mantiene como mapa y función, sin jerarquías de clases. No se afirma
-que este bloque complete por sí solo los dos patrones requeridos por el Lab 4.
+El patrón se mantiene como mapa y función, sin jerarquías de clases. El segundo
+patrón, Specification, se implementa y justifica en
+[el proceso de entregas](proceso-entregas.md#segundo-patrón-specification).
 
 ## Pruebas
 
@@ -209,8 +210,12 @@ cubiertas, incluidos DTOs y caminos del proceso de entregas.
 CI usa ahora `npm run test:cov -- --runInBand` en el paso unitario: ejecuta todas
 las unitarias, imprime el reporte y falla si no cumple el umbral. Conserva
 integración y los demás pasos/jobs. Los reportes HTML, LCOV y JSON quedan en
-`apps/backend/coverage/`, ignorado por Git. Los resultados anteriores son locales;
-la ejecución remota del cambio queda pendiente de publicación.
+`apps/backend/coverage/`, ignorado por Git. Los resultados anteriores corresponden
+a la validación local original. El [CI de develop](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/35816057244)
+del commit `556eed10d0215e52215d964bbb14e5c7e13d8402` terminó con `success`,
+incluyendo cobertura e integración. La evidencia local actualizada del cierre de
+entregas está en [proceso-entregas.md](proceso-entregas.md#verificación-local-y-cobertura);
+el CI de esa corrección sigue pendiente de publicación.
 
 ## Límites y continuación
 
@@ -218,5 +223,5 @@ Quedan fuera del bloque autenticación y autorización HTTP, operaciones posteri
 a `CONFIRMADO`, restitución de inventario por cancelación y adopción del mapa de
 estados en otros servicios. No se modifica el proceso de entregas. La frontera DTO
 se garantiza para este nuevo servicio; no se transforma la API histórica de
-productos. La verificación global de los dos patrones sigue siendo un requisito
-de la entrega completa.
+productos. La revisión conjunta de los dos patrones y de la rúbrica se documenta
+en [proceso-entregas.md](proceso-entregas.md#evidencia-de-ci-y-revisión-de-rúbrica).
