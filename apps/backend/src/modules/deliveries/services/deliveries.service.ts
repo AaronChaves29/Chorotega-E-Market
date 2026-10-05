@@ -99,120 +99,134 @@ export class DeliveriesService {
   }
 
   async startDelivery(idEntrega: number): Promise<DeliveryResponseDto> {
-    const delivery = await this.deliveriesRepository.findById(idEntrega);
-
-    if (!delivery) {
-      throw new DeliveryNotFoundException(idEntrega);
-    }
-
-    if (delivery.estado !== 'ASIGNADA') {
-      throw new InvalidDeliveryStateException(delivery.estado, 'ASIGNADA');
-    }
-
-    const order = await this.ordersRepository.findById(delivery.idPedido);
-
-    if (!order) {
-      throw new OrderNotFoundException(delivery.idPedido);
-    }
-
-    delivery.estado = 'EN_CAMINO';
-    order.estado = 'EN_CAMINO';
-
-    const savedDelivery = await this.dataSource.transaction(async (manager) => {
+    return this.dataSource.transaction(async (manager) => {
       const transactionalDeliveriesRepository = manager.getRepository(Delivery);
-
       const transactionalOrdersRepository = manager.getRepository(Order);
 
-      const saved = await transactionalDeliveriesRepository.save(delivery);
+      const delivery = await transactionalDeliveriesRepository.findOne({
+        where: { idEntrega },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!delivery) {
+        throw new DeliveryNotFoundException(idEntrega);
+      }
+
+      if (delivery.estado !== 'ASIGNADA') {
+        throw new InvalidDeliveryStateException(delivery.estado, 'ASIGNADA');
+      }
+
+      const order = await transactionalOrdersRepository.findOne({
+        where: { idPedido: delivery.idPedido },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!order) {
+        throw new OrderNotFoundException(delivery.idPedido);
+      }
+
+      delivery.estado = 'EN_CAMINO';
+      order.estado = 'EN_CAMINO';
+
+      const savedDelivery =
+        await transactionalDeliveriesRepository.save(delivery);
 
       await transactionalOrdersRepository.save(order);
 
-      return saved;
+      return DeliveryMapper.toResponseDto(savedDelivery);
     });
-
-    return DeliveryMapper.toResponseDto(savedDelivery);
   }
 
   async completeDelivery(idEntrega: number): Promise<DeliveryResponseDto> {
-    const delivery = await this.deliveriesRepository.findById(idEntrega);
-
-    if (!delivery) {
-      throw new DeliveryNotFoundException(idEntrega);
-    }
-
-    if (delivery.estado !== 'EN_CAMINO') {
-      throw new InvalidDeliveryStateException(delivery.estado, 'EN_CAMINO');
-    }
-
-    const order = await this.ordersRepository.findById(delivery.idPedido);
-
-    if (!order) {
-      throw new OrderNotFoundException(delivery.idPedido);
-    }
-
-    const courier = await this.couriersRepository.findById(
-      delivery.idRepartidor,
-    );
-
-    if (!courier) {
-      throw new CourierNotFoundException(delivery.idRepartidor);
-    }
-
-    delivery.estado = 'ENTREGADA';
-    delivery.fechaEntrega = new Date();
-
-    order.estado = 'ENTREGADO';
-    courier.disponibilidad = 'DISPONIBLE';
-
-    const savedDelivery = await this.dataSource.transaction(async (manager) => {
+    return this.dataSource.transaction(async (manager) => {
       const transactionalDeliveriesRepository = manager.getRepository(Delivery);
       const transactionalOrdersRepository = manager.getRepository(Order);
       const transactionalCouriersRepository = manager.getRepository(Courier);
 
-      const saved = await transactionalDeliveriesRepository.save(delivery);
+      const delivery = await transactionalDeliveriesRepository.findOne({
+        where: { idEntrega },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!delivery) {
+        throw new DeliveryNotFoundException(idEntrega);
+      }
+
+      if (delivery.estado !== 'EN_CAMINO') {
+        throw new InvalidDeliveryStateException(delivery.estado, 'EN_CAMINO');
+      }
+
+      const order = await transactionalOrdersRepository.findOne({
+        where: { idPedido: delivery.idPedido },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!order) {
+        throw new OrderNotFoundException(delivery.idPedido);
+      }
+
+      const courier = await transactionalCouriersRepository.findOne({
+        where: { idRepartidor: delivery.idRepartidor },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!courier) {
+        throw new CourierNotFoundException(delivery.idRepartidor);
+      }
+
+      delivery.estado = 'ENTREGADA';
+      delivery.fechaEntrega = new Date();
+
+      order.estado = 'ENTREGADO';
+      courier.disponibilidad = 'DISPONIBLE';
+
+      const savedDelivery =
+        await transactionalDeliveriesRepository.save(delivery);
 
       await transactionalOrdersRepository.save(order);
       await transactionalCouriersRepository.save(courier);
 
-      return saved;
+      return DeliveryMapper.toResponseDto(savedDelivery);
     });
-
-    return DeliveryMapper.toResponseDto(savedDelivery);
   }
 
   async cancelDelivery(idEntrega: number): Promise<DeliveryResponseDto> {
-    const delivery = await this.deliveriesRepository.findById(idEntrega);
-
-    if (!delivery) {
-      throw new DeliveryNotFoundException(idEntrega);
-    }
-
-    if (delivery.estado !== 'ASIGNADA') {
-      throw new InvalidDeliveryStateException(delivery.estado, 'ASIGNADA');
-    }
-
-    const courier = await this.couriersRepository.findById(
-      delivery.idRepartidor,
-    );
-
-    if (!courier) {
-      throw new CourierNotFoundException(delivery.idRepartidor);
-    }
-
-    delivery.estado = 'CANCELADA';
-    courier.disponibilidad = 'DISPONIBLE';
-
-    const savedDelivery = await this.dataSource.transaction(async (manager) => {
+    return this.dataSource.transaction(async (manager) => {
       const transactionalDeliveriesRepository = manager.getRepository(Delivery);
+
       const transactionalCouriersRepository = manager.getRepository(Courier);
 
-      const saved = await transactionalDeliveriesRepository.save(delivery);
+      const delivery = await transactionalDeliveriesRepository.findOne({
+        where: { idEntrega },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!delivery) {
+        throw new DeliveryNotFoundException(idEntrega);
+      }
+
+      if (delivery.estado !== 'ASIGNADA') {
+        throw new InvalidDeliveryStateException(delivery.estado, 'ASIGNADA');
+      }
+
+      const courier = await transactionalCouriersRepository.findOne({
+        where: { idRepartidor: delivery.idRepartidor },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!courier) {
+        throw new CourierNotFoundException(delivery.idRepartidor);
+      }
+
+      delivery.estado = 'CANCELADA';
+      courier.disponibilidad = 'DISPONIBLE';
+
+      const savedDelivery =
+        await transactionalDeliveriesRepository.save(delivery);
 
       await transactionalCouriersRepository.save(courier);
 
-      return saved;
+      return DeliveryMapper.toResponseDto(savedDelivery);
     });
-
-    return DeliveryMapper.toResponseDto(savedDelivery);
   }
 }

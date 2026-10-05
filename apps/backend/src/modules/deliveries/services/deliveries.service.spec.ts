@@ -23,6 +23,7 @@ import type { AssignDeliveryDto } from '../dtos/assign-delivery.dto';
 import { OrderNotFoundException } from '../exceptions/order-not-found.exception';
 import { DeliveriesRepository } from '../repositories/deliveries.repository';
 import { DeliveriesService } from './deliveries.service';
+import { DeliveryNotFoundException } from '../exceptions/delivery-not-found.exception';
 
 describe('DeliveriesService', () => {
   let service: DeliveriesService;
@@ -69,6 +70,7 @@ describe('DeliveriesService', () => {
     } as unknown as jest.Mocked<SelectQueryBuilder<Delivery>>;
 
     transactionalDeliveriesRepository = {
+      findOne: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(activeDeliveryQuery),
       save: jest.fn(),
     } as unknown as jest.Mocked<Repository<Delivery>>;
@@ -142,8 +144,8 @@ describe('DeliveriesService', () => {
         service.assignDelivery(input as AssignDeliveryDto),
       ).rejects.toBeInstanceOf(InvalidAssignmentInputException);
       expect(dataSource.transaction.mock.calls).toHaveLength(0);
-      expect(ordersRepository.findById.mock.calls).toHaveLength(0);
       expect(transactionalDeliveriesRepository.save.mock.calls).toHaveLength(0);
+      expect(transactionalOrdersRepository.save.mock.calls).toHaveLength(0);
       expect(transactionalCouriersRepository.save.mock.calls).toHaveLength(0);
     });
 
@@ -402,6 +404,18 @@ describe('DeliveriesService', () => {
   });
 
   describe('startDelivery', () => {
+    it('debe rechazar iniciar una entrega inexistente', async () => {
+      transactionalDeliveriesRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.startDelivery(999)).rejects.toBeInstanceOf(
+        DeliveryNotFoundException,
+      );
+
+      expect(dataSource.transaction.mock.calls).toHaveLength(1);
+      expect(transactionalDeliveriesRepository.save.mock.calls).toHaveLength(0);
+      expect(transactionalOrdersRepository.save.mock.calls).toHaveLength(0);
+    });
+
     it('debe iniciar una entrega correctamente', async () => {
       const delivery = {
         idEntrega: 1,
@@ -417,8 +431,8 @@ describe('DeliveriesService', () => {
         estado: 'PREPARANDO',
       } as Order;
 
-      deliveriesRepository.findById.mockResolvedValue(delivery);
-      ordersRepository.findById.mockResolvedValue(order);
+      transactionalDeliveriesRepository.findOne.mockResolvedValue(delivery);
+      transactionalOrdersRepository.findOne.mockResolvedValue(order);
 
       transactionalDeliveriesRepository.save.mockImplementation((value) =>
         Promise.resolve(value as Delivery),
@@ -456,7 +470,7 @@ describe('DeliveriesService', () => {
         estado: 'EN_CAMINO',
       } as Delivery;
 
-      deliveriesRepository.findById.mockResolvedValue(delivery);
+      transactionalDeliveriesRepository.findOne.mockResolvedValue(delivery);
 
       await expect(service.startDelivery(1)).rejects.toBeInstanceOf(
         InvalidDeliveryStateException,
@@ -465,6 +479,19 @@ describe('DeliveriesService', () => {
   });
 
   describe('completeDelivery', () => {
+    it('debe rechazar completar una entrega inexistente', async () => {
+      transactionalDeliveriesRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.completeDelivery(999)).rejects.toBeInstanceOf(
+        DeliveryNotFoundException,
+      );
+
+      expect(dataSource.transaction.mock.calls).toHaveLength(1);
+      expect(transactionalDeliveriesRepository.save.mock.calls).toHaveLength(0);
+      expect(transactionalOrdersRepository.save.mock.calls).toHaveLength(0);
+      expect(transactionalCouriersRepository.save.mock.calls).toHaveLength(0);
+    });
+
     it('debe completar una entrega correctamente dentro de una transacción', async () => {
       const delivery = {
         idEntrega: 1,
@@ -485,9 +512,9 @@ describe('DeliveriesService', () => {
         disponibilidad: 'OCUPADO',
       } as Courier;
 
-      deliveriesRepository.findById.mockResolvedValue(delivery);
-      ordersRepository.findById.mockResolvedValue(order);
-      couriersRepository.findById.mockResolvedValue(courier);
+      transactionalDeliveriesRepository.findOne.mockResolvedValue(delivery);
+      transactionalOrdersRepository.findOne.mockResolvedValue(order);
+      transactionalCouriersRepository.findOne.mockResolvedValue(courier);
 
       transactionalDeliveriesRepository.save.mockImplementation((value) =>
         Promise.resolve(value as Delivery),
@@ -536,13 +563,16 @@ describe('DeliveriesService', () => {
         estado: 'ASIGNADA',
       } as Delivery;
 
-      deliveriesRepository.findById.mockResolvedValue(delivery);
+      transactionalDeliveriesRepository.findOne.mockResolvedValue(delivery);
 
       await expect(service.completeDelivery(1)).rejects.toBeInstanceOf(
         InvalidDeliveryStateException,
       );
 
-      expect(dataSource.transaction.mock.calls).toHaveLength(0);
+      expect(dataSource.transaction.mock.calls).toHaveLength(1);
+      expect(transactionalDeliveriesRepository.save.mock.calls).toHaveLength(0);
+      expect(transactionalOrdersRepository.save.mock.calls).toHaveLength(0);
+      expect(transactionalCouriersRepository.save.mock.calls).toHaveLength(0);
     });
 
     it('debe rechazar completar la entrega si el repartidor no existe', async () => {
@@ -558,19 +588,34 @@ describe('DeliveriesService', () => {
         estado: 'EN_CAMINO',
       } as Order;
 
-      deliveriesRepository.findById.mockResolvedValue(delivery);
-      ordersRepository.findById.mockResolvedValue(order);
-      couriersRepository.findById.mockResolvedValue(null);
+      transactionalDeliveriesRepository.findOne.mockResolvedValue(delivery);
+      transactionalOrdersRepository.findOne.mockResolvedValue(order);
+      transactionalCouriersRepository.findOne.mockResolvedValue(null);
 
       await expect(service.completeDelivery(1)).rejects.toBeInstanceOf(
         CourierNotFoundException,
       );
 
-      expect(dataSource.transaction.mock.calls).toHaveLength(0);
+      expect(dataSource.transaction.mock.calls).toHaveLength(1);
+      expect(transactionalDeliveriesRepository.save.mock.calls).toHaveLength(0);
+      expect(transactionalOrdersRepository.save.mock.calls).toHaveLength(0);
+      expect(transactionalCouriersRepository.save.mock.calls).toHaveLength(0);
     });
   });
 
   describe('cancelDelivery', () => {
+    it('debe rechazar cancelar una entrega inexistente', async () => {
+      transactionalDeliveriesRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.cancelDelivery(999)).rejects.toBeInstanceOf(
+        DeliveryNotFoundException,
+      );
+
+      expect(dataSource.transaction.mock.calls).toHaveLength(1);
+      expect(transactionalDeliveriesRepository.save.mock.calls).toHaveLength(0);
+      expect(transactionalCouriersRepository.save.mock.calls).toHaveLength(0);
+    });
+
     it('debe cancelar una entrega asignada y liberar al repartidor', async () => {
       const delivery = {
         idEntrega: 1,
@@ -586,8 +631,8 @@ describe('DeliveriesService', () => {
         disponibilidad: 'OCUPADO',
       } as Courier;
 
-      deliveriesRepository.findById.mockResolvedValue(delivery);
-      couriersRepository.findById.mockResolvedValue(courier);
+      transactionalDeliveriesRepository.findOne.mockResolvedValue(delivery);
+      transactionalCouriersRepository.findOne.mockResolvedValue(courier);
 
       transactionalDeliveriesRepository.save.mockImplementation((value) =>
         Promise.resolve(value as Delivery),
@@ -625,11 +670,16 @@ describe('DeliveriesService', () => {
         estado: 'EN_CAMINO',
       } as Delivery;
 
-      deliveriesRepository.findById.mockResolvedValue(delivery);
+      transactionalDeliveriesRepository.findOne.mockResolvedValue(delivery);
 
       await expect(service.cancelDelivery(1)).rejects.toBeInstanceOf(
         InvalidDeliveryStateException,
       );
+      expect(dataSource.transaction.mock.calls).toHaveLength(1);
+
+      expect(transactionalDeliveriesRepository.save.mock.calls).toHaveLength(0);
+
+      expect(transactionalCouriersRepository.save.mock.calls).toHaveLength(0);
     });
   });
 });

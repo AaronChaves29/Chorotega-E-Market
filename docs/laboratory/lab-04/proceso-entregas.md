@@ -7,10 +7,14 @@
 pedido preparado, ocupar un repartidor disponible y registrar el inicio,
 finalización o cancelación permitida de la entrega.
 
-Este cierre corrige únicamente la concurrencia de `assignDelivery`, ejecuta la
-validación de su entrada y formaliza las reglas combinables mediante Specification.
-Las operaciones posteriores conservan su comportamiento. No cambia entidades,
-migraciones, consultas del Lab 3, autenticación, API REST ni frontend.
+Este cierre corrige la concurrencia de `assignDelivery`, ejecuta la validación de
+su entrada y formaliza las reglas combinables mediante Specification. Además,
+`startDelivery`, `completeDelivery` y `cancelDelivery` realizan ahora sus lecturas,
+validaciones y escrituras dentro de la transacción correspondiente, utilizando
+bloqueos pesimistas sobre los recursos que modifican.
+
+No cambia entidades, migraciones, consultas del Lab 3, autenticación, API REST
+ni frontend.
 
 La guía del Lab 4, página PDF 2, dice: «records de entrada y salida para cada
 proceso; ninguna entidad JPA expuesta fuera del servicio; mapeo manual o con
@@ -96,9 +100,18 @@ nuevas también fallaron contra el servicio anterior, mostrando dos resultados
 `fulfilled`; pasan después de la corrección. La garantía verificada corresponde
 a llamadas concurrentes de asignación, no a escrituras arbitrarias fuera del servicio.
 
-Las operaciones de iniciar, completar y cancelar conservan sus transacciones de
-escritura existentes. Este cambio no refactoriza su estrategia de lecturas ni
-pretende acreditar todos los posibles cruces concurrentes entre esas operaciones.
+Las operaciones `startDelivery`, `completeDelivery` y `cancelDelivery` también
+realizan ahora sus lecturas y escrituras dentro de `DataSource.transaction()`.
+
+`startDelivery` bloquea la entrega y el pedido antes de validar y actualizar sus
+estados. `completeDelivery` bloquea la entrega, el pedido y el repartidor antes de
+marcar la entrega como ENTREGADA, el pedido como ENTREGADO y liberar al
+repartidor. `cancelDelivery` bloquea la entrega y el repartidor antes de marcar la
+entrega como CANCELADA y devolver el repartidor a DISPONIBLE.
+
+De esta forma, las decisiones de negocio de estas operaciones se toman utilizando
+los datos leídos dentro de la misma transacción en la que se realizan las
+escrituras, reduciendo condiciones de carrera entre operaciones concurrentes.
 
 ## Segundo patrón: Specification
 
@@ -125,10 +138,15 @@ segundo patrón distinto con una necesidad presente en entregas.
 
 ## Pruebas y rollback
 
-Se conservan las 14 unitarias anteriores de DeliveriesService. Se añaden 14 casos
-de formato inválido y dos de recursos inexistentes. La prueba de asignación
-comprueba los bloqueos, el uso del manager y la salida sin entidad. Tres pruebas
-de Specification verifican la conjunción y el diagnóstico de cada criterio.
+Las pruebas unitarias de `DeliveriesService` cubren actualmente 33 casos. Además
+de las validaciones de entrada, reglas de asignación, cambios de estado y uso de
+transacciones, se verifican explícitamente los casos en que una entrega no existe
+al intentar iniciarla, completarla o cancelarla. En los tres casos se espera
+`DeliveryNotFoundException` y se comprueba que no se realicen escrituras.
+
+Las pruebas de `startDelivery`, `completeDelivery` y `cancelDelivery` también
+comprueban el uso de los repositorios obtenidos desde el EntityManager
+transaccional.
 
 `test/integration/deliveries-concurrency.integration-spec.ts` reutiliza el helper
 existente: PostgreSQL 16 temporal, puertos dinámicos, nueve entidades, migraciones
@@ -155,12 +173,12 @@ provocar errores.
 
 ## Verificación local y cobertura
 
-Resultados del 23 de septiembre de 2026 en `fix/delivery-assignment-consistency`:
+Resultados de la validación local más reciente en `fix/delivery-transaction-boundaries`:
 
 | Comprobación                                     | Resultado                                |
 | ------------------------------------------------ | ---------------------------------------- |
 | Prettier, ESLint, TypeScript sin emisión y build | Aprobados                                |
-| Unitarias totales                                | 109 aprobadas, 7 suites                  |
+| Unitarias totales                                | 116 aprobadas                            |
 | Unitarias directamente de negocio Lab 4          | 95: pedidos 62; entregas 33              |
 | Otras unitarias                                  | 14 del servicio/repositorio de productos |
 | Integraciones totales                            | 15 aprobadas, 7 suites; 12,356 segundos  |
@@ -188,11 +206,18 @@ en `apps/backend/coverage/`, ignorado por Git.
 ## Evidencia de CI y revisión de rúbrica
 
 Se verificó remotamente el [CI de develop](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/35816057244)
-para `556eed10d0215e52215d964bbb14e5c7e13d8402`: estado `completed`, conclusión
-`success`. Es evidencia de la base integrada; no acredita esta corrección local.
-La rama todavía no se publica. Su CI queda pendiente de commit/push autorizados.
-El workflow existente ya ejecuta unitarias con umbral de cobertura e integración;
-descubre automáticamente la nueva suite. No necesita cambios.
+para `556eed10d0215e52215d964bbb14e5c7e13d8402`: estado `completed` y conclusión
+`success`. Esta ejecución confirma que la base integrada en `develop` tenía el
+workflow funcionando correctamente.
+
+Para este cierre se realizó además una validación local completa. ESLint finalizó
+sin errores, las 116 pruebas unitarias fueron aprobadas, las 15 pruebas de
+integración con PostgreSQL mediante Testcontainers fueron aprobadas y el build
+del backend finalizó correctamente.
+
+El workflow existente ya ejecuta las pruebas unitarias con umbral de cobertura y
+las pruebas de integración. El resultado remoto específico de estos cambios se
+verificará después de publicar e integrar la rama.
 
 | Requisito                                      | Evidencia                                           | Estado    |
 | ---------------------------------------------- | --------------------------------------------------- | --------- |
@@ -206,8 +231,10 @@ descubre automáticamente la nueva suite. No necesita cambios.
 | Cobertura de negocio ≥70 %                     | Cuatro métricas verificadas                         | CUMPLIDO  |
 | CI configurado con umbral                      | Workflow y configuración Jest existentes            | CUMPLIDO  |
 | Documentación de ambos procesos                | Este documento y proceso-pedidos.md                 | CUMPLIDO  |
-| Resultado remoto de esta corrección            | Pendiente de publicación autorizada                 | PENDIENTE |
+| Resultado remoto de esta corrección            | Se verificará después del push/integración           | PENDIENTE |
 
-Los requisitos técnicos están comprobados localmente. El resultado remoto del
-cierre todavía no existe; tampoco se afirma haber efectuado la entrega en el aula
-virtual ni verificado una defensa individual.
+Los requisitos técnicos de este cierre están comprobados localmente mediante
+lint, pruebas unitarias, pruebas de integración y build. El resultado remoto
+específico de estos cambios se verificará después de publicar e integrar la rama;
+tampoco se afirma haber efectuado la entrega en el aula virtual ni verificado una
+defensa individual.
