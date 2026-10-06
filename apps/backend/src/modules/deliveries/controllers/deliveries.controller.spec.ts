@@ -12,6 +12,7 @@ describe('DeliveriesController', () => {
     completeDelivery: jest.fn(),
     cancelDelivery: jest.fn(),
     search: jest.fn(),
+    findById: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -30,13 +31,13 @@ describe('DeliveriesController', () => {
     controller = module.get<DeliveriesController>(DeliveriesController);
   });
 
-  it('delega la asignación de una entrega al servicio', async () => {
+  it('delega la asignación y establece la ubicación del recurso creado', async () => {
     const input = {
       idPedido: 10,
       idRepartidor: 5,
     };
 
-    const response = {
+    const delivery = {
       idEntrega: 1,
       idPedido: 10,
       idRepartidor: 5,
@@ -45,12 +46,21 @@ describe('DeliveriesController', () => {
       fechaEntrega: null,
     } as DeliveryResponseDto;
 
-    deliveriesService.assignDelivery.mockResolvedValue(response);
+    const httpResponse = {
+      location: jest.fn(),
+    };
 
-    await expect(controller.assignDelivery(input)).resolves.toBe(response);
+    deliveriesService.assignDelivery.mockResolvedValue(delivery);
+
+    await expect(
+      controller.assignDelivery(input, httpResponse as never),
+    ).resolves.toBe(delivery);
 
     expect(deliveriesService.assignDelivery).toHaveBeenCalledTimes(1);
     expect(deliveriesService.assignDelivery).toHaveBeenCalledWith(input);
+
+    expect(httpResponse.location).toHaveBeenCalledTimes(1);
+    expect(httpResponse.location).toHaveBeenCalledWith('/api/v1/deliveries/1');
   });
 
   it('delega el inicio de una entrega al servicio', async () => {
@@ -129,5 +139,23 @@ describe('DeliveriesController', () => {
 
     expect(deliveriesService.search).toHaveBeenCalledTimes(1);
     expect(deliveriesService.search).toHaveBeenCalledWith(query);
+  });
+
+  it('delega la consulta de una entrega por id al servicio', async () => {
+    const delivery = {
+      idEntrega: 1,
+      idPedido: 10,
+      idRepartidor: 5,
+      estado: 'ASIGNADA',
+      fechaAsignacion: new Date(),
+      fechaEntrega: null,
+    } as DeliveryResponseDto;
+
+    deliveriesService.findById.mockResolvedValue(delivery);
+
+    await expect(controller.findById(1)).resolves.toBe(delivery);
+
+    expect(deliveriesService.findById).toHaveBeenCalledTimes(1);
+    expect(deliveriesService.findById).toHaveBeenCalledWith(1);
   });
 });

@@ -244,4 +244,14 @@ export class DeliveriesService {
       ),
     };
   }
+
+  async findById(idEntrega: number): Promise<DeliveryResponseDto> {
+    const delivery = await this.deliveriesRepository.findById(idEntrega);
+
+    if (!delivery) {
+      throw new DeliveryNotFoundException(idEntrega);
+    }
+
+    return DeliveryMapper.toResponseDto(delivery);
+  }
 }
