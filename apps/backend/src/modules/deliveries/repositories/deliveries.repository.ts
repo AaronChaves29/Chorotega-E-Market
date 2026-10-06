@@ -4,6 +4,7 @@ import type { FindOptionsWhere, Repository } from 'typeorm';
 import { TypeOrmBaseRepository } from '../../../common/repositories/typeorm-base.repository';
 import { Delivery } from '../entities/delivery.entity';
 import { DeliverySearchFilters } from '../interfaces/delivery-search-filters.interface';
+import { PaginationResult } from '../../../common/pagination/pagination-result';
 
 @Injectable()
 export class DeliveriesRepository extends TypeOrmBaseRepository<
@@ -28,13 +29,25 @@ export class DeliveriesRepository extends TypeOrmBaseRepository<
       .getOne();
   }
 
-  async search(filters: DeliverySearchFilters): Promise<Delivery[]> {
+  async search(
+    filters: DeliverySearchFilters,
+  ): Promise<PaginationResult<Delivery>> {
     const query = this.repository
       .createQueryBuilder('entrega')
       .leftJoinAndSelect('entrega.pedido', 'pedido')
-      .leftJoinAndSelect('entrega.repartidor', 'repartidor')
-      .orderBy('entrega.fechaAsignacion', 'DESC')
-      .addOrderBy('entrega.idEntrega', 'DESC');
+      .leftJoinAndSelect('entrega.repartidor', 'repartidor');
+
+    const sortColumns = {
+      fechaAsignacion: 'entrega.fechaAsignacion',
+      fechaEntrega: 'entrega.fechaEntrega',
+      idEntrega: 'entrega.idEntrega',
+    } as const;
+
+    query.orderBy(sortColumns[filters.sortBy], filters.sortDirection);
+
+    if (filters.sortBy !== 'idEntrega') {
+      query.addOrderBy('entrega.idEntrega', filters.sortDirection);
+    }
 
     if (filters.estado !== undefined) {
       query.andWhere('entrega.estado = :estado', {
@@ -66,6 +79,16 @@ export class DeliveriesRepository extends TypeOrmBaseRepository<
       });
     }
 
-    return query.getMany();
+    query.skip(filters.page * filters.size).take(filters.size);
+
+    const [content, totalElements] = await query.getManyAndCount();
+
+    return {
+      content,
+      page: filters.page,
+      size: filters.size,
+      totalElements,
+      totalPages: Math.ceil(totalElements / filters.size),
+    };
   }
 }

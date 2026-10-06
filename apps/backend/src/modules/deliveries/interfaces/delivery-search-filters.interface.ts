@@ -4,4 +4,8 @@ export interface DeliverySearchFilters {
   idRepartidor?: number;
   fechaDesde?: Date;
   fechaHasta?: Date;
+  page: number;
+  size: number;
+  sortBy: 'fechaAsignacion' | 'fechaEntrega' | 'idEntrega';
+  sortDirection: 'ASC' | 'DESC';
 }
