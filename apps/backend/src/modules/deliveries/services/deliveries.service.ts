@@ -23,6 +23,8 @@ import { InactiveNeighborhoodException } from '../exceptions/inactive-neighborho
 import { DataSource } from 'typeorm';
 import { Order } from '../../orders/entities/order.entity';
 import { Courier } from '../../couriers/entities/courier.entity';
+import { DeliverySearchFilters } from '../interfaces/delivery-search-filters.interface';
+import { PaginationResult } from 'src/common/pagination/pagination-result';
 
 @Injectable()
 export class DeliveriesService {
@@ -228,5 +230,18 @@ export class DeliveriesService {
 
       return DeliveryMapper.toResponseDto(savedDelivery);
     });
+  }
+
+  async search(
+    filters: DeliverySearchFilters,
+  ): Promise<PaginationResult<DeliveryResponseDto>> {
+    const result = await this.deliveriesRepository.search(filters);
+
+    return {
+      ...result,
+      content: result.content.map((delivery) =>
+        DeliveryMapper.toResponseDto(delivery),
+      ),
+    };
   }
 }
