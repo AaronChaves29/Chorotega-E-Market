@@ -682,4 +682,42 @@ describe('DeliveriesService', () => {
       expect(transactionalCouriersRepository.save.mock.calls).toHaveLength(0);
     });
   });
+
+  describe('findById', () => {
+    it('debe devolver una entrega existente', async () => {
+      const delivery = Object.assign(new Delivery(), {
+        idEntrega: 1,
+        idPedido: 10,
+        idRepartidor: 5,
+        estado: 'ASIGNADA',
+        fechaAsignacion: new Date('2026-10-05T12:00:00'),
+        fechaEntrega: null,
+      });
+
+      deliveriesRepository.findById.mockResolvedValue(delivery);
+
+      const result = await service.findById(1);
+
+      expect(deliveriesRepository.findById.mock.calls).toEqual([[1]]);
+
+      expect(result).toEqual({
+        idEntrega: 1,
+        idPedido: 10,
+        idRepartidor: 5,
+        estado: 'ASIGNADA',
+        fechaAsignacion: delivery.fechaAsignacion,
+        fechaEntrega: null,
+      });
+    });
+  });
+
+  it('debe rechazar una entrega inexistente', async () => {
+    deliveriesRepository.findById.mockResolvedValue(null);
+
+    await expect(service.findById(999)).rejects.toBeInstanceOf(
+      DeliveryNotFoundException,
+    );
+
+    expect(deliveriesRepository.findById.mock.calls).toEqual([[999]]);
+  });
 });
