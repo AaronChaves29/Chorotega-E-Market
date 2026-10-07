@@ -5,6 +5,8 @@ import { AvailableProductSpecification } from './available-product.specification
 import { ProductCategorySpecification } from './product-category.specification';
 import { ProductStoreSpecification } from './product-store.specification';
 
+import { ProductStateSpecification } from './product-state.specification';
+
 describe('Product Specifications', () => {
   let queryBuilder: SelectQueryBuilder<Product>;
   let andWhereMock: jest.Mock;
@@ -60,6 +62,21 @@ describe('Product Specifications', () => {
       {
         idCategoria: 9,
       },
+    );
+  });
+
+  it('permite filtrar un estado distinto de ACTIVO sin duplicar la condición', () => {
+    new ProductStateSpecification('INACTIVO').apply(queryBuilder);
+    expect(andWhereMock).toHaveBeenCalledWith('producto.estado = :estado', {
+      estado: 'INACTIVO',
+    });
+  });
+
+  it('filtra exactamente cero existencias cuando disponible es false', () => {
+    new AvailableProductSpecification(false).apply(queryBuilder);
+    expect(andWhereMock).toHaveBeenCalledWith(
+      'producto.cantidadDisponible = :cantidadMinima',
+      { cantidadMinima: 0 },
     );
   });
 });

@@ -11,36 +11,41 @@ import {
   Min,
 } from 'class-validator';
 
-export class CreateProductDto {
+export class UpdateProductDto {
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsInt()
   @Min(1)
   @Max(2_147_483_647)
-  idTienda!: number;
+  idTienda?: number;
 
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsInt()
   @Min(1)
   @Max(2_147_483_647)
-  idCategoria!: number;
+  idCategoria?: number;
 
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   @IsNotEmpty()
   @MaxLength(150)
-  nombre!: string;
+  nombre?: string;
 
   @IsOptional()
   @IsString()
   @MaxLength(500)
   descripcion?: string | null;
 
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
   @Max(99_999_999.99)
-  precio!: number;
+  precio?: number;
 
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsInt()
   @Min(0)
   @Max(2_147_483_647)
-  cantidadDisponible!: number;
+  cantidadDisponible?: number;
 
   @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsIn(['ACTIVO', 'INACTIVO', 'AGOTADO'])

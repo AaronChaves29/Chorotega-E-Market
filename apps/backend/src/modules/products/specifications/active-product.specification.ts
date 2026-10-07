@@ -1,11 +1,7 @@
-import type { SelectQueryBuilder } from 'typeorm';
-import { Product } from '../entities/product.entity';
-import type { ProductSpecification } from './product.specification';
+import { ProductStateSpecification } from './product-state.specification';
 
-export class ActiveProductSpecification implements ProductSpecification {
-  apply(queryBuilder: SelectQueryBuilder<Product>): void {
-    queryBuilder.andWhere('producto.estado = :estado', {
-      estado: 'ACTIVO',
-    });
+export class ActiveProductSpecification extends ProductStateSpecification {
+  constructor() {
+    super('ACTIVO');
   }
 }
