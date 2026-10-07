@@ -49,6 +49,7 @@ describe('Repositorios del catálogo: integración funcional', () => {
     ).toEqual([
       { name: 'CreateInitialSchema1788732000000' },
       { name: 'AlignTimestampDefaults1788998400000' },
+      { name: 'AddPasswordHashToUser1791352458237' },
     ]);
   });
 
