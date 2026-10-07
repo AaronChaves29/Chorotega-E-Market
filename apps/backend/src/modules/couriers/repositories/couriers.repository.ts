@@ -16,4 +16,10 @@ export class CouriersRepository extends TypeOrmBaseRepository<
   protected whereId(id: Courier['idRepartidor']): FindOptionsWhere<Courier> {
     return { idRepartidor: id };
   }
+
+  async findByUserId(idUsuario: number): Promise<Courier | null> {
+    return this.repository.findOne({
+      where: { idUsuario },
+    });
+  }
 }

@@ -180,7 +180,10 @@ describe('Deliveries transaction rollback integration', () => {
     `);
 
     await expect(
-      deliveriesService.completeDelivery(delivery.idEntrega),
+      deliveriesService.completeDelivery(
+        delivery.idEntrega,
+        courierUser.idUsuario,
+      ),
     ).rejects.toThrow('forced rollback test failure');
 
     const persistedDelivery = await deliveryRepository.findOneByOrFail({

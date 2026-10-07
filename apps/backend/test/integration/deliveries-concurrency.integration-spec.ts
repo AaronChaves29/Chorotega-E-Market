@@ -24,6 +24,8 @@ describe('Asignación de entregas: concurrencia real', () => {
   let service: DeliveriesService;
 
   beforeAll(async () => {
+    process.env.JWT_SECRET = 'integration-test-jwt-secret';
+
     database = await startPostgresTestDatabase();
     source = database.dataSource;
     module = await Test.createTestingModule({ imports: [DeliveriesModule] })
@@ -43,6 +45,7 @@ describe('Asignación de entregas: concurrencia real', () => {
       await module?.close();
     } finally {
       await database?.stop();
+      delete process.env.JWT_SECRET;
     }
   });
 

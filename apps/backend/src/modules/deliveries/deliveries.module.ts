@@ -7,6 +7,7 @@ import { OrdersModule } from '../orders/orders.module';
 import { CouriersModule } from '../couriers/couriers.module';
 import { NeighborhoodsModule } from '../neighborhoods/neighborhoods.module';
 import { DeliveriesController } from './controllers/deliveries.controller';
+import { AuthModule } from '../../auth/auth.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { DeliveriesController } from './controllers/deliveries.controller';
     OrdersModule,
     CouriersModule,
     NeighborhoodsModule,
+    AuthModule,
   ],
   controllers: [DeliveriesController],
   providers: [DeliveriesRepository, DeliveriesService],
