@@ -31,7 +31,13 @@ describe('Base HTTP sobre PostgreSQL temporal', () => {
   }
 
   it('consulta la ruta real de productos con prefijo y PostgreSQL sin seeds', async () => {
-    await request(server()).get('/api/v1/products').expect(200).expect([]);
+    await request(server()).get('/api/v1/products').expect(200).expect({
+      content: [],
+      page: 0,
+      size: 20,
+      totalElements: 0,
+      totalPages: 0,
+    });
   });
 
   it('retira la ruta de productos sin versión', async () => {
@@ -132,7 +138,7 @@ describe('Base HTTP sobre PostgreSQL temporal', () => {
     );
     error.stack = 'private-stack';
     jest
-      .spyOn(context!.app.get(ProductsRepository), 'findAll')
+      .spyOn(context!.app.get(ProductsRepository), 'search')
       .mockRejectedValueOnce(error);
     const response = await request(server())
       .get('/api/v1/products')
@@ -160,7 +166,7 @@ describe('Base HTTP sobre PostgreSQL temporal', () => {
     async (error, status) => {
       // Simula únicamente el error; la solicitud atraviesa Nest y el filtro real.
       jest
-        .spyOn(context!.app.get(ProductsService), 'findAll')
+        .spyOn(context!.app.get(ProductsService), 'search')
         .mockRejectedValueOnce(error);
       const response = await request(server())
         .get('/api/v1/products')

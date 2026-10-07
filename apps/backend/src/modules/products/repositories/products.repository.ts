@@ -9,6 +9,10 @@ import { ActiveProductSpecification } from '../specifications/active-product.spe
 import { AvailableProductSpecification } from '../specifications/available-product.specification';
 import { ProductCategorySpecification } from '../specifications/product-category.specification';
 
+import type { PaginationResult } from '../../../common/pagination/pagination-result';
+import type { ProductSearchQueryDto } from '../dto/product-search-query.dto';
+import { ProductStateSpecification } from '../specifications/product-state.specification';
+
 export type NewProductData = Pick<
   Product,
   | 'idTienda'
@@ -36,6 +40,56 @@ export class ProductsRepository extends TypeOrmBaseRepository<
   // Construye la entidad en memoria; save es la operación que la persiste.
   createEntity(data: NewProductData): Product {
     return this.repository.create(data);
+  }
+
+  async updateById(
+    id: number,
+    data: Partial<NewProductData>,
+  ): Promise<Product | null> {
+    if (Object.keys(data).length > 0) {
+      const result = await this.repository.update(this.whereId(id), data);
+      if (!result.affected) return null;
+    }
+    return this.findById(id);
+  }
+
+  async search(
+    filters: ProductSearchQueryDto,
+  ): Promise<PaginationResult<Product>> {
+    const specifications: ProductSpecification[] = [];
+    if (filters.idTienda !== undefined)
+      specifications.push(new ProductStoreSpecification(filters.idTienda));
+    if (filters.idCategoria !== undefined)
+      specifications.push(
+        new ProductCategorySpecification(filters.idCategoria),
+      );
+    if (filters.estado !== undefined)
+      specifications.push(new ProductStateSpecification(filters.estado));
+    if (filters.disponible !== undefined)
+      specifications.push(
+        new AvailableProductSpecification(filters.disponible),
+      );
+    const query = this.repository.createQueryBuilder('producto');
+    for (const specification of specifications) specification.apply(query);
+    const columns = {
+      idProducto: 'producto.idProducto',
+      nombre: 'producto.nombre',
+      precio: 'producto.precio',
+      cantidadDisponible: 'producto.cantidadDisponible',
+      estado: 'producto.estado',
+    } as const;
+    query.orderBy(columns[filters.sortBy], filters.sortDirection);
+    if (filters.sortBy !== 'idProducto')
+      query.addOrderBy('producto.idProducto', filters.sortDirection);
+    query.skip(filters.page * filters.size).take(filters.size);
+    const [content, totalElements] = await query.getManyAndCount();
+    return {
+      content,
+      page: filters.page,
+      size: filters.size,
+      totalElements,
+      totalPages: Math.ceil(totalElements / filters.size),
+    };
   }
 
   private applySpecifications(

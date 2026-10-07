@@ -4,6 +4,11 @@ import { Product } from './entities/product.entity';
 import { ProductsService } from './products.service';
 import { ProductsRepository } from './repositories/products.repository';
 
+import { Store } from '../stores/entities/store.entity';
+import { Category } from '../categories/entities/category.entity';
+import { StoresRepository } from '../stores/repositories/stores.repository';
+import { CategoriesRepository } from '../categories/repositories/categories.repository';
+
 describe('ProductsService', () => {
   let service: ProductsService;
 
@@ -27,6 +32,24 @@ describe('ProductsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProductsService,
+        {
+          provide: StoresRepository,
+          useValue: {
+            findById: jest
+              .fn<StoresRepository['findById']>()
+              .mockResolvedValue(Object.assign(new Store(), { idTienda: 1 })),
+          },
+        },
+        {
+          provide: CategoriesRepository,
+          useValue: {
+            findById: jest
+              .fn<CategoriesRepository['findById']>()
+              .mockResolvedValue(
+                Object.assign(new Category(), { idCategoria: 1 }),
+              ),
+          },
+        },
         {
           provide: ProductsRepository,
           useValue: {
@@ -170,7 +193,9 @@ describe('ProductsService', () => {
     createMock.mockReturnValue(entity);
     saveMock.mockResolvedValue(saved);
 
-    expect(await service.create(dto)).toBe(saved);
+    const result = await service.create(dto);
+    expect(result).toEqual(saved);
+    expect(result).not.toBeInstanceOf(Product);
     expect(createMock).toHaveBeenCalledWith(data);
     expect(saveMock).toHaveBeenCalledWith(entity);
   });
