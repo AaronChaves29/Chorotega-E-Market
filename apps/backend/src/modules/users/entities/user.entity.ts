@@ -40,6 +40,14 @@ export class User {
   @Column({ type: 'varchar', length: 150 })
   correo!: string;
 
+  @Column({
+    name: 'clave_hash',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  claveHash!: string | null;
+
   @Column({ type: 'varchar', length: 20, nullable: true })
   telefono!: string | null;
 

@@ -25,6 +25,7 @@ import { Order } from '../../orders/entities/order.entity';
 import { Courier } from '../../couriers/entities/courier.entity';
 import { DeliverySearchFilters } from '../interfaces/delivery-search-filters.interface';
 import { PaginationResult } from 'src/common/pagination/pagination-result';
+import { DeliveryAccessDeniedException } from '../exceptions/delivery-access-denied.exception';
 
 @Injectable()
 export class DeliveriesService {
@@ -100,7 +101,10 @@ export class DeliveriesService {
     });
   }
 
-  async startDelivery(idEntrega: number): Promise<DeliveryResponseDto> {
+  async startDelivery(
+    idEntrega: number,
+    idUsuario: number,
+  ): Promise<DeliveryResponseDto> {
     return this.dataSource.transaction(async (manager) => {
       const transactionalDeliveriesRepository = manager.getRepository(Delivery);
       const transactionalOrdersRepository = manager.getRepository(Order);
@@ -113,6 +117,8 @@ export class DeliveriesService {
       if (!delivery) {
         throw new DeliveryNotFoundException(idEntrega);
       }
+
+      await this.assertCourierOwnsDelivery(delivery, idUsuario);
 
       if (delivery.estado !== 'ASIGNADA') {
         throw new InvalidDeliveryStateException(delivery.estado, 'ASIGNADA');
@@ -139,7 +145,10 @@ export class DeliveriesService {
     });
   }
 
-  async completeDelivery(idEntrega: number): Promise<DeliveryResponseDto> {
+  async completeDelivery(
+    idEntrega: number,
+    idUsuario: number,
+  ): Promise<DeliveryResponseDto> {
     return this.dataSource.transaction(async (manager) => {
       const transactionalDeliveriesRepository = manager.getRepository(Delivery);
       const transactionalOrdersRepository = manager.getRepository(Order);
@@ -153,6 +162,8 @@ export class DeliveriesService {
       if (!delivery) {
         throw new DeliveryNotFoundException(idEntrega);
       }
+
+      await this.assertCourierOwnsDelivery(delivery, idUsuario);
 
       if (delivery.estado !== 'EN_CAMINO') {
         throw new InvalidDeliveryStateException(delivery.estado, 'EN_CAMINO');
@@ -253,5 +264,16 @@ export class DeliveriesService {
     }
 
     return DeliveryMapper.toResponseDto(delivery);
+  }
+
+  private async assertCourierOwnsDelivery(
+    delivery: Delivery,
+    idUsuario: number,
+  ): Promise<void> {
+    const courier = await this.couriersRepository.findByUserId(idUsuario);
+
+    if (!courier || courier.idRepartidor !== delivery.idRepartidor) {
+      throw new DeliveryAccessDeniedException();
+    }
   }
 }

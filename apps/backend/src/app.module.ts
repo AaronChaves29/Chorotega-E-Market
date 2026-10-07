@@ -15,6 +15,7 @@ import { DeliveriesModule } from './modules/deliveries/deliveries.module';
 import { NeighborhoodsModule } from './modules/neighborhoods/neighborhoods.module';
 import { OrderDetailsModule } from './modules/order-details/order-details.module';
 import { OrdersModule } from './modules/orders/orders.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { OrdersModule } from './modules/orders/orders.module';
     NeighborhoodsModule,
     OrderDetailsModule,
     OrdersModule,
+    AuthModule,
   ],
   controllers: [HealthController],
   providers: [HealthService],

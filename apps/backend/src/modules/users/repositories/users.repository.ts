@@ -16,4 +16,10 @@ export class UsersRepository extends TypeOrmBaseRepository<
   protected whereId(id: User['idUsuario']): FindOptionsWhere<User> {
     return { idUsuario: id };
   }
+
+  async findByEmail(correo: string): Promise<User | null> {
+    return this.repository.findOne({
+      where: { correo },
+    });
+  }
 }

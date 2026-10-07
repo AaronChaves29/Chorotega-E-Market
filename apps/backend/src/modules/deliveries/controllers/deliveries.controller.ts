@@ -1,27 +1,40 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
-  Post,
   Param,
   ParseIntPipe,
-  Get,
+  Post,
   Query,
   Res,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
+import type { Response } from 'express';
+import { PaginationResult } from 'src/common/pagination/pagination-result';
+import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../auth/guards/roles.guard';
+import { Roles } from '../../../auth/decorators/roles.decorator';
 import { AssignDeliveryDto } from '../dtos/assign-delivery.dto';
 import { DeliveryResponseDto } from '../dtos/delivery-response.dto';
 import { DeliverySearchQueryDto } from '../dtos/delivery-search-query.dto';
 import { DeliveriesService } from '../services/deliveries.service';
-import { PaginationResult } from 'src/common/pagination/pagination-result';
-import type { Response } from 'express';
+import type { Request } from 'express';
+import { AuthenticatedUser } from '../../../auth/interfaces/authenticated-user.interface';
 
-@Controller('api/v1/deliveries')
+type AuthenticatedRequest = Request & {
+  user: AuthenticatedUser;
+};
+
+@Controller('deliveries')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class DeliveriesController {
   constructor(private readonly deliveriesService: DeliveriesService) {}
 
   @Post()
+  @Roles('ADMIN')
   @HttpCode(HttpStatus.CREATED)
   async assignDelivery(
     @Body() dto: AssignDeliveryDto,
@@ -35,22 +48,33 @@ export class DeliveriesController {
   }
 
   @Post(':id/start')
+  @Roles('REPARTIDOR')
   @HttpCode(HttpStatus.OK)
   startDelivery(
     @Param('id', ParseIntPipe) idEntrega: number,
+    @Req() request: AuthenticatedRequest,
   ): Promise<DeliveryResponseDto> {
-    return this.deliveriesService.startDelivery(idEntrega);
+    return this.deliveriesService.startDelivery(
+      idEntrega,
+      request.user.idUsuario,
+    );
   }
 
   @Post(':id/complete')
+  @Roles('REPARTIDOR')
   @HttpCode(HttpStatus.OK)
   completeDelivery(
     @Param('id', ParseIntPipe) idEntrega: number,
+    @Req() request: AuthenticatedRequest,
   ): Promise<DeliveryResponseDto> {
-    return this.deliveriesService.completeDelivery(idEntrega);
+    return this.deliveriesService.completeDelivery(
+      idEntrega,
+      request.user.idUsuario,
+    );
   }
 
   @Post(':id/cancel')
+  @Roles('ADMIN')
   @HttpCode(HttpStatus.OK)
   cancelDelivery(
     @Param('id', ParseIntPipe) idEntrega: number,
@@ -59,6 +83,7 @@ export class DeliveriesController {
   }
 
   @Get()
+  @Roles('ADMIN', 'REPARTIDOR')
   findAll(
     @Query() query: DeliverySearchQueryDto,
   ): Promise<PaginationResult<DeliveryResponseDto>> {
@@ -66,6 +91,7 @@ export class DeliveriesController {
   }
 
   @Get(':id')
+  @Roles('ADMIN', 'REPARTIDOR')
   findById(
     @Param('id', ParseIntPipe) idEntrega: number,
   ): Promise<DeliveryResponseDto> {
