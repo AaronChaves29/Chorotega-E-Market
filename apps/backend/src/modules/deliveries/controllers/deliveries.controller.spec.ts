@@ -1,7 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
+
+jest.mock('@nestjs/jwt', () => ({
+  JwtService: class JwtService {},
+}));
+
 import { DeliveriesController } from './deliveries.controller';
 import { DeliveryResponseDto } from '../dtos/delivery-response.dto';
 import { DeliveriesService } from '../services/deliveries.service';
+import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../auth/guards/roles.guard';
 
 describe('DeliveriesController', () => {
   let controller: DeliveriesController;
@@ -15,6 +22,22 @@ describe('DeliveriesController', () => {
     findById: jest.fn(),
   };
 
+  const jwtAuthGuard = {
+    canActivate: jest.fn().mockReturnValue(true),
+  };
+
+  const rolesGuard = {
+    canActivate: jest.fn().mockReturnValue(true),
+  };
+
+  const authenticatedRequest = {
+    user: {
+      sub: 'repartidor@chorotega.test',
+      idUsuario: 10,
+      rol: 'REPARTIDOR',
+    },
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -26,7 +49,12 @@ describe('DeliveriesController', () => {
           useValue: deliveriesService,
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue(jwtAuthGuard)
+      .overrideGuard(RolesGuard)
+      .useValue(rolesGuard)
+      .compile();
 
     controller = module.get<DeliveriesController>(DeliveriesController);
   });
@@ -63,7 +91,7 @@ describe('DeliveriesController', () => {
     expect(httpResponse.location).toHaveBeenCalledWith('/api/v1/deliveries/1');
   });
 
-  it('delega el inicio de una entrega al servicio', async () => {
+  it('delega el inicio de una entrega con el usuario autenticado', async () => {
     const response = {
       idEntrega: 1,
       idPedido: 10,
@@ -75,13 +103,15 @@ describe('DeliveriesController', () => {
 
     deliveriesService.startDelivery.mockResolvedValue(response);
 
-    await expect(controller.startDelivery(1)).resolves.toBe(response);
+    await expect(
+      controller.startDelivery(1, authenticatedRequest as never),
+    ).resolves.toBe(response);
 
     expect(deliveriesService.startDelivery).toHaveBeenCalledTimes(1);
-    expect(deliveriesService.startDelivery).toHaveBeenCalledWith(1);
+    expect(deliveriesService.startDelivery).toHaveBeenCalledWith(1, 10);
   });
 
-  it('delega la finalización de una entrega al servicio', async () => {
+  it('delega la finalización de una entrega con el usuario autenticado', async () => {
     const response = {
       idEntrega: 1,
       idPedido: 10,
@@ -93,10 +123,12 @@ describe('DeliveriesController', () => {
 
     deliveriesService.completeDelivery.mockResolvedValue(response);
 
-    await expect(controller.completeDelivery(1)).resolves.toBe(response);
+    await expect(
+      controller.completeDelivery(1, authenticatedRequest as never),
+    ).resolves.toBe(response);
 
     expect(deliveriesService.completeDelivery).toHaveBeenCalledTimes(1);
-    expect(deliveriesService.completeDelivery).toHaveBeenCalledWith(1);
+    expect(deliveriesService.completeDelivery).toHaveBeenCalledWith(1, 10);
   });
 
   it('delega la cancelación de una entrega al servicio', async () => {
