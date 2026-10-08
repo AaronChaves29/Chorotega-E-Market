@@ -2,7 +2,7 @@ import { Controller, Get, Param, ParseIntPipe } from '@nestjs/common';
 import { CourierResponseDto } from '../dtos/courier-response.dto';
 import { CouriersService } from '../services/couriers.service';
 
-@Controller('api/v1/couriers')
+@Controller('couriers')
 export class CouriersController {
   constructor(private readonly couriersService: CouriersService) {}
 
