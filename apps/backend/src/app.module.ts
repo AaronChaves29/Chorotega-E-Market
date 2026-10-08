@@ -3,9 +3,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ProductsModule } from './modules/products/products.module';
 import { HealthModule } from './modules/health/health.module';
-import { HealthController } from './modules/health/health.controller';
-import { HealthService } from './modules/health/health.service';
 import { createDatabaseOptions } from './database/database.options';
+import { UsersHttpModule } from './modules/users/users-http.module';
 import { UsersModule } from './modules/users/users.module';
 import { StoresModule } from './modules/stores/stores.module';
 import { CategoriesModule } from './modules/categories/categories.module';
@@ -35,6 +34,7 @@ import { AuthModule } from './auth/auth.module';
     HealthModule,
     ProductsModule,
     UsersModule,
+    UsersHttpModule,
     StoresModule,
     CategoriesModule,
     OrderAuditsModule,
@@ -45,7 +45,5 @@ import { AuthModule } from './auth/auth.module';
     OrdersModule,
     AuthModule,
   ],
-  controllers: [HealthController],
-  providers: [HealthService],
 })
 export class AppModule {}
