@@ -2,7 +2,7 @@ import { Controller, Get, Param, ParseIntPipe } from '@nestjs/common';
 import { NeighborhoodResponseDto } from '../dtos/neighborhood-response.dto';
 import { NeighborhoodsService } from '../services/neighborhoods.service';
 
-@Controller('api/v1/neighborhoods')
+@Controller('neighborhoods')
 export class NeighborhoodsController {
   constructor(private readonly neighborhoodsService: NeighborhoodsService) {}
 
