@@ -13,6 +13,7 @@ import { CouriersModule } from './modules/couriers/couriers.module';
 import { DeliveriesModule } from './modules/deliveries/deliveries.module';
 import { NeighborhoodsModule } from './modules/neighborhoods/neighborhoods.module';
 import { OrderDetailsModule } from './modules/order-details/order-details.module';
+import { OrdersHttpModule } from './modules/orders/orders-http.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { AuthModule } from './auth/auth.module';
 
@@ -43,6 +44,7 @@ import { AuthModule } from './auth/auth.module';
     NeighborhoodsModule,
     OrderDetailsModule,
     OrdersModule,
+    OrdersHttpModule,
     AuthModule,
   ],
 })
