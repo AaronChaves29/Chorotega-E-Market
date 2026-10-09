@@ -1,3 +1,4 @@
+import { CatalogHttpAuth } from '../../support/catalog-http-auth';
 import request from 'supertest';
 import { CategoriesModule } from '../../../src/modules/categories/categories.module';
 import type { CategoryResponseDto } from '../../../src/modules/categories/dtos/category-response.dto';
@@ -10,8 +11,14 @@ import { createHttpTestApp } from '../../support/create-http-test-app';
 describe('Categorías: API real con PostgreSQL', () => {
   let context: Awaited<ReturnType<typeof createHttpTestApp>> | undefined;
   const path = '/api/v1/categories';
+  const auth = new CatalogHttpAuth();
+  let token: string;
   beforeAll(async () => {
+    await auth.prepare();
     context = await createHttpTestApp([CategoriesModule]);
+  });
+  beforeEach(async () => {
+    token = await auth.loginAdmin(context!.database.dataSource, server());
   });
   afterEach(async () => {
     await context?.database.dataSource.query(`
@@ -20,7 +27,11 @@ describe('Categorías: API real con PostgreSQL', () => {
     `);
   });
   afterAll(async () => {
-    await context?.close();
+    try {
+      await context?.close();
+    } finally {
+      auth.restore();
+    }
   });
   function server() {
     if (!context) throw new Error('Aplicación no inicializada');
@@ -32,6 +43,7 @@ describe('Categorías: API real con PostgreSQL', () => {
   ): Promise<CategoryResponseDto> {
     const response = await request(server())
       .post(path)
+      .set('Authorization', `Bearer ${token}`)
       .send({ nombre, estado, descripcion: 'Descripción' })
       .expect(201);
     return response.body as CategoryResponseDto;
@@ -61,6 +73,7 @@ describe('Categorías: API real con PostgreSQL', () => {
   it('crea con 201, Location utilizable y contrato DTO exacto', async () => {
     const response = await request(server())
       .post(path)
+      .set('Authorization', `Bearer ${token}`)
       .send({ nombre: 'Alimentos' })
       .expect(201);
     const category = response.body as CategoryResponseDto;
@@ -89,7 +102,14 @@ describe('Categorías: API real con PostgreSQL', () => {
     { nombre: 'A', estado: null },
     { nombre: 'A', idCategoria: 99 },
   ])('rechaza creación inválida %j', async (body) => {
-    problem(await request(server()).post(path).send(body).expect(400), 400);
+    problem(
+      await request(server())
+        .post(path)
+        .set('Authorization', `Bearer ${token}`)
+        .send(body)
+        .expect(400),
+      400,
+    );
   });
 
   it('devuelve 404 para una categoría inexistente', async () => {
@@ -108,6 +128,7 @@ describe('Categorías: API real con PostgreSQL', () => {
     const updated = { ...category, descripcion: null };
     await request(server())
       .patch(`${path}/${category.idCategoria}`)
+      .set('Authorization', `Bearer ${token}`)
       .send({ descripcion: null })
       .expect(200)
       .expect(updated);
@@ -117,6 +138,7 @@ describe('Categorías: API real con PostgreSQL', () => {
       .expect(updated);
     await request(server())
       .patch(`${path}/${category.idCategoria}`)
+      .set('Authorization', `Bearer ${token}`)
       .send({})
       .expect(200)
       .expect(updated);
@@ -126,6 +148,7 @@ describe('Categorías: API real con PostgreSQL', () => {
     const category = await create();
     await request(server())
       .patch(`${path}/${category.idCategoria}`)
+      .set('Authorization', `Bearer ${token}`)
       .send({ nombre: 'Nuevo', estado: 'INACTIVA' })
       .expect(200)
       .expect({ ...category, nombre: 'Nuevo', estado: 'INACTIVA' });
@@ -138,6 +161,7 @@ describe('Categorías: API real con PostgreSQL', () => {
       problem(
         await request(server())
           .patch(`${path}/${category.idCategoria}`)
+          .set('Authorization', `Bearer ${token}`)
           .send(body)
           .expect(400),
         400,
@@ -149,6 +173,7 @@ describe('Categorías: API real con PostgreSQL', () => {
     problem(
       await request(server())
         .patch(`${path}/999`)
+        .set('Authorization', `Bearer ${token}`)
         .send({ nombre: 'Nuevo' })
         .expect(404),
       404,
@@ -161,13 +186,20 @@ describe('Categorías: API real con PostgreSQL', () => {
     const category = await create();
     const response = await request(server())
       .delete(`${path}/${category.idCategoria}`)
+      .set('Authorization', `Bearer ${token}`)
       .expect(204);
     expect(response.text).toBe('');
     await request(server()).get(`${path}/${category.idCategoria}`).expect(404);
   });
 
   it('DELETE inexistente devuelve 404', async () => {
-    problem(await request(server()).delete(`${path}/999`).expect(404), 404);
+    problem(
+      await request(server())
+        .delete(`${path}/999`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404),
+      404,
+    );
   });
 
   it('rechaza nombres duplicados en POST y PATCH con la restricción real', async () => {
@@ -175,6 +207,7 @@ describe('Categorías: API real con PostgreSQL', () => {
     problem(
       await request(server())
         .post(path)
+        .set('Authorization', `Bearer ${token}`)
         .send({ nombre: 'Duplicada' })
         .expect(409),
       409,
@@ -183,6 +216,7 @@ describe('Categorías: API real con PostgreSQL', () => {
     problem(
       await request(server())
         .patch(`${path}/${other.idCategoria}`)
+        .set('Authorization', `Bearer ${token}`)
         .send({ nombre: 'Duplicada' })
         .expect(409),
       409,
@@ -218,6 +252,7 @@ describe('Categorías: API real con PostgreSQL', () => {
     problem(
       await request(server())
         .delete(`${path}/${category.idCategoria}`)
+        .set('Authorization', `Bearer ${token}`)
         .expect(409),
       409,
     );

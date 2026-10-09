@@ -6,7 +6,12 @@ import {
   it,
   jest,
 } from '@jest/globals';
-import { DataSource, SelectQueryBuilder } from 'typeorm';
+import {
+  DataSource,
+  SelectQueryBuilder,
+  UpdateQueryBuilder,
+  DeleteQueryBuilder,
+} from 'typeorm';
 import { Category } from '../../categories/entities/category.entity';
 import { Courier } from '../../couriers/entities/courier.entity';
 import { Delivery } from '../../deliveries/entities/delivery.entity';
@@ -103,4 +108,44 @@ describe('ProductsRepository: consultas fijas', () => {
       expect(parameters).toEqual([idCategoria, 'ACTIVO']);
     },
   );
+  it('genera UPDATE condicionado por origen y destino sin sustituir el nombre de la tabla de relación', async () => {
+    jest
+      .spyOn(UpdateQueryBuilder.prototype, 'execute')
+      .mockImplementation(function (this: UpdateQueryBuilder<Product>) {
+        [sql, parameters] = this.getQueryAndParameters();
+        return Promise.resolve({ affected: 0, generatedMaps: [], raw: [] });
+      });
+    expect(
+      await repository.updateForActor(
+        9,
+        { idTienda: 4, nombre: 'Nuevo' },
+        { sub: 'owner@example.test', idUsuario: 7, rol: 'EMPRENDEDOR' },
+      ),
+    ).toBeNull();
+    expect(sql).toContain('UPDATE "producto"');
+    expect(sql).toContain('FROM "tienda" "origen"');
+    expect(sql).toContain('"origen"."id_tienda" = "producto"."id_tienda"');
+    expect(sql).toContain('FROM "tienda" "destino"');
+    expect(sql).not.toContain('FROM "id_tienda"');
+    expect(parameters).toEqual([4, 'Nuevo', 9, 7, 4]);
+  });
+  it('genera DELETE condicionado por propietario con parámetros', async () => {
+    jest
+      .spyOn(DeleteQueryBuilder.prototype, 'execute')
+      .mockImplementation(function (this: DeleteQueryBuilder<Product>) {
+        [sql, parameters] = this.getQueryAndParameters();
+        return Promise.resolve({ affected: 0, raw: [] });
+      });
+    expect(
+      await repository.deleteForActor(9, {
+        sub: 'owner@example.test',
+        idUsuario: 7,
+        rol: 'EMPRENDEDOR',
+      }),
+    ).toBe(false);
+    expect(sql).toContain('DELETE FROM "producto"');
+    expect(sql).toContain('FROM "tienda" "origen"');
+    expect(sql).toContain('"origen"."id_emprendedor" = $2');
+    expect(parameters).toEqual([9, 7]);
+  });
 });

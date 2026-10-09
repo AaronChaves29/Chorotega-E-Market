@@ -1,3 +1,5 @@
+import type { AuthenticatedUser } from '../../../auth/interfaces/authenticated-user.interface';
+import { assertCatalogWriter } from '../../../common/security/catalog-write-access';
 import {
   BadRequestException,
   ConflictException,
@@ -39,7 +41,11 @@ export class CategoriesService {
     return CategoryMapper.toResponseDto(category);
   }
 
-  async create(dto: CreateCategoryDto): Promise<CategoryResponseDto> {
+  async create(
+    dto: CreateCategoryDto,
+    actor: AuthenticatedUser,
+  ): Promise<CategoryResponseDto> {
+    assertCatalogWriter(actor, ['ADMIN']);
     const category = this.categoriesRepository.createEntity({
       nombre: dto.nombre,
       descripcion: dto.descripcion ?? null,
@@ -57,7 +63,9 @@ export class CategoriesService {
   async update(
     id: number,
     dto: UpdateCategoryDto,
+    actor: AuthenticatedUser,
   ): Promise<CategoryResponseDto> {
+    assertCatalogWriter(actor, ['ADMIN']);
     this.validateId(id);
     const data: Partial<CategoryData> = {};
     if (dto.nombre !== undefined) data.nombre = dto.nombre;
@@ -72,7 +80,8 @@ export class CategoriesService {
     }
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, actor: AuthenticatedUser): Promise<void> {
+    assertCatalogWriter(actor, ['ADMIN']);
     this.validateId(id);
     try {
       if (!(await this.categoriesRepository.deleteById(id))) {

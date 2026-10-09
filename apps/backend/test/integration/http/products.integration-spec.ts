@@ -1,3 +1,4 @@
+import { CatalogHttpAuth } from '../../support/catalog-http-auth';
 import request from 'supertest';
 import { ProductsModule } from '../../../src/modules/products/products.module';
 import type { ProductResponseDto } from '../../../src/modules/products/dto/product-response.dto';
@@ -22,10 +23,14 @@ describe('Productos: API real con PostgreSQL', () => {
   let otherCategory: Category;
   let owner: User;
   const path = '/api/v1/products';
+  const auth = new CatalogHttpAuth();
+  let token: string;
   beforeAll(async () => {
+    await auth.prepare();
     context = await createHttpTestApp([ProductsModule]);
   });
   beforeEach(async () => {
+    token = await auth.loginAdmin(context!.database.dataSource, server());
     const ds = context!.database.dataSource;
     owner = await ds.getRepository(User).save({
       authId: '00000000-0000-4000-8000-000000000001',
@@ -55,7 +60,11 @@ describe('Productos: API real con PostgreSQL', () => {
     );
   });
   afterAll(async () => {
-    await context?.close();
+    try {
+      await context?.close();
+    } finally {
+      auth.restore();
+    }
   });
   function server() {
     if (!context) throw new Error('Aplicación no inicializada');
@@ -75,6 +84,7 @@ describe('Productos: API real con PostgreSQL', () => {
   ): Promise<ProductJson> {
     const response = await request(server())
       .post(path)
+      .set('Authorization', `Bearer ${token}`)
       .send({ ...input(), ...overrides })
       .expect(201);
     return response.body as ProductJson;
@@ -132,6 +142,7 @@ describe('Productos: API real con PostgreSQL', () => {
   it('POST devuelve 201, Location utilizable, DTO y precio string', async () => {
     const response = await request(server())
       .post(path)
+      .set('Authorization', `Bearer ${token}`)
       .send(input())
       .expect(201);
     const product = response.body as ProductJson;
@@ -170,6 +181,7 @@ describe('Productos: API real con PostgreSQL', () => {
     problem(
       await request(server())
         .post(path)
+        .set('Authorization', `Bearer ${token}`)
         .send({ ...input(), ...body })
         .expect(400),
       400,
@@ -182,6 +194,7 @@ describe('Productos: API real con PostgreSQL', () => {
       problem(
         await request(server())
           .post(path)
+          .set('Authorization', `Bearer ${token}`)
           .send({ ...input(), [field]: 999 })
           .expect(404),
         404,
@@ -211,6 +224,7 @@ describe('Productos: API real con PostgreSQL', () => {
     const product = await create({ descripcion: 'Texto' });
     const response = await request(server())
       .patch(`${path}/${product.idProducto}`)
+      .set('Authorization', `Bearer ${token}`)
       .send({ descripcion: null, precio: 2.5 })
       .expect(200);
     expect(response.body).toEqual({
@@ -224,6 +238,7 @@ describe('Productos: API real con PostgreSQL', () => {
       .expect(response.body as ProductJson);
     await request(server())
       .patch(`${path}/${product.idProducto}`)
+      .set('Authorization', `Bearer ${token}`)
       .send({})
       .expect(200)
       .expect(response.body as ProductJson);
@@ -240,6 +255,7 @@ describe('Productos: API real con PostgreSQL', () => {
     };
     await request(server())
       .patch(`${path}/${product.idProducto}`)
+      .set('Authorization', `Bearer ${token}`)
       .send(changes)
       .expect(200)
       .expect({ ...product, ...changes });
@@ -249,6 +265,7 @@ describe('Productos: API real con PostgreSQL', () => {
     problem(
       await request(server())
         .patch(`${path}/999`)
+        .set('Authorization', `Bearer ${token}`)
         .send({ nombre: 'Nuevo' })
         .expect(404),
       404,
@@ -263,6 +280,7 @@ describe('Productos: API real con PostgreSQL', () => {
       problem(
         await request(server())
           .patch(`${path}/${product.idProducto}`)
+          .set('Authorization', `Bearer ${token}`)
           .send({ [field]: 999 })
           .expect(404),
         404,
@@ -286,6 +304,7 @@ describe('Productos: API real con PostgreSQL', () => {
     problem(
       await request(server())
         .patch(`${path}/${product.idProducto}`)
+        .set('Authorization', `Bearer ${token}`)
         .send(body)
         .expect(400),
       400,
@@ -298,6 +317,7 @@ describe('Productos: API real con PostgreSQL', () => {
       (
         await request(server())
           .delete(`${path}/${product.idProducto}`)
+          .set('Authorization', `Bearer ${token}`)
           .expect(204)
       ).text,
     ).toBe('');
@@ -305,7 +325,13 @@ describe('Productos: API real con PostgreSQL', () => {
   });
 
   it('DELETE inexistente devuelve 404', async () => {
-    problem(await request(server()).delete(`${path}/999`).expect(404), 404);
+    problem(
+      await request(server())
+        .delete(`${path}/999`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404),
+      404,
+    );
   });
 
   it('DELETE con detalle real devuelve 409 y conserva producto y detalle', async () => {
@@ -333,6 +359,7 @@ describe('Productos: API real con PostgreSQL', () => {
     problem(
       await request(server())
         .delete(`${path}/${product.idProducto}`)
+        .set('Authorization', `Bearer ${token}`)
         .expect(409),
       409,
     );

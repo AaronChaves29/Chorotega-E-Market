@@ -1,3 +1,4 @@
+import { AuthModule } from '../../auth/auth.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Product } from './entities/product.entity';
@@ -10,6 +11,7 @@ import { CategoriesModule } from '../categories/categories.module';
 
 @Module({
   imports: [
+    AuthModule,
     TypeOrmModule.forFeature([Product]),
     StoresModule,
     CategoriesModule,

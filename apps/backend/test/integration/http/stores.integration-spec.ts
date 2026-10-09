@@ -1,3 +1,4 @@
+import { CatalogHttpAuth } from '../../support/catalog-http-auth';
 import request from 'supertest';
 import { StoresModule } from '../../../src/modules/stores/stores.module';
 import type { StoreResponseDto } from '../../../src/modules/stores/dtos/store-response.dto';
@@ -15,10 +16,14 @@ describe('Tiendas: API real con PostgreSQL', () => {
   let ownerId: number;
   let otherId: number;
   const path = '/api/v1/stores';
+  const auth = new CatalogHttpAuth();
+  let token: string;
   beforeAll(async () => {
+    await auth.prepare();
     context = await createHttpTestApp([StoresModule]);
   });
   beforeEach(async () => {
+    token = await auth.loginAdmin(context!.database.dataSource, server());
     const users = context!.database.dataSource.getRepository(User);
     const first = await users.save({
       authId: '00000000-0000-4000-8000-000000000001',
@@ -48,7 +53,11 @@ describe('Tiendas: API real con PostgreSQL', () => {
     `);
   });
   afterAll(async () => {
-    await context?.close();
+    try {
+      await context?.close();
+    } finally {
+      auth.restore();
+    }
   });
   function server() {
     if (!context) throw new Error('Aplicación no inicializada');
@@ -60,6 +69,7 @@ describe('Tiendas: API real con PostgreSQL', () => {
   ): Promise<StoreResponseDto> {
     const response = await request(server())
       .post(path)
+      .set('Authorization', `Bearer ${token}`)
       .send({ ...valid(), nombre, estado, descripcion: 'Descripción' })
       .expect(201);
     return response.body as StoreResponseDto;
@@ -89,6 +99,7 @@ describe('Tiendas: API real con PostgreSQL', () => {
   it('crea con 201, Location utilizable y contrato DTO exacto', async () => {
     const response = await request(server())
       .post(path)
+      .set('Authorization', `Bearer ${token}`)
       .send(valid())
       .expect(201);
     const store = response.body as StoreResponseDto;
@@ -136,6 +147,7 @@ describe('Tiendas: API real con PostgreSQL', () => {
     problem(
       await request(server())
         .post(path)
+        .set('Authorization', `Bearer ${token}`)
         .send({ ...valid(), ...body })
         .expect(400),
       400,
@@ -163,10 +175,12 @@ describe('Tiendas: API real con PostgreSQL', () => {
     };
     await request(server())
       .patch(`${path}/${store.idTienda}`)
+      .set('Authorization', `Bearer ${token}`)
       .send({ telefono: '88888888', horario: '8-17' })
       .expect(200);
     await request(server())
       .patch(`${path}/${store.idTienda}`)
+      .set('Authorization', `Bearer ${token}`)
       .send({ descripcion: null, telefono: null, horario: null })
       .expect(200)
       .expect(updated);
@@ -176,6 +190,7 @@ describe('Tiendas: API real con PostgreSQL', () => {
       .expect(updated);
     await request(server())
       .patch(`${path}/${store.idTienda}`)
+      .set('Authorization', `Bearer ${token}`)
       .send({})
       .expect(200)
       .expect(updated);
@@ -185,6 +200,7 @@ describe('Tiendas: API real con PostgreSQL', () => {
     const store = await create();
     await request(server())
       .patch(`${path}/${store.idTienda}`)
+      .set('Authorization', `Bearer ${token}`)
       .send({ nombre: 'Nuevo', estado: 'INACTIVA' })
       .expect(200)
       .expect({ ...store, nombre: 'Nuevo', estado: 'INACTIVA' });
@@ -202,6 +218,7 @@ describe('Tiendas: API real con PostgreSQL', () => {
     problem(
       await request(server())
         .patch(`${path}/${store.idTienda}`)
+        .set('Authorization', `Bearer ${token}`)
         .send(body)
         .expect(400),
       400,
@@ -212,6 +229,7 @@ describe('Tiendas: API real con PostgreSQL', () => {
     problem(
       await request(server())
         .patch(`${path}/999`)
+        .set('Authorization', `Bearer ${token}`)
         .send({ nombre: 'Nuevo' })
         .expect(404),
       404,
@@ -224,13 +242,20 @@ describe('Tiendas: API real con PostgreSQL', () => {
     const store = await create();
     const response = await request(server())
       .delete(`${path}/${store.idTienda}`)
+      .set('Authorization', `Bearer ${token}`)
       .expect(204);
     expect(response.text).toBe('');
     await request(server()).get(`${path}/${store.idTienda}`).expect(404);
   });
 
   it('DELETE inexistente devuelve 404', async () => {
-    problem(await request(server()).delete(`${path}/999`).expect(404), 404);
+    problem(
+      await request(server())
+        .delete(`${path}/999`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404),
+      404,
+    );
   });
 
   it('permite nombres repetidos: no existe UNIQUE de nombre', async () => {
@@ -242,6 +267,7 @@ describe('Tiendas: API real con PostgreSQL', () => {
     problem(
       await request(server())
         .post(path)
+        .set('Authorization', `Bearer ${token}`)
         .send({ ...valid(), idEmprendedor: 999 })
         .expect(404),
       404,
@@ -250,14 +276,15 @@ describe('Tiendas: API real con PostgreSQL', () => {
       await context!.database.dataSource.getRepository(Store).count(),
     ).toBe(0);
   });
-  it('PATCH valida el usuario nuevo y conserva la fila si no existe', async () => {
+  it('PATCH rechaza transferencias y conserva la fila incluso para ADMIN', async () => {
     const store = await create();
     problem(
       await request(server())
         .patch(`${path}/${store.idTienda}`)
+        .set('Authorization', `Bearer ${token}`)
         .send({ idEmprendedor: 999 })
-        .expect(404),
-      404,
+        .expect(403),
+      403,
     );
     await request(server())
       .get(`${path}/${store.idTienda}`)
@@ -265,9 +292,13 @@ describe('Tiendas: API real con PostgreSQL', () => {
       .expect(store);
     await request(server())
       .patch(`${path}/${store.idTienda}`)
+      .set('Authorization', `Bearer ${token}`)
       .send({ idEmprendedor: otherId })
+      .expect(403);
+    await request(server())
+      .get(`${path}/${store.idTienda}`)
       .expect(200)
-      .expect({ ...store, idEmprendedor: otherId });
+      .expect(store);
   });
   it.each(['producto', 'pedido'] as const)(
     'DELETE bloqueado por %s real conserva ambas filas',
@@ -316,7 +347,10 @@ describe('Tiendas: API real con PostgreSQL', () => {
         };
       }
       problem(
-        await request(server()).delete(`${path}/${store.idTienda}`).expect(409),
+        await request(server())
+          .delete(`${path}/${store.idTienda}`)
+          .set('Authorization', `Bearer ${token}`)
+          .expect(409),
         409,
       );
       await request(server())
@@ -385,6 +419,7 @@ describe('Tiendas: API real con PostgreSQL', () => {
     await create('Alfabeto', 'INACTIVA');
     await request(server())
       .post(path)
+      .set('Authorization', `Bearer ${token}`)
       .send({ ...valid(), idEmprendedor: otherId, nombre: 'Alfarería' })
       .expect(201);
     const response = await request(server())

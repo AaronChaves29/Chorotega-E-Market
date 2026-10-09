@@ -1,3 +1,4 @@
+const actor = { sub: 'admin@example.test', idUsuario: 9, rol: 'ADMIN' };
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Product } from './entities/product.entity';
@@ -14,7 +15,9 @@ describe('ProductsService', () => {
 
   let findMock: jest.MockedFunction<ProductsRepository['findAll']>;
   let createMock: jest.MockedFunction<ProductsRepository['createEntity']>;
-  let saveMock: jest.MockedFunction<ProductsRepository['save']>;
+  let saveMock: jest.MockedFunction<
+    ProductsRepository['saveInAuthorizedStore']
+  >;
   let availableByStoreMock: jest.MockedFunction<
     ProductsRepository['findAvailableByStore']
   >;
@@ -55,7 +58,7 @@ describe('ProductsService', () => {
           useValue: {
             findAll: findMock,
             createEntity: createMock,
-            save: saveMock,
+            saveInAuthorizedStore: saveMock,
             findAvailableByStore: availableByStoreMock,
             findActiveByCategory: activeByCategoryMock,
           },
@@ -158,7 +161,7 @@ describe('ProductsService', () => {
     createMock.mockReturnValue(product);
     saveMock.mockResolvedValue(product);
 
-    const result = await service.create(createProductDto);
+    const result = await service.create(createProductDto, actor);
 
     expect(createMock).toHaveBeenCalledWith({
       idTienda: 1,
@@ -170,7 +173,7 @@ describe('ProductsService', () => {
       estado: 'ACTIVO',
     });
 
-    expect(saveMock).toHaveBeenCalledWith(product);
+    expect(saveMock).toHaveBeenCalledWith(product, actor);
     expect(result).toEqual(product);
   });
 
@@ -193,11 +196,11 @@ describe('ProductsService', () => {
     createMock.mockReturnValue(entity);
     saveMock.mockResolvedValue(saved);
 
-    const result = await service.create(dto);
+    const result = await service.create(dto, actor);
     expect(result).toEqual(saved);
     expect(result).not.toBeInstanceOf(Product);
     expect(createMock).toHaveBeenCalledWith(data);
-    expect(saveMock).toHaveBeenCalledWith(entity);
+    expect(saveMock).toHaveBeenCalledWith(entity, actor);
   });
 
   it('debe propagar un error al guardar el producto', async () => {
@@ -206,13 +209,16 @@ describe('ProductsService', () => {
     saveMock.mockRejectedValue(error);
 
     await expect(
-      service.create({
-        idTienda: 1,
-        idCategoria: 1,
-        nombre: 'Miel Chorotega',
-        precio: 3500,
-        cantidadDisponible: 12,
-      }),
+      service.create(
+        {
+          idTienda: 1,
+          idCategoria: 1,
+          nombre: 'Miel Chorotega',
+          precio: 3500,
+          cantidadDisponible: 12,
+        },
+        actor,
+      ),
     ).rejects.toBe(error);
     expect(saveMock).toHaveBeenCalledTimes(1);
   });

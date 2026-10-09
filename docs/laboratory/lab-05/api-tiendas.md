@@ -2,9 +2,9 @@
 
 ## Alcance y arquitectura
 
-Base: `develop` en `a8b24f8b0937d85cf3388d6d8df375535e3bbec1`, con la base HTTP,
+Base original del bloque REST: `develop` en `a8b24f8b0937d85cf3388d6d8df375535e3bbec1`, con la base HTTP,
 Categories REST, Products REST, paginación común, Testcontainers y seguridad JWT
-integrados. Rama: `feat/stores-rest-api`.
+integrados. Rama original: `feat/stores-rest-api`. La política actual se implementa en `fix/lab05-catalog-write-security`.
 
 Flujo: HTTP → `StoresController` → `StoresService` → `StoresRepository` → PostgreSQL.
 Antes existían la entidad, el módulo y el repositorio base, sin API de tiendas.
@@ -55,12 +55,11 @@ La fecha se serializa como cadena ISO mediante HTTP.
 Se reutiliza Problem Details global: 400 por DTO, ID o query inválidos; 404 por
 usuario requerido inexistente; 409 únicamente por FK de eliminación conocidas.
 Errores inesperados se propagan al filtro global, que devuelve 500 seguro sin SQL,
-stack ni detalles internos. No se inventan conflictos UNIQUE ni reglas 422.
+stack ni detalles internos. No se inventan conflictos UNIQUE. La nueva elegibilidad del propietario para POST de ADMIN produce 422 si el usuario no es EMPRENDEDOR ACTIVO.
 
-La relación con User se valida antes de crear o cambiar `idEmprendedor`.
-Si el usuario desaparece después de validar, SQLSTATE `23503` con
-`fk_tienda_emprendedor` se traduce también a 404. No se impone un rol de usuario
-adicional: no existe esa política para Stores en el código integrado.
+La relación con User se valida antes de crear. Para ADMIN, el propietario debe existir (404) y tener rol EMPRENDEDOR y estado ACTIVO (422); son los valores reales de `User`. Para EMPRENDEDOR, `idEmprendedor` debe coincidir con `request.user.idUsuario` (403 si no coincide). El identificador sigue siendo obligatorio. Si desaparece la relación antes de guardar, `23503` con `fk_tienda_emprendedor` conserva 404.
+
+PATCH nunca transfiere la tienda, tampoco para ADMIN. Omitir `idEmprendedor` o repetir el actual está permitido; un valor diferente produce 403 antes de escribir cualquier campo. Esto evita alterar indirectamente la visibilidad de pedidos históricos.
 
 DELETE es físico y conserva las restricciones `NO ACTION` existentes:
 SQLSTATE `23503` con `fk_producto_tienda` o `fk_pedido_tienda` produce 409.
@@ -91,28 +90,18 @@ Todos los valores se pasan como parámetros. `sortBy` admite exclusivamente
 `sortDirection` admite ASC/DESC. El default es `idTienda ASC`; los demás órdenes
 se desempatan por ID en la misma dirección. No se añade Specification artificial.
 
-## Compatibilidad con seguridad
+## Seguridad de escrituras y propiedad
 
-La seguridad integrada usa `AuthModule`, login en `POST /api/v1/auth/login`
-(actualmente responde 201), bcrypt y JWT con `sub` (correo), `idUsuario`, `rol`
-y las marcas temporales del token. Roles reales: ADMIN, CLIENTE, EMPRENDEDOR y
-REPARTIDOR. La propiedad de User se llama `claveHash`, columna `clave_hash` nullable,
-añadida por `AddPasswordHashToUser1791352458237`.
+Nueva política aplicada a POST, PATCH y DELETE mediante `JwtAuthGuard`, `RolesGuard` y `@Roles('ADMIN', 'EMPRENDEDOR')` en cada método. `StoresModule` importa `AuthModule`; no se modifican Auth, JWT ni los guards. Todos los GET siguen públicos.
 
-`JwtAuthGuard` valida Bearer, asigna `request.user` y produce 401 cuando falta el
-token o no es válido. `RolesGuard` produce 403 si el rol no está permitido.
-Son guards locales en Deliveries, sin guard global:
+| Actor                            | Crear                             | Modificar/eliminar                           |
+| -------------------------------- | --------------------------------- | -------------------------------------------- |
+| ADMIN                            | Para EMPRENDEDOR ACTIVO existente | Cualquier tienda, sin transferir propietario |
+| EMPRENDEDOR                      | Solo a su nombre                  | Solo sus tiendas, sin transferir propietario |
+| CLIENTE / REPARTIDOR             | 403                               | 403                                          |
+| JWT ausente, inválido o expirado | 401                               | 401                                          |
 
-- POST deliveries y cancel: ADMIN.
-- POST start/complete: REPARTIDOR, además se busca el repartidor por
-  `request.user.idUsuario` y se compara con el asignado a la entrega.
-- GET deliveries y detalle: ADMIN o REPARTIDOR.
-
-Categories y Products son públicos. Stores también queda público: no se encontró
-una política de autorización u ownership definida para este recurso. Su propietario
-se recibe como `idEmprendedor`, no se deriva del JWT. No se copian las reglas de
-Deliveries ni se agregan guards para fabricar respuestas 401/403. Login, JWT,
-roles, User, migraciones y ownership de Deliveries no se modifican.
+Los servicios reciben contexto autenticado obligatorio y verifican rol y propiedad incluso en invocaciones directas. Una tienda ajena devuelve 404. UPDATE y DELETE incluyen el propietario en el predicado SQL para EMPRENDEDOR; los métodos previos del repositorio se conservan para consumidores internos. Se preservan DTOs, PATCH parcial, respuestas 201/Location y 204 vacío, filtros, paginación y conflictos FK conocidos.
 
 ## Verificación
 
@@ -126,9 +115,9 @@ limpian entre casos y la aplicación, DataSource y contenedor se cierran al fina
 Se comprueban CRUD, DTOs, privacidad, validación, relaciones, nombres repetidos,
 FK reales de productos y pedidos, paginación, filtros combinados, orden y entradas
 inválidas. Las suites existentes de productos, pedidos y seguridad se ejecutan
-como regresión sin modificaciones.
+como regresión. Las escrituras de las pruebas de catálogo ahora utilizan login y JWT reales, sin sustituir guards.
 
-Resultados locales del 7 de octubre de 2026:
+Resultados históricos del bloque REST original (7 de octubre de 2026; anteriores a esta política):
 
 | Comprobación                                 | Resultado                              |
 | -------------------------------------------- | -------------------------------------- |
@@ -160,13 +149,10 @@ Fue necesario instalar las dependencias ya declaradas mediante `npm ci` y arranc
 Docker. No se cambiaron manifiestos ni lockfiles. La compilación y las pruebas
 se ejecutaron después de completar esa preparación.
 
-## Fuera de alcance y hallazgos
+## Verificación de la nueva política
 
-No se define autorización propia de tiendas. Tampoco se modifica seguridad,
-Swagger, frontend, MongoDB, dependencias, esquema, migraciones ni infraestructura
-compartida. La cobertura existente mide Orders y Deliveries; no representa una
-medición de cobertura de Stores y no se alteran sus umbrales o exclusiones.
+`catalog-write-security.integration-spec.ts` usa Nest, JWT emitidos mediante login real, PostgreSQL temporal y migraciones reales. Comprueba nueve escrituras, permisos, 401 para tokens ausentes/ inválidos/expirados, recursos ajenos 404, GET públicos, elegibilidad del propietario, transferencias rechazadas sin cambios parciales y visibilidad de Orders antes y después del rechazo. Las pruebas directas del servicio comprueban autorización sin depender de guards. Resultados actuales: 303 unitarias, 545 integraciones, 530 e2e, 88 regresiones HTTP de catálogo, 45 OpenAPI y 5 de seguridad HTTP, todas aprobadas. Los totales se solapan; no se suman. [Detalle de verificación](swagger-openapi.md#verificación-de-seguridad-del-catálogo).
 
-Neighborhoods y Couriers todavía declaran `api/v1` en sus controladores, además del
-prefijo global. Es un hallazgo separado; Deliveries ya usa `@Controller('deliveries')`
-en este develop. No se corrigen esas rutas en este bloque.
+## Fuera de alcance
+
+No se modifican Auth, estados, entidades, migraciones, dependencias ni la lógica de pedidos. No se implementa un proceso de transferencia de tiendas. La cobertura existente mide Orders/Deliveries, no el catálogo; se conservan sus umbrales y exclusiones. Las rutas corregidas de Neighborhoods/Couriers y la seguridad de Deliveries ya están integradas y permanecen intactas.

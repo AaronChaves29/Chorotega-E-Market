@@ -1,3 +1,4 @@
+import type { AuthenticatedUser } from '../../../auth/interfaces/authenticated-user.interface';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { FindOptionsWhere, Repository } from 'typeorm';
@@ -43,6 +44,27 @@ export class StoresRepository extends TypeOrmBaseRepository<
       if (!result.affected) return null;
     }
     return this.findById(id);
+  }
+
+  async updateForActor(
+    id: number,
+    data: Partial<Omit<StoreData, 'idEmprendedor'>>,
+    actor: AuthenticatedUser,
+  ): Promise<Store | null> {
+    const where: FindOptionsWhere<Store> = { idTienda: id };
+    if (actor.rol === 'EMPRENDEDOR') where.idEmprendedor = actor.idUsuario;
+    if (Object.keys(data).length > 0) {
+      const result = await this.repository.update(where, data);
+      if (!result.affected) return null;
+    }
+    return this.repository.findOneBy(where);
+  }
+
+  async deleteForActor(id: number, actor: AuthenticatedUser): Promise<boolean> {
+    const where: FindOptionsWhere<Store> = { idTienda: id };
+    if (actor.rol === 'EMPRENDEDOR') where.idEmprendedor = actor.idUsuario;
+    const result = await this.repository.delete(where);
+    return (result.affected ?? 0) > 0;
   }
 
   async search(filters: StoreSearchQueryDto): Promise<PaginationResult<Store>> {
