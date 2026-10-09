@@ -59,16 +59,22 @@ for (const resource of ['stores', 'categories', 'products']) {
   add(
     'post',
     resource,
-    resource === 'categories' ? [201, 400, 409, 500] : [201, 400, 404, 500],
+    resource === 'categories'
+      ? [201, 400, 401, 403, 409, 500]
+      : resource === 'stores'
+        ? [201, 400, 401, 403, 404, 422, 500]
+        : [201, 400, 401, 403, 404, 500],
+    true,
   );
   add(
     'patch',
     resource + '/{id}',
     resource === 'categories'
-      ? [200, 400, 404, 409, 500]
-      : [200, 400, 404, 500],
+      ? [200, 400, 401, 403, 404, 409, 500]
+      : [200, 400, 401, 403, 404, 500],
+    true,
   );
-  add('delete', resource + '/{id}', [204, 400, 404, 409, 500]);
+  add('delete', resource + '/{id}', [204, 400, 401, 403, 404, 409, 500], true);
 }
 add('get', 'users', [200, 400, 401, 403, 500], true);
 add('get', 'users/{id}', [200, 400, 401, 403, 404, 500], true);
@@ -625,9 +631,11 @@ describe('OpenAPI HTTP: contrato generado de las 35 operaciones', () => {
       adminEmail: admin.correo,
       clientEmail: client.correo,
       courierEmail: owner.correo,
+      entrepreneurEmail: entrepreneur.correo,
       adminPassword: password,
       clientPassword: password,
       courierPassword: password,
+      entrepreneurPassword: password,
       userId: String(client.idUsuario),
       entrepreneurId: String(entrepreneur.idUsuario),
       catalogStoreId: String(store.idTienda),
@@ -693,7 +701,7 @@ describe('OpenAPI HTTP: contrato generado de las 35 operaciones', () => {
         expect(response.headers.location).toEqual(expect.any(String));
       executed.push(name);
     }
-    expect(executed).toHaveLength(43);
+    expect(executed).toHaveLength(44);
     expect(
       await orders.findOneByOrFail({ idPedido: prepared.idPedido }),
     ).toMatchObject({ estado: 'ENTREGADO' });

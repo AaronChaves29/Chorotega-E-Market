@@ -1,3 +1,4 @@
+const actor = { sub: 'admin@example.test', idUsuario: 9, rol: 'ADMIN' };
 import { NotFoundException, ConflictException } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import { ProductsService } from './products.service';
@@ -11,9 +12,9 @@ describe('ProductsService: operaciones REST', () => {
   const products = {
     findById: jest.fn(),
     createEntity: jest.fn(),
-    save: jest.fn(),
-    updateById: jest.fn(),
-    deleteById: jest.fn(),
+    saveInAuthorizedStore: jest.fn(),
+    updateForActor: jest.fn(),
+    deleteForActor: jest.fn(),
     search: jest.fn(),
   };
   const stores = { findById: jest.fn() };
@@ -50,8 +51,8 @@ describe('ProductsService: operaciones REST', () => {
     categories.findById.mockResolvedValue({ idCategoria: 1 });
     products.findById.mockResolvedValue(product);
     products.createEntity.mockReturnValue(product);
-    products.save.mockResolvedValue(product);
-    products.updateById.mockResolvedValue(product);
+    products.saveInAuthorizedStore.mockResolvedValue(product);
+    products.updateForActor.mockResolvedValue(product);
   });
 
   it('devuelve una página de DTOs conservando metadatos y excluyendo relaciones', async () => {
@@ -93,19 +94,23 @@ describe('ProductsService: operaciones REST', () => {
       (relation === 'tienda' ? stores : categories).findById.mockResolvedValue(
         null,
       );
-      await expect(service.create(input)).rejects.toBeInstanceOf(
+      await expect(service.create(input, actor)).rejects.toBeInstanceOf(
         NotFoundException,
       );
-      expect(products.save).not.toHaveBeenCalled();
+      expect(products.saveInAuthorizedStore).not.toHaveBeenCalled();
     },
   );
 
   it('PATCH envía solo cambios, convierte precio a string y admite descripción null', async () => {
-    await service.update(1, { precio: 2.5, descripcion: null });
-    expect(products.updateById).toHaveBeenCalledWith(1, {
-      precio: '2.5',
-      descripcion: null,
-    });
+    await service.update(1, { precio: 2.5, descripcion: null }, actor);
+    expect(products.updateForActor).toHaveBeenCalledWith(
+      1,
+      {
+        precio: '2.5',
+        descripcion: null,
+      },
+      actor,
+    );
     expect(stores.findById).not.toHaveBeenCalled();
     expect(categories.findById).not.toHaveBeenCalled();
   });
@@ -116,19 +121,19 @@ describe('ProductsService: operaciones REST', () => {
       (field === 'idTienda' ? stores : categories).findById.mockResolvedValue(
         null,
       );
-      await expect(service.update(1, { [field]: 999 })).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
-      expect(products.updateById).not.toHaveBeenCalled();
+      await expect(
+        service.update(1, { [field]: 999 }, actor),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(products.updateForActor).not.toHaveBeenCalled();
     },
   );
 
   it('PATCH no inserta un producto eliminado antes de la actualización', async () => {
-    products.updateById.mockResolvedValue(null);
-    await expect(service.update(1, { nombre: 'Nuevo' })).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
-    expect(products.save).not.toHaveBeenCalled();
+    products.updateForActor.mockResolvedValue(null);
+    await expect(
+      service.update(1, { nombre: 'Nuevo' }, actor),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(products.saveInAuthorizedStore).not.toHaveBeenCalled();
   });
 
   function failure(constraint: string) {
@@ -140,15 +145,17 @@ describe('ProductsService: operaciones REST', () => {
   }
 
   it('DELETE traduce exclusivamente la referencia de detalles', async () => {
-    products.deleteById.mockRejectedValue(failure('fk_detalle_producto'));
-    await expect(service.remove(1)).rejects.toBeInstanceOf(ConflictException);
+    products.deleteForActor.mockRejectedValue(failure('fk_detalle_producto'));
+    await expect(service.remove(1, actor)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
   });
 
   it.each(['fk_producto_tienda', 'fk_producto_categoria'])(
     'traduce pérdida concurrente de %s al guardar',
     async (constraint) => {
-      products.save.mockRejectedValue(failure(constraint));
-      await expect(service.create(input)).rejects.toBeInstanceOf(
+      products.saveInAuthorizedStore.mockRejectedValue(failure(constraint));
+      await expect(service.create(input, actor)).rejects.toBeInstanceOf(
         NotFoundException,
       );
     },
@@ -156,16 +163,16 @@ describe('ProductsService: operaciones REST', () => {
 
   it('propaga errores inesperados para el 500 seguro global', async () => {
     const error = failure('otra_fk');
-    products.deleteById.mockRejectedValue(error);
-    await expect(service.remove(1)).rejects.toBe(error);
+    products.deleteForActor.mockRejectedValue(error);
+    await expect(service.remove(1, actor)).rejects.toBe(error);
   });
 
   it.each(['fk_producto_tienda', 'fk_producto_categoria'])(
     'traduce pérdida concurrente de %s durante PATCH',
     async (constraint) => {
-      products.updateById.mockRejectedValue(failure(constraint));
+      products.updateForActor.mockRejectedValue(failure(constraint));
       await expect(
-        service.update(1, { idTienda: 1, idCategoria: 1 }),
+        service.update(1, { idTienda: 1, idCategoria: 1 }, actor),
       ).rejects.toBeInstanceOf(NotFoundException);
     },
   );
@@ -174,13 +181,86 @@ describe('ProductsService: operaciones REST', () => {
     'no oculta otras FK como 404 durante %s',
     async (operation) => {
       const error = failure('otra_fk');
-      products.save.mockRejectedValue(error);
-      products.updateById.mockRejectedValue(error);
+      products.saveInAuthorizedStore.mockRejectedValue(error);
+      products.updateForActor.mockRejectedValue(error);
       const result =
         operation === 'create'
-          ? service.create(input)
-          : service.update(1, { nombre: 'Nuevo' });
+          ? service.create(input, actor)
+          : service.update(1, { nombre: 'Nuevo' }, actor);
       await expect(result).rejects.toBe(error);
     },
   );
+  it.each(['CLIENTE', 'REPARTIDOR'])(
+    'rechaza escrituras directas del rol %s antes de consultar',
+    async (rol) => {
+      const denied = { ...actor, rol };
+      await expect(service.create(input, denied)).rejects.toThrow(
+        'Rol no autorizado',
+      );
+      await expect(service.update(1, {}, denied)).rejects.toThrow(
+        'Rol no autorizado',
+      );
+      await expect(service.remove(1, denied)).rejects.toThrow(
+        'Rol no autorizado',
+      );
+      expect(products.findById).not.toHaveBeenCalled();
+      expect(products.createEntity).not.toHaveBeenCalled();
+    },
+  );
+  it('rechaza contexto ausente al invocar directamente', async () => {
+    const missing = undefined as unknown as typeof actor;
+    await expect(service.create(input, missing)).rejects.toThrow(
+      'Identidad autenticada',
+    );
+    await expect(service.update(1, {}, missing)).rejects.toThrow(
+      'Identidad autenticada',
+    );
+    await expect(service.remove(1, missing)).rejects.toThrow(
+      'Identidad autenticada',
+    );
+    expect(products.findById).not.toHaveBeenCalled();
+  });
+  it('rechaza producto y tienda ajenos antes de persistir', async () => {
+    stores.findById.mockResolvedValue({ idTienda: 1, idEmprendedor: 4 });
+    const owner = { ...actor, idUsuario: 3, rol: 'EMPRENDEDOR' };
+    await expect(service.create(input, owner)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(service.update(1, {}, owner)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(service.remove(1, owner)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(products.saveInAuthorizedStore).not.toHaveBeenCalled();
+    expect(products.updateForActor).not.toHaveBeenCalled();
+    expect(products.deleteForActor).not.toHaveBeenCalled();
+  });
+  it('comprueba origen y destino al trasladar un producto propio', async () => {
+    const owner = { ...actor, idUsuario: 3, rol: 'EMPRENDEDOR' };
+    stores.findById.mockResolvedValue({ idTienda: 1, idEmprendedor: 3 });
+    await service.update(1, { idTienda: 2 }, owner);
+    expect(stores.findById.mock.calls).toEqual([[1], [2]]);
+    expect(products.updateForActor).toHaveBeenCalledWith(
+      1,
+      { idTienda: 2 },
+      owner,
+    );
+  });
+  it('rechaza destino ajeno sin escribir', async () => {
+    const owner = { ...actor, idUsuario: 3, rol: 'EMPRENDEDOR' };
+    stores.findById
+      .mockResolvedValueOnce({ idTienda: 1, idEmprendedor: 3 })
+      .mockResolvedValueOnce({ idTienda: 2, idEmprendedor: 4 });
+    await expect(
+      service.update(1, { idTienda: 2 }, owner),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(products.updateForActor).not.toHaveBeenCalled();
+  });
+  it('rechaza tienda perdida antes de guardar dentro de la transacción', async () => {
+    products.saveInAuthorizedStore.mockResolvedValue(null);
+    await expect(service.create(input, actor)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
 });

@@ -1,6 +1,14 @@
+import type { AuthenticatedUser } from '../../../auth/interfaces/authenticated-user.interface';
+import { Store } from '../../stores/entities/store.entity';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import type { FindOptionsWhere, Repository } from 'typeorm';
+import type {
+  FindOptionsWhere,
+  Repository,
+  SelectQueryBuilder,
+  UpdateQueryBuilder,
+  DeleteQueryBuilder,
+} from 'typeorm';
 import { TypeOrmBaseRepository } from '../../../common/repositories/typeorm-base.repository';
 import { Product } from '../entities/product.entity';
 import type { ProductSpecification } from '../specifications/product.specification';
@@ -51,6 +59,77 @@ export class ProductsRepository extends TypeOrmBaseRepository<
       if (!result.affected) return null;
     }
     return this.findById(id);
+  }
+
+  // La tienda se vuelve a autorizar bajo bloqueo dentro de la transacción.
+  async saveInAuthorizedStore(
+    product: Product,
+    actor: AuthenticatedUser,
+  ): Promise<Product | null> {
+    return this.repository.manager.transaction(async (manager) => {
+      const where: FindOptionsWhere<Store> = { idTienda: product.idTienda };
+      if (actor.rol === 'EMPRENDEDOR') where.idEmprendedor = actor.idUsuario;
+      const store = await manager
+        .getRepository(Store)
+        .findOne({ where, lock: { mode: 'pessimistic_write' } });
+      if (!store) return null;
+      return manager.getRepository(Product).save(product);
+    });
+  }
+
+  async updateForActor(
+    id: number,
+    data: Partial<NewProductData>,
+    actor: AuthenticatedUser,
+  ): Promise<Product | null> {
+    if (Object.keys(data).length === 0) {
+      const query = this.repository
+        .createQueryBuilder('producto')
+        .where('producto.idProducto = :productId', { productId: id });
+      this.applyWriteOwnership(query, actor);
+      return query.getOne();
+    }
+    const query = this.repository
+      .createQueryBuilder()
+      .update(Product)
+      .set(data)
+      .where('"id_producto" = :productId', { productId: id });
+    this.applyWriteOwnership(query, actor);
+    if (actor.rol === 'EMPRENDEDOR' && data.idTienda !== undefined) {
+      query.andWhere(
+        'EXISTS (SELECT 1 FROM "tienda" "destino" WHERE "destino"."id_tienda" = :destinationStoreId AND "destino"."id_emprendedor" = :scopeUserId)',
+        { destinationStoreId: data.idTienda },
+      );
+    }
+    const result = await query.execute();
+    return result.affected ? this.findById(id) : null;
+  }
+
+  async deleteForActor(id: number, actor: AuthenticatedUser): Promise<boolean> {
+    const query = this.repository
+      .createQueryBuilder()
+      .delete()
+      .from(Product)
+      .where('"id_producto" = :productId', { productId: id });
+    this.applyWriteOwnership(query, actor);
+    const result = await query.execute();
+    return (result.affected ?? 0) > 0;
+  }
+
+  private applyWriteOwnership(
+    query:
+      | SelectQueryBuilder<Product>
+      | UpdateQueryBuilder<Product>
+      | DeleteQueryBuilder<Product>,
+    actor: AuthenticatedUser,
+  ): void {
+    if (actor.rol === 'EMPRENDEDOR') {
+      // Predicado correlacionado con la tienda actual, evaluado en la escritura SQL.
+      query.andWhere(
+        'EXISTS (SELECT 1 FROM "tienda" "origen" WHERE "origen"."id_tienda" = "producto"."id_tienda" AND "origen"."id_emprendedor" = :scopeUserId)',
+        { scopeUserId: actor.idUsuario },
+      );
+    }
   }
 
   async search(

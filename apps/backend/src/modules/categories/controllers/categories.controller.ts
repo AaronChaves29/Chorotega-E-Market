@@ -1,4 +1,9 @@
+import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../auth/guards/roles.guard';
+import { Roles } from '../../../auth/decorators/roles.decorator';
+import type { AuthenticatedUser } from '../../../auth/interfaces/authenticated-user.interface';
 import {
+  ApiBearerAuth,
   ApiTags,
   ApiOperation,
   ApiParam,
@@ -22,6 +27,8 @@ import {
   Post,
   Query,
   Res,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import type { PaginationResult } from '../../../common/pagination/pagination-result';
@@ -75,7 +82,7 @@ export class CategoriesController {
 
   @ApiOperation({
     summary: 'Crear categorías',
-    description: 'Acceso público.',
+    description: 'JWT requerido. Solo ADMIN.',
   })
   @ApiBody({ type: CreateCategoryDto })
   @ApiResponse({
@@ -90,14 +97,18 @@ export class CategoriesController {
       },
     },
   })
-  @ApiProblemResponses([400, 409, 500])
+  @ApiProblemResponses([400, 401, 403, 409, 500])
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(
     @Body() dto: CreateCategoryDto,
     @Res({ passthrough: true }) response: Pick<Response, 'location'>,
+    @Req() request: { user: AuthenticatedUser },
   ): Promise<CategoryResponseDto> {
-    const category = await this.categoriesService.create(dto);
+    const category = await this.categoriesService.create(dto, request.user);
     response.location(`/api/v1/categories/${category.idCategoria}`);
     return category;
   }
@@ -105,7 +116,7 @@ export class CategoriesController {
   @ApiOperation({
     summary: 'Actualizar parcialmente categorías',
     description:
-      'Acceso público. Actualización parcial; null solo en campos nullable.',
+      'JWT requerido. Solo ADMIN. Actualización parcial; null solo en campos nullable.',
   })
   @ApiParam({
     name: 'id',
@@ -119,18 +130,22 @@ export class CategoriesController {
     isArray: false,
     description: 'Respuesta pública mediante DTO.',
   })
-  @ApiProblemResponses([400, 404, 409, 500])
+  @ApiProblemResponses([400, 401, 403, 404, 409, 500])
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
+    @Req() request: { user: AuthenticatedUser },
     @Body() dto: UpdateCategoryDto,
   ): Promise<CategoryResponseDto> {
-    return this.categoriesService.update(id, dto);
+    return this.categoriesService.update(id, dto, request.user);
   }
 
   @ApiOperation({
     summary: 'Eliminar categorías',
-    description: 'Acceso público.',
+    description: 'JWT requerido. Solo ADMIN.',
   })
   @ApiParam({
     name: 'id',
@@ -141,10 +156,16 @@ export class CategoriesController {
     status: 204,
     description: 'Eliminación correcta; sin cuerpo.',
   })
-  @ApiProblemResponses([400, 404, 409, 500])
+  @ApiProblemResponses([400, 401, 403, 404, 409, 500])
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
-    return this.categoriesService.remove(id);
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() request: { user: AuthenticatedUser },
+  ): Promise<void> {
+    return this.categoriesService.remove(id, request.user);
   }
 }

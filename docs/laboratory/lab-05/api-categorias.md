@@ -1,8 +1,16 @@
 # API REST de categorías
 
+## Nueva política de seguridad de escrituras
+
+POST, PATCH y DELETE requieren JWT y ADMIN. EMPRENDEDOR, CLIENTE y REPARTIDOR reciben 403. Los GET permanecen públicos. La autorización se aplica por método con JwtAuthGuard, RolesGuard y @Roles y se repite en el servicio con contexto obligatorio. Se conservan conflictos UNIQUE y FK reales.
+
+JWT ausente, inválido o expirado: 401. Los errores reutilizan RFC 9457 Problem Details; inesperados: 500 seguro. Se conservan la validación, los DTOs, la paginación y los conflictos existentes.
+
+La suite catalog-write-security.integration-spec.ts verifica permisos y propiedad con login real, PostgreSQL temporal y migraciones, sin desactivar guards. Las suites HTTP anteriores conservan sus contratos funcionales con JWT autorizado para escribir. Los resultados antiguos de este documento corresponden al bloque REST inicial, antes de esta nueva política.
+
 ## Base y reutilización
 
-Implementación sobre `develop` en `2d3ca485d66011bc40efbf7270678d5685db757b`.
+Implementación REST original sobre `develop` en `2d3ca485d66011bc40efbf7270678d5685db757b`.
 Se reutilizan `configureHttp()`, el filtro Problem Details, `PaginationQueryDto`,
 `PaginationResult`, el repositorio base y `createHttpTestApp()`. No se modifica
 infraestructura compartida ni se agregan dependencias.
@@ -12,7 +20,7 @@ estático `toResponseDto`, `sortBy`/`sortDirection` y el encabezado `Location`
 siguen las implementaciones recientes. El controlador usa `categories`, porque
 `configureHttp()` ya añade `/api/v1`.
 
-La inspección encontró prefijos `api/v1` repetidos en los controladores de
+Hallazgo histórico del bloque inicial, ya corregido en develop: la inspección encontró prefijos `api/v1` repetidos en los controladores de
 entregas, barrios y repartidores, además del prefijo global. Esa combinación
 produciría rutas duplicadas. No se modifican esos módulos en este bloque; sus
 pruebas unitarias actuales no verifican las rutas HTTP efectivas.
@@ -148,7 +156,6 @@ El 6 de octubre de 2026:
 
 ## Fuera de alcance
 
-No se implementan autenticación, roles, autorización, Swagger ni otros recursos.
-No se corrigen las rutas duplicadas detectadas en otros controladores. No se
-modifican procesos transaccionales, entidades ni migraciones. El recurso todavía
-no tiene protección de acceso; su integración con seguridad queda pendiente.
+No se modifica Auth, la emisión de JWT, entidades, migraciones, dependencias ni otros recursos. La nueva política agrega guards de escritura y autorización en el servicio; Swagger y la colección HTTP reflejan esos permisos. Los GET siguen públicos. La cobertura existente mide Orders/Deliveries y conserva su configuración. Las correcciones previas de rutas están integradas y no se alteran aquí.
+
+La validación actual de seguridad está registrada en [Swagger/OpenAPI](swagger-openapi.md#verificación-de-seguridad-del-catálogo), incluyendo resultados, cobertura y límites técnicos.

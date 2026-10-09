@@ -1,7 +1,11 @@
+import type { AuthenticatedUser } from '../../../auth/interfaces/authenticated-user.interface';
+import { assertCatalogWriter } from '../../../common/security/catalog-write-access';
 import {
   BadRequestException,
   ConflictException,
   Injectable,
+  ForbiddenException,
+  UnprocessableEntityException,
   NotFoundException,
 } from '@nestjs/common';
 import { UsersRepository } from '../../users/repositories/users.repository';
@@ -41,10 +45,18 @@ export class StoresService {
     return StoreMapper.toResponseDto(store);
   }
 
-  async create(dto: CreateStoreDto): Promise<StoreResponseDto> {
-    await this.requireUser(dto.idEmprendedor);
+  async create(
+    dto: CreateStoreDto,
+    actor: AuthenticatedUser,
+  ): Promise<StoreResponseDto> {
+    assertCatalogWriter(actor, ['ADMIN', 'EMPRENDEDOR']);
+    if (actor.rol === 'EMPRENDEDOR' && dto.idEmprendedor !== actor.idUsuario)
+      throw new ForbiddenException('Solo puede crear tiendas a su nombre.');
+    const ownerId =
+      actor.rol === 'EMPRENDEDOR' ? actor.idUsuario : dto.idEmprendedor;
+    await this.requireUser(ownerId, actor.rol === 'ADMIN');
     const store = this.storesRepository.createEntity({
-      idEmprendedor: dto.idEmprendedor,
+      idEmprendedor: ownerId,
       direccion: dto.direccion,
       telefono: dto.telefono ?? null,
       horario: dto.horario ?? null,
@@ -59,14 +71,22 @@ export class StoresService {
     }
   }
 
-  async update(id: number, dto: UpdateStoreDto): Promise<StoreResponseDto> {
+  async update(
+    id: number,
+    dto: UpdateStoreDto,
+    actor: AuthenticatedUser,
+  ): Promise<StoreResponseDto> {
+    assertCatalogWriter(actor, ['ADMIN', 'EMPRENDEDOR']);
     this.validateId(id);
-    if (!(await this.storesRepository.findById(id)))
-      throw new NotFoundException('Tienda no encontrada.');
-    if (dto.idEmprendedor !== undefined)
-      await this.requireUser(dto.idEmprendedor);
-    const data: Partial<StoreData> = {};
-    if (dto.idEmprendedor !== undefined) data.idEmprendedor = dto.idEmprendedor;
+    const store = await this.requireOwnedStore(id, actor);
+    if (
+      dto.idEmprendedor !== undefined &&
+      dto.idEmprendedor !== store.idEmprendedor
+    )
+      throw new ForbiddenException(
+        'No se permite transferir la propiedad de una tienda.',
+      );
+    const data: Partial<Omit<StoreData, 'idEmprendedor'>> = {};
     if (dto.direccion !== undefined) data.direccion = dto.direccion;
     if (dto.telefono !== undefined) data.telefono = dto.telefono;
     if (dto.horario !== undefined) data.horario = dto.horario;
@@ -74,7 +94,7 @@ export class StoresService {
     if (dto.descripcion !== undefined) data.descripcion = dto.descripcion;
     if (dto.estado !== undefined) data.estado = dto.estado;
     try {
-      const store = await this.storesRepository.updateById(id, data);
+      const store = await this.storesRepository.updateForActor(id, data, actor);
       if (!store) throw new NotFoundException('Tienda no encontrada.');
       return StoreMapper.toResponseDto(store);
     } catch (error) {
@@ -82,10 +102,12 @@ export class StoresService {
     }
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, actor: AuthenticatedUser): Promise<void> {
+    assertCatalogWriter(actor, ['ADMIN', 'EMPRENDEDOR']);
     this.validateId(id);
+    await this.requireOwnedStore(id, actor);
     try {
-      if (!(await this.storesRepository.deleteById(id))) {
+      if (!(await this.storesRepository.deleteForActor(id, actor))) {
         throw new NotFoundException('Tienda no encontrada.');
       }
     } catch (error) {
@@ -93,9 +115,29 @@ export class StoresService {
     }
   }
 
-  private async requireUser(id: number): Promise<void> {
-    if (!(await this.usersRepository.findById(id)))
-      throw new NotFoundException('Usuario no encontrado.');
+  private async requireUser(
+    id: number,
+    requireEligible: boolean,
+  ): Promise<void> {
+    const user = await this.usersRepository.findById(id);
+    if (!user) throw new NotFoundException('Usuario no encontrado.');
+    if (
+      requireEligible &&
+      (user.rol !== 'EMPRENDEDOR' || user.estado !== 'ACTIVO')
+    )
+      throw new UnprocessableEntityException(
+        'El propietario debe ser un emprendedor activo.',
+      );
+  }
+
+  private async requireOwnedStore(id: number, actor: AuthenticatedUser) {
+    const store = await this.storesRepository.findById(id);
+    if (
+      !store ||
+      (actor.rol === 'EMPRENDEDOR' && store.idEmprendedor !== actor.idUsuario)
+    )
+      throw new NotFoundException('Tienda no encontrada.');
+    return store;
   }
 
   private validateId(id: number): void {

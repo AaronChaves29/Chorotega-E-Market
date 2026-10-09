@@ -1,3 +1,4 @@
+const actor = { sub: 'admin@example.test', idUsuario: 9, rol: 'ADMIN' };
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import { CategoriesService } from './categories.service';
@@ -57,7 +58,7 @@ describe('CategoriesService', () => {
   it('aplica defaults de creación y devuelve DTO', async () => {
     repository.createEntity.mockReturnValue(category);
     repository.save.mockResolvedValue(category);
-    const result = await service.create({ nombre: 'Alimentos' });
+    const result = await service.create({ nombre: 'Alimentos' }, actor);
     expect(repository.createEntity).toHaveBeenCalledWith({
       nombre: 'Alimentos',
       descripcion: null,
@@ -69,10 +70,12 @@ describe('CategoriesService', () => {
 
   it('envía solo campos presentes y conserva null explícito en PATCH', async () => {
     repository.updateById.mockResolvedValue({ ...category, descripcion: null });
-    expect(await service.update(1, { descripcion: null })).toMatchObject({
-      descripcion: null,
-      nombre: 'Alimentos',
-    });
+    expect(await service.update(1, { descripcion: null }, actor)).toMatchObject(
+      {
+        descripcion: null,
+        nombre: 'Alimentos',
+      },
+    );
     expect(repository.updateById).toHaveBeenCalledWith(1, {
       descripcion: null,
     });
@@ -85,7 +88,11 @@ describe('CategoriesService', () => {
       repository.updateById.mockResolvedValue(null);
       repository.deleteById.mockResolvedValue(false);
       const operation =
-        method === 'update' ? service.update(1, {}) : service[method](1);
+        method === 'update'
+          ? service.update(1, {}, actor)
+          : method === 'findById'
+            ? service.findById(1)
+            : service.remove(1, actor);
       await expect(operation).rejects.toBeInstanceOf(NotFoundException);
     },
   );
@@ -101,7 +108,7 @@ describe('CategoriesService', () => {
   it('traduce la restricción única real durante creación', async () => {
     repository.save.mockRejectedValue(failure('23505', 'categoria_nombre_key'));
     await expect(
-      service.create({ nombre: 'Duplicado' }),
+      service.create({ nombre: 'Duplicado' }, actor),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
@@ -110,7 +117,7 @@ describe('CategoriesService', () => {
       failure('23505', 'categoria_nombre_key'),
     );
     await expect(
-      service.update(1, { nombre: 'Duplicado' }),
+      service.update(1, { nombre: 'Duplicado' }, actor),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
@@ -118,7 +125,7 @@ describe('CategoriesService', () => {
     repository.deleteById.mockRejectedValue(
       failure('23503', 'fk_producto_categoria'),
     );
-    await expect(service.remove(1)).rejects.toThrow(
+    await expect(service.remove(1, actor)).rejects.toThrow(
       'La categoría tiene productos asociados.',
     );
   });
@@ -129,6 +136,36 @@ describe('CategoriesService', () => {
     new Error('fallo inesperado'),
   ])('propaga fallos no clasificados al filtro global', async (error) => {
     repository.deleteById.mockRejectedValue(error);
-    await expect(service.remove(1)).rejects.toBe(error);
+    await expect(service.remove(1, actor)).rejects.toBe(error);
+  });
+  it.each(['CLIENTE', 'REPARTIDOR', 'EMPRENDEDOR'])(
+    'rechaza escrituras directas del rol %s antes de consultar',
+    async (rol) => {
+      const denied = { ...actor, rol };
+      await expect(service.create({ nombre: 'Nueva' }, denied)).rejects.toThrow(
+        'Rol no autorizado',
+      );
+      await expect(service.update(1, {}, denied)).rejects.toThrow(
+        'Rol no autorizado',
+      );
+      await expect(service.remove(1, denied)).rejects.toThrow(
+        'Rol no autorizado',
+      );
+      expect(repository.findById).not.toHaveBeenCalled();
+      expect(repository.createEntity).not.toHaveBeenCalled();
+    },
+  );
+  it('rechaza contexto ausente al invocar directamente', async () => {
+    const missing = undefined as unknown as typeof actor;
+    await expect(service.create({ nombre: 'Nueva' }, missing)).rejects.toThrow(
+      'Identidad autenticada',
+    );
+    await expect(service.update(1, {}, missing)).rejects.toThrow(
+      'Identidad autenticada',
+    );
+    await expect(service.remove(1, missing)).rejects.toThrow(
+      'Identidad autenticada',
+    );
+    expect(repository.findById).not.toHaveBeenCalled();
   });
 });

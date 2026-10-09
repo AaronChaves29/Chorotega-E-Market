@@ -1,17 +1,22 @@
 # Chorotega E-Market — colección para VS Code REST Client.
 # Preparación y secuencia: swagger-openapi.md. Usar exclusivamente una base local de pruebas.
 # Las variables de entorno se establecen fuera del repositorio; no guardar credenciales aquí.
+# ADMIN administra categorías; EMPRENDEDOR escribe en sus tiendas y productos.
+# entrepreneurId debe corresponder al usuario entrepreneurEmail.
 # Ejecutar los bloques en orden. Los IDs de recursos temporales proceden de las respuestas.
 @baseUrl = http://localhost:3000
 @adminEmail = admin@example.test
 @clientEmail = cliente@example.test
 @courierEmail = repartidor@example.test
+@entrepreneurEmail = emprendedor@example.test
 @adminPassword = {{$processEnv CHOROTEGA_ADMIN_PASSWORD}}
 @clientPassword = {{$processEnv CHOROTEGA_CLIENT_PASSWORD}}
 @courierPassword = {{$processEnv CHOROTEGA_COURIER_PASSWORD}}
+@entrepreneurPassword = {{$processEnv CHOROTEGA_ENTREPRENEUR_PASSWORD}}
 @adminToken = {{loginAdmin.response.body.$.token}}
 @clientToken = {{loginClient.response.body.$.token}}
 @courierToken = {{loginCourier.response.body.$.token}}
+@entrepreneurToken = {{loginEntrepreneur.response.body.$.token}}
 @userId = 1
 @entrepreneurId = 1
 @catalogStoreId = 1
@@ -63,6 +68,17 @@ Content-Type: application/json
   "clave": "{{courierPassword}}"
 }
 
+### Auth — login Entrepreneur
+# @name loginEntrepreneur
+# expected-status: 201
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{entrepreneurEmail}}",
+  "clave": "{{entrepreneurPassword}}"
+}
+
 ### Users — listado administrativo
 # @name usersList
 # expected-status: 200
@@ -90,6 +106,7 @@ Content-Type: application/json
 # @name createStore
 # expected-status: 201
 POST {{baseUrl}}/api/v1/stores
+Authorization: Bearer {{entrepreneurToken}}
 Content-Type: application/json
 
 {
@@ -112,6 +129,7 @@ GET {{baseUrl}}/api/v1/stores/{{storeId}}
 # @name patchStore
 # expected-status: 200
 PATCH {{baseUrl}}/api/v1/stores/{{storeId}}
+Authorization: Bearer {{entrepreneurToken}}
 Content-Type: application/json
 
 {
@@ -122,11 +140,13 @@ Content-Type: application/json
 # @name deleteStore
 # expected-status: 204
 DELETE {{baseUrl}}/api/v1/stores/{{storeId}}
+Authorization: Bearer {{entrepreneurToken}}
 
 ### categories — crear temporal
 # @name createCategory
 # expected-status: 201
 POST {{baseUrl}}/api/v1/categories
+Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
 {
@@ -149,6 +169,7 @@ GET {{baseUrl}}/api/v1/categories/{{categoryId}}
 # @name patchCategory
 # expected-status: 200
 PATCH {{baseUrl}}/api/v1/categories/{{categoryId}}
+Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
 {
@@ -159,11 +180,13 @@ Content-Type: application/json
 # @name deleteCategory
 # expected-status: 204
 DELETE {{baseUrl}}/api/v1/categories/{{categoryId}}
+Authorization: Bearer {{adminToken}}
 
 ### products — crear temporal
 # @name createProduct
 # expected-status: 201
 POST {{baseUrl}}/api/v1/products
+Authorization: Bearer {{entrepreneurToken}}
 Content-Type: application/json
 
 {
@@ -188,6 +211,7 @@ GET {{baseUrl}}/api/v1/products/{{productId}}
 # @name patchProduct
 # expected-status: 200
 PATCH {{baseUrl}}/api/v1/products/{{productId}}
+Authorization: Bearer {{entrepreneurToken}}
 Content-Type: application/json
 
 {
@@ -198,6 +222,7 @@ Content-Type: application/json
 # @name deleteProduct
 # expected-status: 204
 DELETE {{baseUrl}}/api/v1/products/{{productId}}
+Authorization: Bearer {{entrepreneurToken}}
 
 ### Orders — crear y confirmar como CLIENTE
 # @name createOrder
@@ -333,6 +358,7 @@ GET {{baseUrl}}/api/v1/products/2147483647
 # @name error409
 # expected-status: 409
 POST {{baseUrl}}/api/v1/categories
+Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
 {

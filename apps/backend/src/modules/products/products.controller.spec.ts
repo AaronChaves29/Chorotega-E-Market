@@ -1,3 +1,5 @@
+jest.mock('@nestjs/jwt', () => ({ JwtService: class JwtService {} }));
+const actor = { sub: 'admin@example.test', idUsuario: 9, rol: 'ADMIN' };
 import { ProductsController } from './products.controller';
 import { ProductsService } from './products.service';
 
@@ -16,8 +18,10 @@ describe('ProductsController', () => {
       precio: 10.25,
       cantidadDisponible: 1,
     };
-    expect(await controller.create(input, response)).toBe(result);
-    expect(service.create).toHaveBeenCalledWith(input);
+    expect(await controller.create(input, response, { user: actor })).toBe(
+      result,
+    );
+    expect(service.create).toHaveBeenCalledWith(input, actor);
     expect(response.location).toHaveBeenCalledWith('/api/v1/products/42');
   });
 });

@@ -1,3 +1,5 @@
+import type { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
+import { assertCatalogWriter } from '../../common/security/catalog-write-access';
 import {
   BadRequestException,
   ConflictException,
@@ -44,8 +46,10 @@ export class ProductsService {
 
   async create(
     createProductDto: CreateProductDto,
+    actor: AuthenticatedUser,
   ): Promise<ProductResponseDto> {
-    await this.validateRelations(createProductDto);
+    assertCatalogWriter(actor, ['ADMIN', 'EMPRENDEDOR']);
+    await this.validateRelations(createProductDto, actor);
     const product = this.productsRepository.createEntity({
       idTienda: createProductDto.idTienda,
       idCategoria: createProductDto.idCategoria,
@@ -57,9 +61,12 @@ export class ProductsService {
     });
 
     try {
-      return ProductMapper.toResponseDto(
-        await this.productsRepository.save(product),
+      const saved = await this.productsRepository.saveInAuthorizedStore(
+        product,
+        actor,
       );
+      if (!saved) throw new NotFoundException('Tienda no encontrada.');
+      return ProductMapper.toResponseDto(saved);
     } catch (error) {
       this.rethrowPersistenceError(error, 'save');
     }
@@ -84,9 +91,15 @@ export class ProductsService {
     return ProductMapper.toResponseDto(product);
   }
 
-  async update(id: number, dto: UpdateProductDto): Promise<ProductResponseDto> {
-    await this.findById(id);
-    await this.validateRelations(dto);
+  async update(
+    id: number,
+    dto: UpdateProductDto,
+    actor: AuthenticatedUser,
+  ): Promise<ProductResponseDto> {
+    assertCatalogWriter(actor, ['ADMIN', 'EMPRENDEDOR']);
+    this.validateId(id);
+    await this.requireOwnedProduct(id, actor);
+    await this.validateRelations(dto, actor);
     const data: Partial<NewProductData> = {};
     if (dto.idTienda !== undefined) data.idTienda = dto.idTienda;
     if (dto.idCategoria !== undefined) data.idCategoria = dto.idCategoria;
@@ -97,7 +110,11 @@ export class ProductsService {
       data.cantidadDisponible = dto.cantidadDisponible;
     if (dto.estado !== undefined) data.estado = dto.estado;
     try {
-      const product = await this.productsRepository.updateById(id, data);
+      const product = await this.productsRepository.updateForActor(
+        id,
+        data,
+        actor,
+      );
       if (!product) throw new NotFoundException('Producto no encontrado.');
       return ProductMapper.toResponseDto(product);
     } catch (error) {
@@ -105,14 +122,39 @@ export class ProductsService {
     }
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, actor: AuthenticatedUser): Promise<void> {
+    assertCatalogWriter(actor, ['ADMIN', 'EMPRENDEDOR']);
     this.validateId(id);
+    await this.requireOwnedProduct(id, actor);
     try {
-      if (!(await this.productsRepository.deleteById(id)))
+      if (!(await this.productsRepository.deleteForActor(id, actor)))
         throw new NotFoundException('Producto no encontrado.');
     } catch (error) {
       this.rethrowPersistenceError(error, 'delete');
     }
+  }
+
+  private async requireOwnedProduct(
+    id: number,
+    actor: AuthenticatedUser,
+  ): Promise<Product> {
+    const product = await this.productsRepository.findById(id);
+    if (!product) throw new NotFoundException('Producto no encontrado.');
+    if (actor.rol === 'EMPRENDEDOR')
+      await this.requireOwnedStore(product.idTienda, actor);
+    return product;
+  }
+
+  private async requireOwnedStore(
+    id: number,
+    actor: AuthenticatedUser,
+  ): Promise<void> {
+    const store = await this.storesRepository.findById(id);
+    if (
+      !store ||
+      (actor.rol === 'EMPRENDEDOR' && store.idEmprendedor !== actor.idUsuario)
+    )
+      throw new NotFoundException('Tienda no encontrada.');
   }
 
   private validateId(id: number): void {
@@ -122,15 +164,12 @@ export class ProductsService {
       );
   }
 
-  private async validateRelations(dto: {
-    idTienda?: number;
-    idCategoria?: number;
-  }): Promise<void> {
-    if (
-      dto.idTienda !== undefined &&
-      !(await this.storesRepository.findById(dto.idTienda))
-    )
-      throw new NotFoundException('Tienda no encontrada.');
+  private async validateRelations(
+    dto: { idTienda?: number; idCategoria?: number },
+    actor: AuthenticatedUser,
+  ): Promise<void> {
+    if (dto.idTienda !== undefined)
+      await this.requireOwnedStore(dto.idTienda, actor);
     if (
       dto.idCategoria !== undefined &&
       !(await this.categoriesRepository.findById(dto.idCategoria))

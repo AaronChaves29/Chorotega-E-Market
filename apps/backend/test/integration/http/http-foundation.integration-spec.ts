@@ -1,3 +1,4 @@
+import { CatalogHttpAuth } from '../../support/catalog-http-auth';
 import {
   ConflictException,
   ForbiddenException,
@@ -16,13 +17,21 @@ import { createHttpTestApp } from '../../support/create-http-test-app';
 describe('Base HTTP sobre PostgreSQL temporal', () => {
   let context: Awaited<ReturnType<typeof createHttpTestApp>> | undefined;
 
+  const auth = new CatalogHttpAuth();
+  let token: string;
   beforeAll(async () => {
+    await auth.prepare();
     context = await createHttpTestApp([ProductsModule, HealthModule]);
+    token = await auth.loginAdmin(context.database.dataSource, server());
   });
 
   afterEach(() => jest.restoreAllMocks());
   afterAll(async () => {
-    await context?.close();
+    try {
+      await context?.close();
+    } finally {
+      auth.restore();
+    }
   });
 
   function server() {
@@ -62,6 +71,7 @@ describe('Base HTTP sobre PostgreSQL temporal', () => {
     const create = jest.spyOn(context!.app.get(ProductsService), 'create');
     const response = await request(server())
       .post('/api/v1/products')
+      .set('Authorization', `Bearer ${token}`)
       .send({ nombre: 123 })
       .expect(400)
       .expect('Content-Type', /application\/problem\+json/);
@@ -91,6 +101,7 @@ describe('Base HTTP sobre PostgreSQL temporal', () => {
   it('rechaza propiedades ajenas al DTO', async () => {
     const response = await request(server())
       .post('/api/v1/products')
+      .set('Authorization', `Bearer ${token}`)
       .send({ ...validProduct, privilegio: true })
       .expect(400);
     expect(response.body).toMatchObject({
@@ -104,14 +115,19 @@ describe('Base HTTP sobre PostgreSQL temporal', () => {
       .mockRejectedValueOnce(new ConflictException('Conflicto de prueba'));
     await request(server())
       .post('/api/v1/products')
+      .set('Authorization', `Bearer ${token}`)
       .send(validProduct)
       .expect(409);
-    expect(create).toHaveBeenCalledWith(expect.any(CreateProductDto));
+    expect(create).toHaveBeenCalledWith(
+      expect.any(CreateProductDto),
+      expect.objectContaining({ rol: 'ADMIN' }),
+    );
   });
 
   it('normaliza JSON mal formado como Problem Details', async () => {
     await request(server())
       .post('/api/v1/products')
+      .set('Authorization', `Bearer ${token}`)
       .set('Content-Type', 'application/json')
       .send('{')
       .expect(400)

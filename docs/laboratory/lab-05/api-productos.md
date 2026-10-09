@@ -1,8 +1,16 @@
 # API REST de productos
 
+## Nueva política de seguridad de escrituras
+
+POST, PATCH y DELETE requieren JWT y ADMIN o EMPRENDEDOR. ADMIN administra cualquier producto; EMPRENDEDOR solo los de sus tiendas. Se comprueban tienda de origen y destino al trasladar un producto. CLIENTE y REPARTIDOR reciben 403; productos o tiendas ajenos reciben 404. Los GET permanecen públicos. Guards por método y contexto obligatorio en servicio; no se cambia Auth. UPDATE/DELETE usan predicados SQL de propiedad y de destino, y la creación revalida la tienda bajo bloqueo en una transacción. Los métodos previos del repositorio usados por Orders se conservan.
+
+JWT ausente, inválido o expirado: 401. Los errores reutilizan RFC 9457 Problem Details; inesperados: 500 seguro. Se conserva la validación, los DTOs, la paginación y el contrato de precio string.
+
+La suite catalog-write-security.integration-spec.ts verifica permisos y propiedad con login real, PostgreSQL temporal y migraciones, sin desactivar guards. Las suites HTTP anteriores conservan sus contratos funcionales con JWT autorizado para escribir. Los resultados antiguos de este documento corresponden al bloque REST inicial, antes de esta nueva política.
+
 ## Base y reutilización
 
-Base: `develop` en `3dd7733ea1be2a96bee4d9069f6810892a319e55`, con Categorías
+Base original del bloque REST: `develop` en `3dd7733ea1be2a96bee4d9069f6810892a319e55`, con Categorías
 integrada por el PR #60. Se conservan ProductsController, ProductsService,
 ProductsRepository, las entidades, migraciones y las consultas de Labs 3/4.
 
@@ -121,7 +129,9 @@ Ejemplo: `/api/v1/products?idTienda=1&idCategoria=2&estado=ACTIVO&disponible=tru
 ## Errores e integridad referencial
 
 - 400: DTO, identificador, paginación, filtro u orden inválidos.
-- 404: producto, tienda o categoría inexistente. La validación de relaciones ocurre
+- 401: JWT ausente, inválido o expirado al escribir.
+- 403: rol sin permiso de escritura.
+- 404: producto o tienda ajenos para EMPRENDEDOR; producto, tienda o categoría inexistente. La validación de relaciones ocurre
   antes de guardar; también se reconocen código 23503 y restricciones
   fk_producto_tienda/fk_producto_categoria al escribir para cubrir una eliminación
   concurrente después de validar.
@@ -175,10 +185,8 @@ El 6 de octubre de 2026:
   conjunto de integración; no son casos adicionales.
 - `git diff --check`: sin errores. `docker ps`: sin contenedores activos al finalizar.
 
-## Pendientes separados
+## Fuera de alcance
 
-Se mantiene documentada la duplicación previa de api/v1 en controladores de
-entregas, barrios y repartidores; no se corrige aquí. JWT, autorización, propiedad
-y Swagger quedan fuera de alcance. Las escrituras REST todavía no están protegidas
-por el bloque de seguridad. No se modifica funcionalidad de otros módulos,
-transacciones de pedidos, frontend ni MongoDB.
+No se modifica Auth, la transacción de pedidos, las entidades, migraciones ni dependencias. La cobertura configurada sigue midiendo Orders/Deliveries. Las correcciones previas de rutas y Swagger están integradas; el contrato OpenAPI y api.http se actualizan únicamente para reflejar esta nueva seguridad de escritura.
+
+La validación actual de seguridad está registrada en [Swagger/OpenAPI](swagger-openapi.md#verificación-de-seguridad-del-catálogo), incluyendo resultados, cobertura y límites técnicos.

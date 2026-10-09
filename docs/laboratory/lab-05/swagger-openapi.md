@@ -49,25 +49,31 @@ Las creaciones de recursos devuelven 201 con encabezado `Location`; el login dev
 
 Ejecuta POST `/api/v1/auth/login` con correo y clave de una cuenta local de pruebas válida. La respuesta contiene `token`, `tipo` y `expiraEnSegundos`. La clave está marcada `writeOnly` en OpenAPI. Para una operación protegida, usa `Authorization: Bearer <token>`; en Swagger, pulsa **Authorize** e introduce únicamente el token, sin escribir de nuevo `Bearer`.
 
-| Recurso                                                                    | Política vigente                                                                        |
-| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Users                                                                      | JWT y ADMIN                                                                             |
-| Orders: POST                                                               | JWT y CLIENTE; idCliente se obtiene del token                                           |
-| Orders: lecturas                                                           | JWT; ADMIN todos, CLIENTE propios, EMPRENDEDOR de sus tiendas; recursos ajenos 404      |
-| Deliveries: lecturas                                                       | JWT; ADMIN todas, REPARTIDOR propias; alcance SQL antes de paginar y contar; ajenas 404 |
-| Deliveries: asignar/cancelar                                               | JWT y ADMIN                                                                             |
-| Deliveries: start/complete                                                 | JWT y REPARTIDOR propietario; ajenas 403                                                |
-| Auth/login, Stores, Categories, Products, Neighborhoods, Couriers y Health | Públicos según el código actual                                                         |
+| Recurso                         | Política vigente                                                                                                                                           |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stores: escrituras              | JWT; ADMIN cualquier tienda, EMPRENDEDOR propias. No se permite transferir propietario mediante PATCH. POST de ADMIN exige propietario EMPRENDEDOR ACTIVO. |
+| Categories: escrituras          | JWT y ADMIN.                                                                                                                                               |
+| Products: escrituras            | JWT; ADMIN cualquier producto, EMPRENDEDOR solo tiendas propias, comprobando origen y destino.                                                             |
+| Catálogo: GET                   | Público, sin Bearer obligatorio.                                                                                                                           |
+| Users                           | JWT y ADMIN.                                                                                                                                               |
+| Orders: POST                    | JWT y CLIENTE; idCliente proviene del token.                                                                                                               |
+| Orders: lecturas                | JWT; ADMIN todos, CLIENTE propios, EMPRENDEDOR de sus tiendas; ajenos 404.                                                                                 |
+| Deliveries: lecturas            | JWT; ADMIN todas, REPARTIDOR propias; ajenas 404.                                                                                                          |
+| Deliveries: asignar/cancelar    | JWT y ADMIN.                                                                                                                                               |
+| Deliveries: start/complete      | JWT y REPARTIDOR propietario; ajenas 403.                                                                                                                  |
+| Neighborhoods, Couriers, Health | Público.                                                                                                                                                   |
 
-Bearer se declara solo en los endpoints protegidos. Authorize facilita el envío del JWT; no sustituye los guards ni cambia permisos. Esta documentación refleja el acceso público actual del catálogo; no introduce una política de seguridad nueva.
+Bearer se declara en las 23 operaciones protegidas, incluidas las nueve escrituras del catálogo. Hay 12 operaciones públicas y 35 en total. Los guards y los servicios aplican la nueva política; Authorize solo facilita enviar el JWT. Sin token, inválido o expirado: 401; rol prohibido o transferencia de tienda: 403; recurso ajeno de catálogo: 404. POST Stores de ADMIN puede devolver 422 por propietario inelegible. Se preservan Problem Details y 500 seguro.
 
 ## Colección `api.http`
 
-La colección contiene **43 peticiones**, que cubren las 35 operaciones únicas: tres logins para distintos roles, las operaciones por recurso y seis ejemplos adicionales de errores 400, 401, 403, 404, 409 y 422. Cada bloque tiene nombre y un comentario `expected-status`; ese comentario indica el resultado esperado y no es una aserción automática de la extensión.
+La colección contiene **44 peticiones**, que cubren las 35 operaciones únicas: cuatro logins para distintos roles, las operaciones por recurso y seis ejemplos adicionales de errores 400, 401, 403, 404, 409 y 422. Cada bloque tiene nombre y un comentario `expected-status`; ese comentario indica el resultado esperado y no es una aserción automática de la extensión.
 
 Para uso manual, abre `api.http` con [REST Client para VS Code](https://github.com/Huachao/vscode-restclient). Los JWT e identificadores de recursos nuevos se obtienen de respuestas de peticiones nombradas. Ejecuta los tres logins y después cada bloque en el orden del archivo. Las referencias de respuesta solo funcionan después de ejecutar la petición nombrada.
 
-Configura localmente las variables de entorno `CHOROTEGA_ADMIN_PASSWORD`, `CHOROTEGA_CLIENT_PASSWORD` y `CHOROTEGA_COURIER_PASSWORD` en el entorno desde el que inicia VS Code. La colección las lee con `$processEnv`; no carga el `.env` del backend. Sustituye los correos de ejemplo por los de tus cuentas locales y ajusta `baseUrl`. No reemplaces esos valores por secretos reales en un archivo que vayas a publicar.
+Configura localmente las variables de entorno `CHOROTEGA_ADMIN_PASSWORD`, `CHOROTEGA_CLIENT_PASSWORD` y `CHOROTEGA_COURIER_PASSWORD` y `CHOROTEGA_ENTREPRENEUR_PASSWORD` en el entorno desde el que inicia VS Code. La colección las lee con `$processEnv`; no carga el `.env` del backend. Sustituye los correos de ejemplo por los de tus cuentas locales y ajusta `baseUrl`. No reemplaces esos valores por secretos reales en un archivo que vayas a publicar.
+
+Las escrituras de Categories y el ejemplo de conflicto 409 usan `adminToken`; Stores y Products usan `entrepreneurToken`. Ejecuta `loginAdmin` y `loginEntrepreneur` con cuentas locales de esos roles; `entrepreneurId` debe ser el idUsuario de `entrepreneurEmail`. La colección obtiene los tokens de las respuestas, sin guardarlos como secretos. ADMIN puede elegir otro EMPRENDEDOR ACTIVO; no puede transferir una tienda mediante PATCH.
 
 ### Datos previos para ejecución manual
 
@@ -77,7 +83,7 @@ Los valores 1 y 2 son marcadores y deben reemplazarse por IDs reales; no se supo
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | adminEmail/clientEmail/courierEmail | Cuentas ACTIVO con hash bcrypt válido y roles ADMIN, CLIENTE y REPARTIDOR respectivamente                         |
 | userId                              | Usuario que ADMIN puede consultar y cuyo teléfono de prueba puede actualizarse                                    |
-| entrepreneurId                      | Usuario EMPRENDEDOR existente                                                                                     |
+| entrepreneurId                      | Usuario EMPRENDEDOR ACTIVO existente que corresponde a entrepreneurEmail                                          |
 | catalogStoreId/catalogCategoryId    | Tienda y categoría existentes, ambas ACTIVA, diferentes de los recursos temporales de CRUD                        |
 | catalogProductId                    | Producto ACTIVO de esa tienda, con existencias suficientes para la compra                                         |
 | neighborhoodId                      | Barrio ACTIVO con tarifa válida                                                                                   |
@@ -93,7 +99,7 @@ El pedido creado mediante POST queda CONFIRMADO. No puede usarse directamente co
 
 La prueba `openapi.integration-spec.ts` prepara esos datos exclusivamente dentro de PostgreSQL temporal: cuentas de roles distintos con contraseña temporal, catálogo base, productos de dos tiendas, barrio, repartidores y pedidos PREPARANDO. La segunda asignación de entrega se prepara mediante el servicio real. Los IDs, correos y contraseñas se sustituyen en memoria; no se guardan ni se reutilizan fuera de la prueba.
 
-Un ejecutor de pruebas procesa el subconjunto de sintaxis utilizado por el archivo: variables, referencias JSON de respuestas, método/ruta, Authorization y body JSON. Envía las **43 peticiones del archivo** con Supertest al mismo Nest real y comprueba cada código esperado, los 201 con Location, los 204 vacíos y Problem Details en errores. No sustituye guards ni autenticación. Esto comprueba los ejemplos bajo datos controlados; no garantiza el resultado al ejecutar manualmente con otra base o IDs distintos.
+Un ejecutor de pruebas procesa el subconjunto de sintaxis utilizado por el archivo: variables, referencias JSON de respuestas, método/ruta, Authorization y body JSON. Envía las **44 peticiones del archivo** con Supertest al mismo Nest real y comprueba cada código esperado, los 201 con Location, los 204 vacíos y Problem Details en errores. No sustituye guards ni autenticación. Esto comprueba los ejemplos bajo datos controlados; no garantiza el resultado al ejecutar manualmente con otra base o IDs distintos.
 
 ## Pruebas
 
@@ -108,9 +114,9 @@ npm run test:e2e
 
 La infraestructura usa PostgreSQL 16, migraciones reales y `synchronize: false`, sin cargar `.env` ni usar Supabase. El callback opcional del helper registra Swagger antes de `app.init()` y conserva el comportamiento anterior cuando no se proporciona.
 
-La suite específica comprueba UI y script, JSON y versión OpenAPI, exactamente 35 operaciones, ausencia de rutas duplicadas, parámetros y opcionalidad, DTOs públicos, todas las referencias de componentes, respuestas paginadas, arrays, Bearer selectivo, contraseña writeOnly, importes string, campos nullable, PATCH parcial, Location, 204 sin contenido y errores Problem Details por operación. También comprueba cobertura estructural de la colección y ejecuta sus 43 peticiones. La revisión del JSON verifica estructura y referencias generadas; no introduce un validador externo adicional.
+La suite específica comprueba UI y script, JSON y versión OpenAPI, exactamente 35 operaciones, ausencia de rutas duplicadas, parámetros y opcionalidad, DTOs públicos, todas las referencias de componentes, respuestas paginadas, arrays, Bearer selectivo, contraseña writeOnly, importes string, campos nullable, PATCH parcial, Location, 204 sin contenido y errores Problem Details por operación. También comprueba cobertura estructural de la colección y ejecuta sus 44 peticiones. La revisión del JSON verifica estructura y referencias generadas; no introduce un validador externo adicional.
 
-## Resultados locales del bloque
+## Resultados históricos del bloque OpenAPI inicial
 
 | Validación                                | Resultado                                                                                                                      |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -126,12 +132,41 @@ La suite específica comprueba UI y script, JSON y versión OpenAPI, exactamente
 | OpenAPI específica                        | 44/44, 2,684 s; incluye envío real de las 43 peticiones de la colección                                                        |
 | `git diff --check`                        | Sin errores                                                                                                                    |
 
-La cobertura corresponde al alcance existente de Orders/Deliveries, sin cambios de exclusiones ni umbrales. Las suites con Docker se ejecutaron en secuencia. La comparación del AST de los 36 controladores/DTOs modificados, eliminando solo las anotaciones e imports de Swagger, conserva íntegramente las declaraciones, validaciones y cuerpos funcionales anteriores.
+La cobertura corresponde al alcance existente de Orders/Deliveries, sin cambios de exclusiones ni umbrales. Las suites con Docker se ejecutaron en secuencia. En el bloque OpenAPI inicial, la comparación del AST de los 36 controladores/DTOs modificados, eliminando solo las anotaciones e imports de Swagger, conserva íntegramente las declaraciones, validaciones y cuerpos funcionales anteriores.
 
 La revisión de los servicios confirmó que Stores y Products documentan 409 únicamente en DELETE por referencias existentes; sus POST/PATCH no introducen ese código. Categories conserva el conflicto UNIQUE en POST/PATCH y el de FK en DELETE.
 
+## Verificación de seguridad del catálogo
+
+La política de escritura es nueva y se aplica en `fix/lab05-catalog-write-security`. Solo se protegen POST/PATCH/DELETE de Stores, Categories y Products; los GET siguen públicos. Se conservan Auth, JWT, guards compartidos, OrdersReadService, entidades, migraciones y dependencias.
+
+| Verificación                          | Resultado local                                                    |
+| ------------------------------------- | ------------------------------------------------------------------ |
+| Prettier de archivos afectados        | Aprobado                                                           |
+| ESLint completo                       | Aprobado, sin warnings                                             |
+| TypeScript sin emisión ni incremental | Aprobado                                                           |
+| Build                                 | Aprobado                                                           |
+| Unitarias completas                   | 303/303 en 28 suites; 20 casos nuevos                              |
+| Cobertura existente                   | Statements 96,97%; branches 84,63%; functions 89%; lines 97,18%    |
+| Integración completa                  | 545/545 en 18 suites, 78,213 s                                     |
+| E2E                                   | 530/530 en 11 suites, 68,723 s                                     |
+| Seguridad HTTP de catálogo            | 88/88, incluidas en integración/e2e                                |
+| OpenAPI específica                    | 45/45; 35 operaciones y ejecución de las 44 peticiones de api.http |
+| Seguridad HTTP existente              | 5/5; ejecución explícita junto con OpenAPI: 50/50 en 4,520 s       |
+| git diff --check                      | Sin errores                                                        |
+
+Los totales se solapan: e2e reutiliza las suites HTTP de integración y no se suma como casos adicionales. La cobertura conserva umbrales y exclusiones; mide Orders/Deliveries, no el catálogo.
+
+Las regresiones usan JWT real obtenido por login, Nest real y PostgreSQL 16 temporal con migraciones, sin cargar `.env` ni sustituir guards. Comprueban 401 (ausente, inválido, expirado), 403 por rol, recursos ajenos 404, ADMIN autorizado, propietario autorizado, propietario idéntico u omitido en PATCH, transferencias rechazadas sin cambios parciales, elegibilidad del propietario para POST de ADMIN, GET públicos y ausencia de cambios en la visibilidad de pedidos.
+
+Dos casos ejecutan una carrera HTTP real: una transacción mueve el producto a otra tienda, PATCH/DELETE del emprendedor se bloquea en PostgreSQL y, al confirmar el movimiento, el predicado SQL reevalúa la propiedad y devuelve 404 sin escritura indebida. Otros casos comprueban autorización SQL de origen/destino tras cambios de datos y revalidación de la tienda bajo bloqueo al crear productos.
+
+Las unitarias comprueban autorización directa de servicios y SQL generado parametrizado. Una regresión evita que TypeORM sustituya el nombre `tienda` del subquery por la columna de relación `id_tienda`; los identificadores SQL estáticos se entrecomillan y todos los valores siguen siendo parámetros. Se conservan los casos funcionales previos, incluidos los conflictos UNIQUE/FK reales.
+
+La creación de tiendas para ADMIN devuelve 404 si no existe el usuario y 422 si no es EMPRENDEDOR ACTIVO. No se añade un 404 artificial a POST Categories: documenta sus códigos realmente aplicables. No se incorpora un proceso de transferencia de tiendas, revocación de tokens ni cambios de autenticación. La publicación y la validación remota permanecen pendientes de revisión.
+
 ## Límites técnicos
 
-Se preservan rutas, guards, validación global, repositorios, servicios de negocio, entidades, migraciones, estados y transacciones. Swagger es documentación; no genera endpoints de negocio nuevos ni modifica el flujo de autenticación. No se instala una extensión de editor ni se guarda configuración local. La prueba automática de la colección no pretende implementar todas las funciones de REST Client. La publicación y el CI remoto quedan para una revisión posterior.
+El bloque OpenAPI original preservó la funcionalidad. La corrección actual agrega seguridad a las nueve escrituras de catálogo y actualiza el contrato generado y la colección; se preservan rutas, validación global, entidades, migraciones, estados, transacciones de pedidos y autenticación global. Swagger es documentación; no genera endpoints de negocio nuevos ni modifica el flujo de autenticación. No se instala una extensión de editor ni se guarda configuración local. La prueba automática de la colección no pretende implementar todas las funciones de REST Client. La publicación y el CI remoto quedan para una revisión posterior.
 
 La instalación npm informó 12 alertas de auditoría del árbol completo (4 moderadas, 6 altas y 2 críticas). No se ejecutó `audit fix`; la revisión de esas alertas queda como pendiente separado. La comparación del lockfile confirma que no cambió ninguna versión previa.
