@@ -376,6 +376,27 @@ Por defecto, el backend utiliza el puerto `3000` o el valor definido mediante `P
 
 Si el `.env` apunta a Supabase, el backend se conectará a Supabase. Las variables temporales utilizadas en los comandos de migración local no modifican ese archivo.
 
+## Swagger/OpenAPI y colección HTTP
+
+Con el backend en ejecución en el puerto 3000:
+
+- Swagger UI: <http://localhost:3000/docs>.
+- Especificación JSON: <http://localhost:3000/docs-json>.
+- Colección de las 35 operaciones: [api.http](docs/laboratory/lab-05/api.http).
+
+Los endpoints protegidos permiten utilizar **Authorize** con un JWT obtenido
+mediante `/api/v1/auth/login`. La documentación refleja los permisos actuales;
+los endpoints públicos conservan su acceso público. La colección requiere
+cuentas y datos locales de pruebas preparados; sus variables y el orden de
+peticiones se explican en [Swagger y OpenAPI](docs/laboratory/lab-05/swagger-openapi.md).
+
+Para verificar el contrato y ejecutar la colección contra PostgreSQL temporal,
+desde `apps/backend` y con Docker activo:
+
+```bash
+npm run test:integration -- --testPathPatterns=test/integration/http/openapi.integration-spec.ts
+```
+
 ## Ejecutar el frontend
 
 Desde `apps/frontend`:
