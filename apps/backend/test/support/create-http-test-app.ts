@@ -14,6 +14,7 @@ class HttpTestDatabaseModule {}
 
 export async function createHttpTestApp(
   imports: NonNullable<ModuleMetadata['imports']>,
+  setup?: (app: INestApplication<App>) => void,
 ) {
   const database = await startPostgresTestDatabase();
   let module: TestingModule | undefined;
@@ -53,6 +54,7 @@ export async function createHttpTestApp(
     }).compile();
     app = module.createNestApplication<INestApplication<App>>();
     configureHttp(app);
+    setup?.(app);
     await app.init();
     return { app, database, close };
   } catch (error) {

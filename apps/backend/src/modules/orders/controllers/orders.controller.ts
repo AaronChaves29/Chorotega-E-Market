@@ -1,4 +1,16 @@
 import {
+  ApiTags,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiBody,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
+import {
+  ApiPageResponse,
+  ApiProblemResponses,
+} from '../../../common/http/openapi-contract';
+import {
   Body,
   Controller,
   Get,
@@ -30,6 +42,8 @@ import { rethrowOrderHttpError } from '../http/order-http-error';
 
 type AuthenticatedRequest = Request & { user: AuthenticatedUser };
 
+@ApiTags('orders')
+@ApiBearerAuth('bearer')
 @Controller('orders')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class OrdersController {
@@ -38,6 +52,13 @@ export class OrdersController {
     private readonly ordersReadService: OrdersReadService,
   ) {}
 
+  @ApiOperation({
+    summary: 'Listar pedidos',
+    description:
+      'Roles: ADMIN, CLIENTE, EMPRENDEDOR. ADMIN consulta todos, CLIENTE solo propios y EMPRENDEDOR solo pedidos de sus tiendas; recursos ajenos devuelven 404. Los detalles pertenecen al pedido de la URL. Paginación en PostgreSQL, filtros combinables, columnas de orden controladas y desempate por identificador.',
+  })
+  @ApiPageResponse(OrderResponseDto)
+  @ApiProblemResponses([400, 401, 403, 500])
   @Get()
   @Roles('ADMIN', 'CLIENTE', 'EMPRENDEDOR')
   findAll(
@@ -47,6 +68,23 @@ export class OrdersController {
     return this.ordersReadService.search(request.user, query);
   }
 
+  @ApiOperation({
+    summary: 'Consultar pedidos por ID',
+    description:
+      'Roles: ADMIN, CLIENTE, EMPRENDEDOR. ADMIN consulta todos, CLIENTE solo propios y EMPRENDEDOR solo pedidos de sus tiendas; recursos ajenos devuelven 404. Los detalles pertenecen al pedido de la URL.',
+  })
+  @ApiParam({
+    name: 'id',
+    schema: { type: 'integer' },
+    description: 'Identificador del recurso.',
+  })
+  @ApiResponse({
+    status: 200,
+    type: OrderResponseDto,
+    isArray: false,
+    description: 'Respuesta pública mediante DTO.',
+  })
+  @ApiProblemResponses([400, 401, 403, 404, 500])
   @Get(':id')
   @Roles('ADMIN', 'CLIENTE', 'EMPRENDEDOR')
   findById(
@@ -56,6 +94,25 @@ export class OrdersController {
     return this.ordersReadService.findById(request.user, id);
   }
 
+  @ApiOperation({
+    summary: 'Crear pedidos',
+    description:
+      'Roles: CLIENTE. idCliente procede del JWT; creación y confirmación transaccional con importes calculados por el servicio.',
+  })
+  @ApiBody({ type: CreateOrderDto })
+  @ApiResponse({
+    status: 201,
+    type: OrderResponseDto,
+    isArray: false,
+    description: 'Respuesta pública mediante DTO.',
+    headers: {
+      Location: {
+        description: 'Ruta del recurso creado.',
+        schema: { type: 'string', example: '/api/v1/orders/1' },
+      },
+    },
+  })
+  @ApiProblemResponses([400, 401, 403, 404, 409, 422, 500])
   @Post()
   @Roles('CLIENTE')
   @HttpCode(HttpStatus.CREATED)
@@ -76,6 +133,23 @@ export class OrdersController {
     }
   }
 
+  @ApiOperation({
+    summary: 'Listar detalles del pedido',
+    description:
+      'Roles: ADMIN, CLIENTE, EMPRENDEDOR. ADMIN consulta todos, CLIENTE solo propios y EMPRENDEDOR solo pedidos de sus tiendas; recursos ajenos devuelven 404. Los detalles pertenecen al pedido de la URL.',
+  })
+  @ApiParam({
+    name: 'id',
+    schema: { type: 'integer' },
+    description: 'Identificador del recurso.',
+  })
+  @ApiResponse({
+    status: 200,
+    type: OrderItemResponseDto,
+    isArray: true,
+    description: 'Respuesta pública mediante DTO.',
+  })
+  @ApiProblemResponses([400, 401, 403, 404, 500])
   @Get(':id/details')
   @Roles('ADMIN', 'CLIENTE', 'EMPRENDEDOR')
   findDetails(
@@ -85,6 +159,28 @@ export class OrdersController {
     return this.ordersReadService.findDetails(request.user, id);
   }
 
+  @ApiOperation({
+    summary: 'Consultar un detalle del pedido',
+    description:
+      'Roles: ADMIN, CLIENTE, EMPRENDEDOR. ADMIN consulta todos, CLIENTE solo propios y EMPRENDEDOR solo pedidos de sus tiendas; recursos ajenos devuelven 404. Los detalles pertenecen al pedido de la URL.',
+  })
+  @ApiParam({
+    name: 'id',
+    schema: { type: 'integer' },
+    description: 'Identificador del recurso.',
+  })
+  @ApiParam({
+    name: 'detailId',
+    schema: { type: 'integer' },
+    description: 'Identificador del recurso.',
+  })
+  @ApiResponse({
+    status: 200,
+    type: OrderItemResponseDto,
+    isArray: false,
+    description: 'Respuesta pública mediante DTO.',
+  })
+  @ApiProblemResponses([400, 401, 403, 404, 500])
   @Get(':id/details/:detailId')
   @Roles('ADMIN', 'CLIENTE', 'EMPRENDEDOR')
   findDetail(

@@ -1,0 +1,362 @@
+# Chorotega E-Market — colección para VS Code REST Client.
+# Preparación y secuencia: swagger-openapi.md. Usar exclusivamente una base local de pruebas.
+# Las variables de entorno se establecen fuera del repositorio; no guardar credenciales aquí.
+# Ejecutar los bloques en orden. Los IDs de recursos temporales proceden de las respuestas.
+@baseUrl = http://localhost:3000
+@adminEmail = admin@example.test
+@clientEmail = cliente@example.test
+@courierEmail = repartidor@example.test
+@adminPassword = {{$processEnv CHOROTEGA_ADMIN_PASSWORD}}
+@clientPassword = {{$processEnv CHOROTEGA_CLIENT_PASSWORD}}
+@courierPassword = {{$processEnv CHOROTEGA_COURIER_PASSWORD}}
+@adminToken = {{loginAdmin.response.body.$.token}}
+@clientToken = {{loginClient.response.body.$.token}}
+@courierToken = {{loginCourier.response.body.$.token}}
+@userId = 1
+@entrepreneurId = 1
+@catalogStoreId = 1
+@catalogCategoryId = 1
+@catalogProductId = 1
+@neighborhoodId = 1
+@courierId = 1
+@preparedOrderId = 1
+@cancellableDeliveryId = 1
+@storeId = {{createStore.response.body.$.idTienda}}
+@categoryId = {{createCategory.response.body.$.idCategoria}}
+@productId = {{createProduct.response.body.$.idProducto}}
+@orderId = {{createOrder.response.body.$.idPedido}}
+@detailId = {{createOrder.response.body.$.items[0].idDetalle}}
+@deliveryId = {{assignDelivery.response.body.$.idEntrega}}
+@existingCategoryName = REEMPLAZAR_POR_CATEGORIA_EXISTENTE
+@otherStoreProductId = 2
+
+### Auth — login Admin
+# @name loginAdmin
+# expected-status: 201
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{adminEmail}}",
+  "clave": "{{adminPassword}}"
+}
+
+### Auth — login Client
+# @name loginClient
+# expected-status: 201
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{clientEmail}}",
+  "clave": "{{clientPassword}}"
+}
+
+### Auth — login Courier
+# @name loginCourier
+# expected-status: 201
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{courierEmail}}",
+  "clave": "{{courierPassword}}"
+}
+
+### Users — listado administrativo
+# @name usersList
+# expected-status: 200
+GET {{baseUrl}}/api/v1/users?nombre=Usuario&page=0&size=20&sortBy=idUsuario&sortDirection=ASC
+Authorization: Bearer {{adminToken}}
+
+### Users — detalle
+# @name userDetail
+# expected-status: 200
+GET {{baseUrl}}/api/v1/users/{{userId}}
+Authorization: Bearer {{adminToken}}
+
+### Users — PATCH parcial
+# @name patchUser
+# expected-status: 200
+PATCH {{baseUrl}}/api/v1/users/{{userId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "telefono": null
+}
+
+### stores — crear temporal
+# @name createStore
+# expected-status: 201
+POST {{baseUrl}}/api/v1/stores
+Content-Type: application/json
+
+{
+  "nombre": "Temporal colección HTTP",
+  "idEmprendedor": {{entrepreneurId}},
+  "direccion": "Nicoya"
+}
+
+### stores — listado paginado
+# @name listStore
+# expected-status: 200
+GET {{baseUrl}}/api/v1/stores?page=0&size=10&sortDirection=DESC
+
+### stores — detalle
+# @name getStore
+# expected-status: 200
+GET {{baseUrl}}/api/v1/stores/{{storeId}}
+
+### stores — PATCH parcial
+# @name patchStore
+# expected-status: 200
+PATCH {{baseUrl}}/api/v1/stores/{{storeId}}
+Content-Type: application/json
+
+{
+  "descripcion": "Actualización parcial HTTP"
+}
+
+### stores — eliminar temporal sin referencias
+# @name deleteStore
+# expected-status: 204
+DELETE {{baseUrl}}/api/v1/stores/{{storeId}}
+
+### categories — crear temporal
+# @name createCategory
+# expected-status: 201
+POST {{baseUrl}}/api/v1/categories
+Content-Type: application/json
+
+{
+  "nombre": "Temporal colección HTTP",
+  "descripcion": null,
+  "estado": "ACTIVA"
+}
+
+### categories — listado paginado
+# @name listCategory
+# expected-status: 200
+GET {{baseUrl}}/api/v1/categories?page=0&size=10&sortDirection=DESC
+
+### categories — detalle
+# @name getCategory
+# expected-status: 200
+GET {{baseUrl}}/api/v1/categories/{{categoryId}}
+
+### categories — PATCH parcial
+# @name patchCategory
+# expected-status: 200
+PATCH {{baseUrl}}/api/v1/categories/{{categoryId}}
+Content-Type: application/json
+
+{
+  "descripcion": "Actualización parcial HTTP"
+}
+
+### categories — eliminar temporal sin referencias
+# @name deleteCategory
+# expected-status: 204
+DELETE {{baseUrl}}/api/v1/categories/{{categoryId}}
+
+### products — crear temporal
+# @name createProduct
+# expected-status: 201
+POST {{baseUrl}}/api/v1/products
+Content-Type: application/json
+
+{
+  "nombre": "Temporal colección HTTP",
+  "idTienda": {{catalogStoreId}},
+  "idCategoria": {{catalogCategoryId}},
+  "precio": 2500.5,
+  "cantidadDisponible": 10
+}
+
+### products — listado paginado
+# @name listProduct
+# expected-status: 200
+GET {{baseUrl}}/api/v1/products?page=0&size=10&sortDirection=DESC
+
+### products — detalle
+# @name getProduct
+# expected-status: 200
+GET {{baseUrl}}/api/v1/products/{{productId}}
+
+### products — PATCH parcial
+# @name patchProduct
+# expected-status: 200
+PATCH {{baseUrl}}/api/v1/products/{{productId}}
+Content-Type: application/json
+
+{
+  "descripcion": "Actualización parcial HTTP"
+}
+
+### products — eliminar temporal sin referencias
+# @name deleteProduct
+# expected-status: 204
+DELETE {{baseUrl}}/api/v1/products/{{productId}}
+
+### Orders — crear y confirmar como CLIENTE
+# @name createOrder
+# expected-status: 201
+POST {{baseUrl}}/api/v1/orders
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{
+  "idBarrio": {{neighborhoodId}},
+  "direccionEntrega": "Nicoya, dirección de prueba",
+  "items": [
+    {
+      "idProducto": {{catalogProductId}},
+      "cantidad": 1
+    }
+  ]
+}
+
+### Orders — listado propio
+# @name ordersList
+# expected-status: 200
+GET {{baseUrl}}/api/v1/orders?estado=CONFIRMADO&page=0&size=10&sortBy=idPedido&sortDirection=DESC
+Authorization: Bearer {{clientToken}}
+
+### Orders — detalle propio
+# @name orderDetail
+# expected-status: 200
+GET {{baseUrl}}/api/v1/orders/{{orderId}}
+Authorization: Bearer {{clientToken}}
+
+### Orders — detalles del pedido
+# @name orderItems
+# expected-status: 200
+GET {{baseUrl}}/api/v1/orders/{{orderId}}/details
+Authorization: Bearer {{clientToken}}
+
+### Orders — detalle individual
+# @name orderItem
+# expected-status: 200
+GET {{baseUrl}}/api/v1/orders/{{orderId}}/details/{{detailId}}
+Authorization: Bearer {{clientToken}}
+
+### Deliveries — asignar pedido PREPARANDO preparado previamente
+# @name assignDelivery
+# expected-status: 201
+POST {{baseUrl}}/api/v1/deliveries
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "idPedido": {{preparedOrderId}},
+  "idRepartidor": {{courierId}}
+}
+
+### Deliveries — listado del propietario
+# @name deliveriesList
+# expected-status: 200
+GET {{baseUrl}}/api/v1/deliveries?estado=ASIGNADA&page=0&size=10&sortBy=idEntrega&sortDirection=ASC
+Authorization: Bearer {{courierToken}}
+
+### Deliveries — detalle propio
+# @name deliveryDetail
+# expected-status: 200
+GET {{baseUrl}}/api/v1/deliveries/{{deliveryId}}
+Authorization: Bearer {{courierToken}}
+
+### Deliveries — iniciar
+# @name startDelivery
+# expected-status: 200
+POST {{baseUrl}}/api/v1/deliveries/{{deliveryId}}/start
+Authorization: Bearer {{courierToken}}
+
+### Deliveries — completar
+# @name completeDelivery
+# expected-status: 200
+POST {{baseUrl}}/api/v1/deliveries/{{deliveryId}}/complete
+Authorization: Bearer {{courierToken}}
+
+### Deliveries — cancelar otra entrega ASIGNADA previamente preparada
+# @name cancelDelivery
+# expected-status: 200
+POST {{baseUrl}}/api/v1/deliveries/{{cancellableDeliveryId}}/cancel
+Authorization: Bearer {{adminToken}}
+
+### neighborhoods — listado array
+# @name listneighborhoods
+# expected-status: 200
+GET {{baseUrl}}/api/v1/neighborhoods
+
+### neighborhoods — detalle
+# @name getneighborhoods
+# expected-status: 200
+GET {{baseUrl}}/api/v1/neighborhoods/{{neighborhoodId}}
+
+### couriers — listado array
+# @name listcouriers
+# expected-status: 200
+GET {{baseUrl}}/api/v1/couriers
+
+### couriers — detalle
+# @name getcouriers
+# expected-status: 200
+GET {{baseUrl}}/api/v1/couriers/{{courierId}}
+
+### Health — excepción al prefijo v1
+# @name health
+# expected-status: 200
+GET {{baseUrl}}/api/database/health
+
+### Error 400 — filtro booleano inválido
+# @name error400
+# expected-status: 400
+GET {{baseUrl}}/api/v1/products?disponible=yes
+
+### Error 401 — falta JWT
+# @name error401
+# expected-status: 401
+GET {{baseUrl}}/api/v1/users
+
+### Error 403 — CLIENTE en administración
+# @name error403
+# expected-status: 403
+GET {{baseUrl}}/api/v1/users
+Authorization: Bearer {{clientToken}}
+
+### Error 404 — recurso inexistente
+# @name error404
+# expected-status: 404
+GET {{baseUrl}}/api/v1/products/2147483647
+
+### Error 409 — categoría ya existente
+# @name error409
+# expected-status: 409
+POST {{baseUrl}}/api/v1/categories
+Content-Type: application/json
+
+{
+  "nombre": "{{existingCategoryName}}"
+}
+
+### Error 422 — producto de otra tienda en el mismo pedido
+# @name error422
+# expected-status: 422
+POST {{baseUrl}}/api/v1/orders
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{
+  "idBarrio": {{neighborhoodId}},
+  "direccionEntrega": "Nicoya",
+  "items": [
+    {
+      "idProducto": {{catalogProductId}},
+      "cantidad": 1
+    },
+    {
+      "idProducto": {{otherStoreProductId}},
+      "cantidad": 1
+    }
+  ]
+}
