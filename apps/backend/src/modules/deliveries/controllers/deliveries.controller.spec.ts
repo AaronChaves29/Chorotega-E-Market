@@ -18,8 +18,8 @@ describe('DeliveriesController', () => {
     startDelivery: jest.fn(),
     completeDelivery: jest.fn(),
     cancelDelivery: jest.fn(),
-    search: jest.fn(),
-    findById: jest.fn(),
+    searchVisible: jest.fn(),
+    findVisibleById: jest.fn(),
   };
 
   const jwtAuthGuard = {
@@ -165,12 +165,17 @@ describe('DeliveriesController', () => {
       totalPages: 0,
     };
 
-    deliveriesService.search.mockResolvedValue(response);
+    deliveriesService.searchVisible.mockResolvedValue(response);
 
-    await expect(controller.findAll(query)).resolves.toBe(response);
+    await expect(
+      controller.findAll(query, authenticatedRequest as never),
+    ).resolves.toBe(response);
 
-    expect(deliveriesService.search).toHaveBeenCalledTimes(1);
-    expect(deliveriesService.search).toHaveBeenCalledWith(query);
+    expect(deliveriesService.searchVisible).toHaveBeenCalledTimes(1);
+    expect(deliveriesService.searchVisible).toHaveBeenCalledWith(
+      query,
+      authenticatedRequest.user,
+    );
   });
 
   it('delega la consulta de una entrega por id al servicio', async () => {
@@ -183,11 +188,16 @@ describe('DeliveriesController', () => {
       fechaEntrega: null,
     } as DeliveryResponseDto;
 
-    deliveriesService.findById.mockResolvedValue(delivery);
+    deliveriesService.findVisibleById.mockResolvedValue(delivery);
 
-    await expect(controller.findById(1)).resolves.toBe(delivery);
+    await expect(
+      controller.findById(1, authenticatedRequest as never),
+    ).resolves.toBe(delivery);
 
-    expect(deliveriesService.findById).toHaveBeenCalledTimes(1);
-    expect(deliveriesService.findById).toHaveBeenCalledWith(1);
+    expect(deliveriesService.findVisibleById).toHaveBeenCalledTimes(1);
+    expect(deliveriesService.findVisibleById).toHaveBeenCalledWith(
+      1,
+      authenticatedRequest.user,
+    );
   });
 });

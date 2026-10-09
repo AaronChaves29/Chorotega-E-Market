@@ -155,4 +155,57 @@ describe('DeliveriesRepository: búsqueda paginada', () => {
 
     expect(parameters).toEqual(['ASIGNADA', 10, 5, fechaDesde, fechaHasta]);
   });
+  it('combina el usuario autenticado con los filtros antes de paginar y contar', async () => {
+    let sql = '';
+    let parameters: unknown[] = [];
+    jest
+      .spyOn(SelectQueryBuilder.prototype, 'getManyAndCount')
+      .mockImplementation(function (this: SelectQueryBuilder<Delivery>) {
+        [sql, parameters] = this.getQueryAndParameters();
+        expect(this.expressionMap.skip).toBe(10);
+        expect(this.expressionMap.take).toBe(5);
+        return Promise.resolve([[], 0]);
+      });
+    await repository.searchVisible(
+      {
+        page: 2,
+        size: 5,
+        sortBy: 'idEntrega',
+        sortDirection: 'ASC',
+        idRepartidor: 99,
+      },
+      { rol: 'REPARTIDOR', idUsuario: 42 },
+    );
+    expect(sql).toContain(
+      '"entrega"."id_repartidor" = $1 AND "repartidor"."id_usuario" = $2',
+    );
+    expect(parameters).toEqual([99, 42]);
+    expect(sql).toContain('ORDER BY "entrega"."id_entrega" ASC');
+  });
+
+  it.each(['ADMIN', 'REPARTIDOR'] as const)(
+    'consulta detalle con alcance %s en SQL',
+    async (rol) => {
+      let sql = '';
+      let parameters: unknown[] = [];
+      jest
+        .spyOn(SelectQueryBuilder.prototype, 'getOne')
+        .mockImplementation(function (this: SelectQueryBuilder<Delivery>) {
+          [sql, parameters] = this.getQueryAndParameters();
+          return Promise.resolve(null);
+        });
+      await repository.findVisibleById(
+        7,
+        rol === 'ADMIN' ? { rol } : { rol, idUsuario: 42 },
+      );
+      expect(sql).toContain('"entrega"."id_entrega" = $1');
+      if (rol === 'REPARTIDOR') {
+        expect(sql).toContain('AND "repartidor"."id_usuario" = $2');
+        expect(parameters).toEqual([7, 42]);
+      } else {
+        expect(parameters).toEqual([7]);
+        expect(sql).not.toContain('"repartidor"."id_usuario" =');
+      }
+    },
+  );
 });

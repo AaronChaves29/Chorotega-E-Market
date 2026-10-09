@@ -24,6 +24,8 @@ import { DeliveriesService } from '../services/deliveries.service';
 import type { Request } from 'express';
 import { AuthenticatedUser } from '../../../auth/interfaces/authenticated-user.interface';
 
+import { rethrowDeliveryHttpError } from '../http/delivery-http-error';
+
 type AuthenticatedRequest = Request & {
   user: AuthenticatedUser;
 };
@@ -40,7 +42,9 @@ export class DeliveriesController {
     @Body() dto: AssignDeliveryDto,
     @Res({ passthrough: true }) response: Response,
   ): Promise<DeliveryResponseDto> {
-    const delivery = await this.deliveriesService.assignDelivery(dto);
+    const delivery = await this.deliveriesService
+      .assignDelivery(dto)
+      .catch(rethrowDeliveryHttpError);
 
     response.location(`/api/v1/deliveries/${delivery.idEntrega}`);
 
@@ -54,10 +58,9 @@ export class DeliveriesController {
     @Param('id', ParseIntPipe) idEntrega: number,
     @Req() request: AuthenticatedRequest,
   ): Promise<DeliveryResponseDto> {
-    return this.deliveriesService.startDelivery(
-      idEntrega,
-      request.user.idUsuario,
-    );
+    return this.deliveriesService
+      .startDelivery(idEntrega, request.user.idUsuario)
+      .catch(rethrowDeliveryHttpError);
   }
 
   @Post(':id/complete')
@@ -67,10 +70,9 @@ export class DeliveriesController {
     @Param('id', ParseIntPipe) idEntrega: number,
     @Req() request: AuthenticatedRequest,
   ): Promise<DeliveryResponseDto> {
-    return this.deliveriesService.completeDelivery(
-      idEntrega,
-      request.user.idUsuario,
-    );
+    return this.deliveriesService
+      .completeDelivery(idEntrega, request.user.idUsuario)
+      .catch(rethrowDeliveryHttpError);
   }
 
   @Post(':id/cancel')
@@ -79,22 +81,30 @@ export class DeliveriesController {
   cancelDelivery(
     @Param('id', ParseIntPipe) idEntrega: number,
   ): Promise<DeliveryResponseDto> {
-    return this.deliveriesService.cancelDelivery(idEntrega);
+    return this.deliveriesService
+      .cancelDelivery(idEntrega)
+      .catch(rethrowDeliveryHttpError);
   }
 
   @Get()
   @Roles('ADMIN', 'REPARTIDOR')
   findAll(
     @Query() query: DeliverySearchQueryDto,
+    @Req() request: AuthenticatedRequest,
   ): Promise<PaginationResult<DeliveryResponseDto>> {
-    return this.deliveriesService.search(query);
+    return this.deliveriesService
+      .searchVisible(query, request.user)
+      .catch(rethrowDeliveryHttpError);
   }
 
   @Get(':id')
   @Roles('ADMIN', 'REPARTIDOR')
   findById(
     @Param('id', ParseIntPipe) idEntrega: number,
+    @Req() request: AuthenticatedRequest,
   ): Promise<DeliveryResponseDto> {
-    return this.deliveriesService.findById(idEntrega);
+    return this.deliveriesService
+      .findVisibleById(idEntrega, request.user)
+      .catch(rethrowDeliveryHttpError);
   }
 }

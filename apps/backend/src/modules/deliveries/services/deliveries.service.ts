@@ -26,6 +26,8 @@ import { Courier } from '../../couriers/entities/courier.entity';
 import { DeliverySearchFilters } from '../interfaces/delivery-search-filters.interface';
 import { PaginationResult } from 'src/common/pagination/pagination-result';
 import { DeliveryAccessDeniedException } from '../exceptions/delivery-access-denied.exception';
+import type { AuthenticatedUser } from '../../../auth/interfaces/authenticated-user.interface';
+import type { DeliveryReadScope } from '../interfaces/delivery-read-scope.interface';
 
 @Injectable()
 export class DeliveriesService {
@@ -264,6 +266,41 @@ export class DeliveriesService {
     }
 
     return DeliveryMapper.toResponseDto(delivery);
+  }
+
+  async searchVisible(
+    filters: DeliverySearchFilters,
+    user: AuthenticatedUser,
+  ): Promise<PaginationResult<DeliveryResponseDto>> {
+    const result = await this.deliveriesRepository.searchVisible(
+      filters,
+      this.readScope(user),
+    );
+    return {
+      ...result,
+      content: result.content.map((delivery) =>
+        DeliveryMapper.toResponseDto(delivery),
+      ),
+    };
+  }
+
+  async findVisibleById(
+    idEntrega: number,
+    user: AuthenticatedUser,
+  ): Promise<DeliveryResponseDto> {
+    const delivery = await this.deliveriesRepository.findVisibleById(
+      idEntrega,
+      this.readScope(user),
+    );
+    if (!delivery) throw new DeliveryNotFoundException(idEntrega);
+    return DeliveryMapper.toResponseDto(delivery);
+  }
+
+  private readScope(user: AuthenticatedUser): DeliveryReadScope {
+    if (user.rol === 'ADMIN') return { rol: 'ADMIN' };
+    if (user.rol === 'REPARTIDOR')
+      return { rol: 'REPARTIDOR', idUsuario: user.idUsuario };
+    throw new DeliveryAccessDeniedException();
   }
 
   private async assertCourierOwnsDelivery(
