@@ -123,6 +123,8 @@ El backend y la CLI comparten `database.options.ts`. Se conservan `synchronize: 
 
 Consulta las reglas, prioridades, pruebas y límites en [Configuración dev/prod](docs/laboratory/lab-06/configuracion-dev-prod.md).
 
+La preparación de Render, los comandos de migración compilados y el procedimiento previo de Supabase/Atlas se describen en [Despliegue del backend](docs/laboratory/lab-06/despliegue-render.md). No se han creado servicios ni verificado conexiones remotas.
+
 ## Bases de datos con Docker
 
 Desde la raíz del proyecto:
