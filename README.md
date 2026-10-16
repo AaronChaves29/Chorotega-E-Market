@@ -101,42 +101,27 @@ npm ci
 
 ## Variables de entorno
 
-El backend utiliza variables de entorno para configurar la aplicación.
+La configuración diferencia `development`, `test` y `production` mediante `NODE_ENV`, seleccionado en el entorno del proceso antes de arrancar. Sin selección se utiliza desarrollo. La aplicación valida la configuración antes de inicializar sus conexiones.
 
-El archivo `apps/backend/.env.example` sirve como referencia para crear `apps/backend/.env`.
+| Variable           | Propósito                                                            |
+| ------------------ | -------------------------------------------------------------------- |
+| `NODE_ENV`         | Seleccionar el ambiente.                                             |
+| `PORT`             | Puerto de escucha del backend.                                       |
+| `DATABASE_URL`     | Conexión PostgreSQL exclusiva del servidor.                          |
+| `DATABASE_SSL`     | Controlar TLS; obligatorio habilitarlo en producción.                |
+| `DATABASE_CA_CERT` | CA PEM opcional para validar el certificado PostgreSQL.              |
+| `MONGODB_URI`      | Conexión MongoDB exclusiva del servidor; TLS validado en producción. |
+| `MONGODB_DATABASE` | Base de datos MongoDB.                                               |
+| `JWT_SECRET`       | Secreto de firma existente, exclusivo por ambiente.                  |
+| `CORS_ORIGIN`      | Orígenes web exactos autorizados, separados por comas.               |
 
-### PostgreSQL local
+Desarrollo carga `apps/backend/.env.development` y luego `apps/backend/.env`, respetando la prioridad del entorno del proceso. Producción y pruebas no cargan archivos de entorno. La plantilla `apps/backend/.env.example` incluye únicamente valores locales no sensibles y campos para completar; nunca copiar credenciales al repositorio.
 
-Ejemplo para utilizar PostgreSQL de Docker:
+Producción requiere configuración completa, secreto JWT de al menos 32 caracteres, TLS con certificado PostgreSQL validado y orígenes HTTPS explícitos. El dominio definitivo del frontend se configura al conocerlo. No se permite introducir parámetros TLS en `DATABASE_URL` de producción que puedan sustituir la política del backend.
 
-```env
-PORT=3000
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/chorotega_emarket
-DATABASE_SSL=false
-```
+El backend y la CLI comparten `database.options.ts`. Se conservan `synchronize: false` y `migrationsRun: false`; este bloque no automatiza ni ejecuta migraciones. La CLI carga archivos locales únicamente en desarrollo y valida las opciones PostgreSQL sin exigir las variables HTTP, MongoDB o JWT.
 
-### PostgreSQL de Supabase
-
-Configura la URL de conexión del proyecto correspondiente y habilita SSL:
-
-```env
-PORT=3000
-DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
-DATABASE_SSL=true
-```
-
-Completa también las demás variables que requieran las funcionalidades de Supabase, tomando como referencia `.env.example`.
-
-El backend y la CLI de TypeORM comparten las opciones de conexión mediante `database.options.ts`.
-
-La configuración mantiene:
-
-- `synchronize: false`: desactiva la modificación automática del esquema a partir de las entidades.
-- `migrationsRun: false`: las migraciones se ejecutan mediante comandos explícitos.
-
-Los comandos de migración deben ejecutarse desde `apps/backend`. El DataSource de la CLI carga el `.env` de esa carpeta y respeta las variables ya definidas en el entorno del proceso.
-
-El archivo `.env` contiene información sensible y no debe subirse al repositorio.
+Consulta las reglas, prioridades, pruebas y límites en [Configuración dev/prod](docs/laboratory/lab-06/configuracion-dev-prod.md).
 
 ## Bases de datos con Docker
 
@@ -374,7 +359,7 @@ npm run start:dev
 
 Por defecto, el backend utiliza el puerto `3000` o el valor definido mediante `PORT`.
 
-Si el `.env` apunta a Supabase, el backend se conectará a Supabase. Las variables temporales utilizadas en los comandos de migración local no modifican ese archivo.
+En desarrollo, si el `.env` apunta a Supabase, el backend intentará conectarse a Supabase; este archivo no se carga en producción ni en pruebas. Las variables temporales utilizadas en los comandos de migración local no modifican ese archivo.
 
 ## Swagger/OpenAPI y colección HTTP
 

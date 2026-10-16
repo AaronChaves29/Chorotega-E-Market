@@ -1,3 +1,4 @@
+import { createEnvironmentOptions } from './config/environment';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -19,9 +20,7 @@ import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-    }),
+    ConfigModule.forRoot(createEnvironmentOptions()),
 
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
@@ -29,6 +28,10 @@ import { AuthModule } from './auth/auth.module';
         createDatabaseOptions(
           configService.get<string>('DATABASE_URL'),
           configService.get<string>('DATABASE_SSL'),
+          {
+            production: configService.get<string>('NODE_ENV') === 'production',
+            ca: configService.get<string>('DATABASE_CA_CERT'),
+          },
         ),
     }),
 
