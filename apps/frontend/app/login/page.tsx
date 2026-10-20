@@ -1,33 +1,39 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { login } from "../../services/auth";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
+  const router = useRouter();
+
   const [correo, setCorreo] = useState("");
   const [clave, setClave] = useState("");
   const [cargando, setCargando] = useState(false);
   const [mensaje, setMensaje] = useState("");
-  const [autenticado, setAutenticado] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMensaje("");
-    setAutenticado(false);
     setCargando(true);
 
     try {
-      const respuesta = await login({ correo, clave });
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ correo, clave }),
+      });
 
-      if (!respuesta.token) {
-        throw new Error("El servidor no devolvió un token.");
+      const data = (await response.json()) as {
+        message?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.message ?? "No se pudo iniciar sesión.");
       }
 
-      // Por ahora verificamos el login sin almacenar el JWT.
-      // La gestión segura de sesiones será el siguiente bloque.
-      setAutenticado(true);
       setClave("");
-      setMensaje("Inicio de sesión correcto.");
+      router.replace("/pedidos");
+      router.refresh();
     } catch (error) {
       setMensaje(
         error instanceof Error
@@ -87,7 +93,7 @@ export default function LoginPage() {
               value={clave}
               onChange={(event) => setClave(event.target.value)}
               className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
-              placeholder="Ingresa tu contraseña"
+              placeholder="Ingresá tu contraseña"
             />
           </div>
 
@@ -101,12 +107,7 @@ export default function LoginPage() {
         </form>
 
         {mensaje && (
-          <p
-            role={autenticado ? "status" : "alert"}
-            className={`mt-4 text-center text-sm ${
-              autenticado ? "text-green-700" : "text-red-600"
-            }`}
-          >
+          <p role="alert" className="mt-4 text-center text-sm text-red-600">
             {mensaje}
           </p>
         )}
