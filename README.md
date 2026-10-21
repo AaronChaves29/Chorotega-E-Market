@@ -394,6 +394,36 @@ npm run dev
 
 Utiliza la dirección y el puerto que indique la terminal.
 
+### Frontend — SPA en React y Next.js
+
+El frontend de Chorotega E-Market está desarrollado con Next.js, React y TypeScript. Se encuentra en `apps/frontend/` dentro del monorepositorio y consume la API REST de NestJS.
+
+**Funcionalidades implementadas:**
+
+- Inicio y cierre de sesión mediante JWT.
+- Almacenamiento del token en una cookie HttpOnly.
+- Consulta paginada de pedidos con estados de carga, datos, error y lista vacía.
+- Creación de pedidos mediante selección de tienda, productos, cantidades, barrio y dirección de entrega.
+- Validación de datos y presentación de mensajes de error.
+- Cliente HTTP compartido en `apps/frontend/lib/api-client.ts`, encargado de centralizar las solicitudes al backend y detectar respuestas HTTP 401.
+
+**Variables de entorno del frontend:**
+
+| Variable | Propósito |
+| --- | --- |
+| `API_URL` | Dirección base de la API NestJS, utilizada exclusivamente por las rutas del servidor de Next.js. |
+| `NEXT_PUBLIC_API_URL` | Variable pública disponible para el navegador. La implementación actual no la necesita para las solicitudes centralizadas. |
+
+En desarrollo, las variables locales pueden configurarse mediante `apps/frontend/.env.local`, archivo que no debe incluirse en el repositorio.
+
+**Despliegue previsto en Vercel:**
+
+El frontend se desplegará desde el repositorio original, utilizando `apps/frontend` como directorio raíz y Next.js como framework.
+
+La variable `API_URL` deberá configurarse en Vercel con la dirección HTTPS real de la API publicada en Render. No se deben utilizar direcciones `localhost` en producción.
+
+El despliegue y las pruebas de integración en producción se encuentran pendientes hasta que estén disponibles los servicios públicos.
+
 ## Verificación del backend
 
 Con el backend en ejecución, utiliza el endpoint de health check para comprobar la conexión con la base configurada:
