@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getApiUrl } from "../../../../lib/server-api";
+import { apiRequest } from "@/lib/api-client";
 import type {
   LoginCredentials,
   LoginResponse,
@@ -30,15 +30,15 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const response = await fetch(`${getApiUrl()}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        correo: credentials.correo,
-        clave: credentials.clave,
-      }),
-      cache: "no-store",
-    });
+    const { response, data: loginData } =
+      await apiRequest<LoginResponse>("/auth/login", {
+        method: "POST",
+        authenticated: false,
+        body: {
+          correo: credentials.correo,
+          clave: credentials.clave,
+        },
+      });
 
     if (!response.ok) {
       return NextResponse.json(
@@ -52,11 +52,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const data = (await response.json()) as LoginResponse;
+    const data = loginData;
 
     if (
-      typeof data.token !== "string" ||
-      !data.token ||
+      !data ||
+      typeof data.token !== "string" || !data.token ||
       data.tipo !== "Bearer" ||
       !Number.isInteger(data.expiraEnSegundos) ||
       data.expiraEnSegundos <= 0

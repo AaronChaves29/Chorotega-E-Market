@@ -1,23 +1,21 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { getApiUrl } from "@/lib/server-api";
+import { apiRequest, SESSION_COOKIE } from "@/lib/api-client";
 import type { PaginatedOrders } from "@/types/orders";
-import { CreateOrderRequest } from "@/types/catalog";
+import type { CreateOrderRequest } from "@/types/catalog";
+
+function handleExpiredSession() {
+  const response = NextResponse.json(
+    { message: "Tu sesión ha vencido. Iniciá sesión nuevamente." },
+    { status: 401 },
+  );
+
+  response.cookies.delete(SESSION_COOKIE);
+  return response;
+}
 
 export async function GET(request: NextRequest) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("chorotega_session")?.value;
-
-  if (!token) {
-    return NextResponse.json(
-      { message: "Debes iniciar sesión." },
-      { status: 401 },
-    );
-  }
-
-  const searchParams = request.nextUrl.searchParams;
-  const rawPage = searchParams.get("page") ?? "0";
+  const rawPage = request.nextUrl.searchParams.get("page") ?? "0";
 
   if (!/^\d+$/.test(rawPage)) {
     return NextResponse.json(
@@ -43,27 +41,13 @@ export async function GET(request: NextRequest) {
   });
 
   try {
-    const response = await fetch(
-      `${getApiUrl()}/orders?${params.toString()}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        cache: "no-store",
-        signal: AbortSignal.timeout(10000),
-      },
-    );
-
-    if (response.status === 401) {
-      const result = NextResponse.json(
-        { message: "Tu sesión ha vencido. Iniciá sesión nuevamente." },
-        { status: 401 },
+    const { response, data, sessionExpired } =
+      await apiRequest<PaginatedOrders>(
+        `/orders?${params.toString()}`,
       );
 
-      result.cookies.delete("chorotega_session");
-      return result;
+    if (sessionExpired) {
+      return handleExpiredSession();
     }
 
     if (!response.ok) {
@@ -72,8 +56,6 @@ export async function GET(request: NextRequest) {
         { status: response.status >= 500 ? 502 : response.status },
       );
     }
-
-    const data = (await response.json()) as PaginatedOrders;
 
     return NextResponse.json(data, {
       headers: {
@@ -89,16 +71,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("chorotega_session")?.value;
-
-  if (!token) {
-    return NextResponse.json(
-      { message: "Debés iniciar sesión para crear un pedido." },
-      { status: 401 },
-    );
-  }
-
   let body: CreateOrderRequest;
 
   try {
@@ -133,24 +105,24 @@ export async function POST(request: NextRequest) {
     )
   ) {
     return NextResponse.json(
-      { message: "Revisá el barrio, la dirección y los productos seleccionados." },
+      {
+        message:
+          "Revisá el barrio, la dirección y los productos seleccionados.",
+      },
       { status: 400 },
     );
   }
 
   try {
-    const response = await fetch(`${getApiUrl()}/orders`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      cache: "no-store",
-      signal: AbortSignal.timeout(10000),
-    });
+    const { response, data, sessionExpired } =
+      await apiRequest<unknown>("/orders", {
+        method: "POST",
+        body,
+      });
 
-    const data: unknown = await response.json().catch(() => null);
+    if (sessionExpired) {
+      return handleExpiredSession();
+    }
 
     if (!response.ok) {
       return NextResponse.json(
@@ -159,7 +131,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(data, { status: response.status });
+    return NextResponse.json(data, {
+      status: response.status,
+    });
   } catch {
     return NextResponse.json(
       {

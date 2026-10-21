@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { getApiUrl } from "@/lib/server-api";
+import { apiRequest } from "@/lib/api-client";
 import type { Neighborhood } from "@/types/catalog";
 
 export async function GET() {
   try {
-    const response = await fetch(`${getApiUrl()}/neighborhoods`, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(10000),
-    });
+    const { response, data } = await apiRequest<Neighborhood[]>(
+      "/neighborhoods",
+      { authenticated: false },
+    );
 
     if (!response.ok) {
       return NextResponse.json(
@@ -16,9 +16,14 @@ export async function GET() {
       );
     }
 
-    const neighborhoods = (await response.json()) as Neighborhood[];
+    if (!Array.isArray(data)) {
+      return NextResponse.json(
+        { message: "La respuesta de barrios no es válida." },
+        { status: 502 },
+      );
+    }
 
-    const activeNeighborhoods = neighborhoods.filter(
+    const activeNeighborhoods = data.filter(
       (neighborhood) => neighborhood.estado === "ACTIVO",
     );
 
