@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getApiUrl } from "@/lib/server-api";
+import { apiRequest } from "@/lib/api-client";
 
 const PAGE_SIZE = 20;
 
@@ -27,10 +27,10 @@ export async function GET(request: NextRequest) {
   });
 
   try {
-    const response = await fetch(`${getApiUrl()}/stores?${params}`, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(10000),
-    });
+    const { response, data } = await apiRequest<unknown>(
+      `/stores?${params.toString()}`,
+      { authenticated: false },
+    );
 
     if (!response.ok) {
       return NextResponse.json(
@@ -38,8 +38,6 @@ export async function GET(request: NextRequest) {
         { status: response.status },
       );
     }
-
-    const data: unknown = await response.json();
 
     return NextResponse.json(data, {
       headers: {
