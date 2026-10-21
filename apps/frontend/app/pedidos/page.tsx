@@ -3,6 +3,7 @@ import LogoutButton from "@/components/logout-button";
 import OrdersList from "@/components/orders-list";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 export default async function PedidosPage() {
   const cookieStore = await cookies();
@@ -27,6 +28,14 @@ export default async function PedidosPage() {
       </header>
 
       <OrdersList />
+      <div className="mt-6">
+        <Link
+          href="/pedidos/nuevo"
+          className="inline-flex items-center rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
+        >
+          + Nuevo pedido
+        </Link>
+      </div>
     </main>
   );
 }

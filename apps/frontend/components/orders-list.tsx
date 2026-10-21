@@ -174,7 +174,7 @@ export default function OrdersList() {
         {data.content.map((order: Order) => (
           <article
             key={order.idPedido}
-            className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm"
+            className="rounded-lg border border-gray-200 bg-white p-5 text-gray-900 shadow-sm"
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-lg font-semibold">
@@ -191,21 +191,21 @@ export default function OrdersList() {
 
             <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
               <div>
-                <dt className="text-gray-500">Fecha</dt>
+                <dt className="text-gray-600">Fecha</dt>
                 <dd className="font-medium">
                   {formatDate(order.fechaCreacion)}
                 </dd>
               </div>
 
               <div>
-                <dt className="text-gray-500">Total</dt>
+                <dt className="text-gray-600">Total</dt>
                 <dd className="font-semibold">
                   {formatMoney(order.total)}
                 </dd>
               </div>
 
               <div className="sm:col-span-2">
-                <dt className="text-gray-500">Dirección de entrega</dt>
+                <dt className="text-gray-600">Dirección de entrega</dt>
                 <dd className="font-medium">
                   {order.direccionEntrega}
                 </dd>
@@ -226,7 +226,7 @@ export default function OrdersList() {
             setLoading(true);
             setPage((value) => Math.max(0, value - 1));
           }}
-          className="rounded border px-4 py-2 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded border border-gray-500 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
           Anterior
         </button>
@@ -243,7 +243,7 @@ export default function OrdersList() {
             setLoading(true);
             setPage((value) => value + 1);
           }}
-          className="rounded border px-4 py-2 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded border border-gray-500 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
           Siguiente
         </button>
