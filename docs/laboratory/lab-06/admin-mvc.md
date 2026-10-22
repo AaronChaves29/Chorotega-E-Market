@@ -2,6 +2,23 @@
 
 La guía oficial del Laboratorio 6, páginas 2 y 3, exige dos casos de uso con vistas del servidor, listado paginado, formularios validados, Post/Redirect/Get y CSRF activo. Este módulo adapta esos comportamientos a NestJS y Handlebars. ADR-001 registra la autorización del stack; no registra una aprobación específica de la equivalencia Handlebars/Thymeleaf. Esa equivalencia académica debe confirmarse.
 
+## Estado de despliegue y verificaciones
+
+El módulo está integrado en `main` y disponible en [el acceso administrativo de Render](https://chorotega-e-market.onrender.com/admin/login). [GitHub Actions](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/39828366237) terminó exitosamente para el commit `d45b97cf0caae338a86a8dc6c393573759308d47`, incluidos integración, artefacto y Chrome. La auditoría de solo lectura obtuvo HTML 200 con CSRF, Referrer-Policy: same-origin y Cache-Control: no-store en el acceso MVC.
+
+El equipo reportó que las funcionalidades administrativas fueron probadas manualmente en producción. Se incorporó la [captura original del listado de productos](evidencias/mvc-productos.jpeg), sin editarla; no existe un acta individual de cada comprobación. El [inventario de capturas](evidencias/README.md) distingue adjuntos revisados de archivos incorporados. No se atribuyen esas interacciones manuales a quien realizó la auditoría documental.
+
+| Comprobación de producción           | Evidencia disponible                                                                               | Evidencia manual por adjuntar                                            |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Acceso ADMIN mediante `/admin/login` | Reporte general de funcionamiento administrativo; GET del formulario comprobado independientemente | Acceso autenticado y redirección al listado, sin credenciales visibles   |
+| Listado de productos y tiendas       | Listado de productos incorporado; automatizadas comprueban listados y paginación                   | Listado de tiendas y cambio de página; productos ya incorporados         |
+| Formularios y validaciones visibles  | Reporte general; Chrome y HTTP comprueban altas, errores y ausencia de escrituras inválidas        | Formularios válidos e inválidos, errores por campo y valores conservados |
+| Post/Redirect/Get                    | HTTP y Chrome comprueban 303 y GET sin repetición de escritura                                     | Registro manual de red mostrando 303 → GET, sin cookies ni tokens        |
+| Cierre de sesión                     | Automatizadas comprueban logout y pérdida de acceso                                                | Resultado manual individual y regreso al acceso                          |
+| Acceso restringido y CSRF            | Automatizadas comprueban roles prohibidos, sesiones inválidas y CSRF ausente/alterado/ajeno        | Evidencia manual individual del rechazo, sin revelar tokens CSRF         |
+
+Los resultados manuales individuales de PRG, logout, restricciones y CSRF no se deducen del reporte general. El registro de capturas y la trazabilidad de la rúbrica se centralizan en [entrega-final.md](entrega-final.md).
+
 ## Casos de uso y rutas
 
 Las rutas pertenecen al backend, sin el prefijo REST `/api/v1`:
@@ -69,7 +86,7 @@ npm run test:e2e
 npm run test:browser
 ```
 
-## Comprobación después de un despliegue autorizado
+## Procedimiento manual de comprobación en el despliegue existente
 
 Abrir https://chorotega-e-market.onrender.com/admin/login y autenticar manualmente sin copiar credenciales ni tokens. Verificar ADMIN y rechazo de otros roles; cookies Secure/HttpOnly/Strict; paginación y páginas vacías; formulario inválido con valores conservados; POST exitoso → 303 → GET; rechazo CSRF ausente, alterado y ajeno; logout y sesión vencida. Las escrituras remotas requieren autorización y registros de prueba identificados.
 
@@ -79,9 +96,9 @@ Comprobar /docs, /docs-json, REST público y Next.js. Las rutas administrativas 
 
 Las pruebas HTTP sin base usan Nest, Supertest, bcrypt/JWT reales y guards activos, simulando los servicios del catálogo. Comprueban presentación, validación, PRG, seguridad y ausencia de llamadas de escritura ante errores. Las pruebas de sesión comprueban cifrado, atributos de cookie, expiración, manipulación, reinicio y aislamiento CSRF. La prueba del artefacto renderiza las seis vistas desde dist.
 
-admin-mvc.integration-spec.ts usa módulos reales y PostgreSQL temporal con Testcontainers para comprobar persistencia, paginación, ausencia de escrituras inválidas y compatibilidad REST. Su existencia no implica ejecución: consultar el reporte para saber si Docker estuvo disponible. Las suites existentes completan las regresiones de pedidos, transacciones y ownership.
+admin-mvc.integration-spec.ts usa módulos reales y PostgreSQL temporal con Testcontainers para comprobar persistencia, paginación, ausencia de escrituras inválidas y compatibilidad REST. La suite fue ejecutada dentro de las 565 integraciones aprobadas del CI de cierre; esas bases desechables no son producción. Las suites existentes completan las regresiones de pedidos, transacciones y ownership.
 
-La regresión de navegador usa un perfil temporal aislado, las vistas compiladas y PostgreSQL Testcontainers con las migraciones reales. No lee perfiles, cookies ni .env privados. Verifica el Origin real del navegador, las dos altas, errores visibles, conservación de valores, 303, sesión conservada al visitar login, CSRF, rechazo de Origin: null y logout. El workflow de GitHub Actions ejecutará test:deployment y test:browser además de las validaciones existentes; su resultado remoto sigue pendiente hasta publicar la rama.
+La regresión de navegador usa un perfil temporal aislado, las vistas compiladas y PostgreSQL Testcontainers con las migraciones reales. No lee perfiles, cookies ni .env privados. Verifica el Origin real del navegador, las dos altas, errores visibles, conservación de valores, 303, sesión conservada al visitar login, CSRF, rechazo de Origin: null y logout. El workflow de GitHub Actions ejecutó test:deployment y test:browser además de las validaciones existentes y terminó correctamente en el run enlazado arriba. Chrome aprobó nueve escenarios: el contador TAP muestra diez pruebas al incluir el contenedor principal. No se confunden con interacciones manuales en Render.
 
 ## Revisión y evidencia de fallos intermitentes
 
@@ -109,4 +126,4 @@ La suite Users compone UsersHttpModule, AuthModule y UsersModule; no carga Admin
 
 La primera ejecución completa con Node 22.22.0 registró socket hang up en `crea products, convierte números y aplica PRG sin repetir escritura en GET`: 454 aprobadas y una fallida. El caso exacto pasó cinco repeticiones aisladas; la repetición completa y cobertura aprobaron 455/455, sin modificar el fixture, agregar reintentos automáticos ni cambiar expectativas. No se demostró la causa de ese fallo de transporte y no se presenta como corregido.
 
-Estas observaciones deben acompañar la revisión del PR. No sustituyen el resultado remoto de GitHub Actions ni las comprobaciones posteriores a un despliegue autorizado.
+Estas observaciones se conservan como evidencia histórica de la investigación. El CI posterior aprobó, pero no demostró la causa de esas intermitencias. Tampoco sustituye las comprobaciones manuales de producción ni la confirmación académica pendiente de Handlebars.
