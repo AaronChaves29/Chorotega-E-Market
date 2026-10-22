@@ -4,6 +4,21 @@
 
 Chorotega E-Market es una plataforma web tipo marketplace diseñada para impulsar el comercio local de la región Chorotega. El sistema permite a los emprendedores registrar sus tiendas, publicar productos y gestionar pedidos, mientras que los clientes pueden explorar el catálogo, realizar compras y dar seguimiento a sus pedidos.
 
+## Producción — Laboratorio 6
+
+Sistema publicado desde `main`; `develop` se utiliza para integración. Estado documentado al 22 de octubre de 2026.
+
+| Acceso                     | URL pública                                           |
+| -------------------------- | ----------------------------------------------------- |
+| Frontend Next.js en Vercel | <https://chorotega-e-market-frontend.vercel.app>      |
+| Backend NestJS en Render   | <https://chorotega-e-market.onrender.com>             |
+| Swagger UI                 | <https://chorotega-e-market.onrender.com/docs>        |
+| Panel MVC administrativo   | <https://chorotega-e-market.onrender.com/admin/login> |
+
+PostgreSQL utiliza Supabase y la bitácora MongoDB utiliza Atlas. API y frontend publican HTTPS; las conexiones de bases utilizan TLS. No se publican direcciones de conexión ni credenciales de las bases.
+
+[Entrega y evidencia consolidada del Lab 6](docs/laboratory/lab-06/entrega-final.md): rúbrica, resultados verificables de CI, comprobaciones públicas y manuales reportadas, equivalencias académicas y pendientes. Las capturas y sus límites se registran en el [inventario de evidencias](docs/laboratory/lab-06/evidencias/README.md).
+
 ## Tecnologías
 
 ### Frontend
@@ -28,13 +43,15 @@ PostgreSQL almacena la información estructurada y transaccional del sistema.
 
 MongoDB almacena la bitácora de eventos relacionados con los pedidos.
 
-Supabase se utiliza como servicio de PostgreSQL y para la autenticación de usuarios.
+Supabase aloja PostgreSQL. La autenticación implementada se realiza en NestJS; no depende de Supabase Auth ni de Google OAuth.
 
 ### Autenticación
 
-- Supabase Auth
-- Google OAuth 2.0
-- JSON Web Tokens (JWT)
+- Inicio de sesión mediante correo y contraseña, verificada con bcrypt contra `usuario.clave_hash`.
+- JWT firmado y emitido por NestJS; roles tomados del usuario persistido.
+- Cookie HttpOnly en el frontend y sesión cifrada con CSRF en el panel MVC.
+
+Supabase Auth y Google OAuth figuran como decisiones previstas en el [ADR-001 histórico](docs/adr/ADR-001-Seleccion-Stack-Tecnologico.md), pero no están implementados en el flujo actual. No existe registro público ni un endpoint para autoasignarse ADMIN.
 
 ### Herramientas
 
@@ -117,13 +134,13 @@ La configuración diferencia `development`, `test` y `production` mediante `NODE
 
 Desarrollo carga `apps/backend/.env.development` y luego `apps/backend/.env`, respetando la prioridad del entorno del proceso. Producción y pruebas no cargan archivos de entorno. La plantilla `apps/backend/.env.example` incluye únicamente valores locales no sensibles y campos para completar; nunca copiar credenciales al repositorio.
 
-Producción requiere configuración completa, secreto JWT de al menos 32 caracteres, TLS con certificado PostgreSQL validado y orígenes HTTPS explícitos. El dominio definitivo del frontend se configura al conocerlo. No se permite introducir parámetros TLS en `DATABASE_URL` de producción que puedan sustituir la política del backend.
+Producción requiere configuración completa, secreto JWT de al menos 32 caracteres, TLS con certificado PostgreSQL validado y orígenes HTTPS explícitos. CORS utiliza el dominio real de Vercel; los formularios MVC requieren también el origen del backend en la lista vigente, según [la configuración de MVC](docs/laboratory/lab-06/admin-mvc.md). No se permite introducir parámetros TLS en `DATABASE_URL` de producción que puedan sustituir la política del backend.
 
-El backend y la CLI comparten `database.options.ts`. Se conservan `synchronize: false` y `migrationsRun: false`; este bloque no automatiza ni ejecuta migraciones. La CLI carga archivos locales únicamente en desarrollo y valida las opciones PostgreSQL sin exigir las variables HTTP, MongoDB o JWT.
+El backend y la CLI comparten `database.options.ts`. Se conservan `synchronize: false` y `migrationsRun: false`; el arranque de producción ejecuta explícitamente las migraciones TypeORM pendientes antes de abrir HTTP, mediante un ejecutor transaccional con bloqueo de concurrencia. La CLI carga archivos locales únicamente en desarrollo y valida las opciones PostgreSQL sin exigir las variables HTTP, MongoDB o JWT.
 
 Consulta las reglas, prioridades, pruebas y límites en [Configuración dev/prod](docs/laboratory/lab-06/configuracion-dev-prod.md).
 
-La preparación de Render, los comandos de migración compilados y el procedimiento previo de Supabase/Atlas se describen en [Despliegue del backend](docs/laboratory/lab-06/despliegue-render.md). No se han creado servicios ni verificado conexiones remotas.
+El despliegue en Render, los comandos de migración compilados y los procedimientos de Supabase/Atlas se describen en [Despliegue del backend](docs/laboratory/lab-06/despliegue-render.md). Los servicios ya están publicados; la [evidencia consolidada](docs/laboratory/lab-06/entrega-final.md) distingue el estado reportado de producción de las comprobaciones independientes y los registros aún pendientes.
 
 ## Bases de datos con Docker
 
@@ -392,7 +409,7 @@ Desde `apps/frontend`:
 npm run dev
 ```
 
-Utiliza la dirección y el puerto que indique la terminal.
+Utiliza la dirección y el puerto que indique la terminal; si el backend ocupa el puerto 3000, utiliza otro para Next.js. `API_URL` debe apuntar al backend seleccionado e incluir el prefijo `/api/v1`; no debe publicarse como variable del navegador.
 
 ### Administración MVC — Laboratorio 6
 
@@ -424,13 +441,13 @@ El frontend de Chorotega E-Market está desarrollado con Next.js, React y TypeSc
 
 En desarrollo, las variables locales pueden configurarse mediante `apps/frontend/.env.local`, archivo que no debe incluirse en el repositorio.
 
-**Despliegue previsto en Vercel:**
+**Despliegue activo en Vercel:**
 
-El frontend se desplegará desde el repositorio original, utilizando `apps/frontend` como directorio raíz y Next.js como framework.
+El frontend está publicado desde `main`, utilizando `apps/frontend` como directorio raíz y Next.js como framework. Su URL real aparece en la sección de producción.
 
-La variable `API_URL` deberá configurarse en Vercel con la dirección HTTPS real de la API publicada en Render. No se deben utilizar direcciones `localhost` en producción.
+`API_URL` es una variable de servidor de Vercel que selecciona la API de Render con el prefijo `/api/v1`. Las configuraciones Production y Preview se revisan por separado; no utilizar `localhost` en producción ni introducir secretos en variables `NEXT_PUBLIC_*`.
 
-El despliegue y las pruebas de integración en producción se encuentran pendientes hasta que estén disponibles los servicios públicos.
+La disponibilidad pública está comprobada. La evidencia del recorrido autenticado de login, listado y creación de pedidos desde Vercel debe completarse en [la entrega final](docs/laboratory/lab-06/entrega-final.md). El código, las pruebas del backend y un build aprobado no sustituyen esa evidencia manual.
 
 ## Verificación del backend
 
@@ -480,7 +497,7 @@ El helper ejecuta las migraciones reales con `synchronize: false`, sin cargar
 Al finalizar, incluso si falla una prueba, se cierra TypeORM y se elimina el
 contenedor temporal. La primera ejecución puede tardar más al descargar imágenes.
 
-Actualmente hay 13 pruebas unitarias, seis funcionales de integración
+Como referencia histórica del cierre del **Laboratorio 3**, se registraron 13 pruebas unitarias, seis funcionales de integración
 (tres del catálogo y tres de pedidos) y tres de infraestructura: nueve de
 integración en total. La validación automática exige que el schema builder de
 TypeORM no proponga cambios después de aplicar las migraciones reales.
@@ -492,15 +509,18 @@ y [Validación final del Laboratorio 3](docs/laboratory/lab-03/validacion-final.
 
 GitHub Actions ejecuta jobs independientes para backend y frontend.
 
+El [CI aprobado de producción](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/39828366237), correspondiente a `main` en `d45b97cf0caae338a86a8dc6c393573759308d47`, verificó 455 unitarias, 565 integraciones, ocho pruebas del artefacto y nueve escenarios de Chrome. Los resultados y sus límites se detallan en [la entrega del Lab 6](docs/laboratory/lab-06/entrega-final.md).
+
 El job del backend:
 
 1. Inicia PostgreSQL 16 con una base vacía y espera su healthcheck.
-2. Instala dependencias, ejecuta el linter y compila.
+2. Instala dependencias, ejecuta el linter, compila y verifica el artefacto JavaScript y las plantillas.
 3. Ejecuta las migraciones TypeORM y muestra su estado.
 4. Carga los seeds por separado en una transacción.
-5. Ejecuta las pruebas unitarias del backend.
+5. Ejecuta las pruebas unitarias y la cobertura de negocio del backend.
 6. Ejecuta la suite de integración con Testcontainers, que crea sus propios
    contenedores y no utiliza el servicio PostgreSQL de las validaciones anteriores.
+7. Verifica los formularios MVC con Chrome y PostgreSQL temporal.
 
 El backend fija Node.js 22.22.0, compatible con la versión de Testcontainers
 instalada. Un fallo de integración hace fallar el job. El patrón de Jest descubre
