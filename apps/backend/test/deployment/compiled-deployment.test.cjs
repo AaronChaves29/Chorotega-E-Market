@@ -1,8 +1,10 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
-const { readFileSync } = require('node:fs');
+const { readFileSync, mkdtempSync, writeFileSync, rmSync } = require('node:fs');
 const { resolve } = require('node:path');
+const { tmpdir } = require('node:os');
+const { randomBytes } = require('node:crypto');
 
 const root = resolve(__dirname, '../..');
 const scripts = JSON.parse(
@@ -33,6 +35,12 @@ for (const entry of ['migrate', 'start-render']) {
     assert.equal(result.status, 1);
     assert.equal(result.stdout, '');
     assert.match(result.stderr, /No se inició|Migraciones no completadas/);
+    assert.match(
+      result.stderr,
+      new RegExp(
+        `etapa=${entry === 'migrate' ? 'migraciones_postgresql' : 'validacion_variables'} tipo=Error mensaje=La variable(?: de entorno)? DATABASE_URL`,
+      ),
+    );
     assert.doesNotMatch(
       result.stderr,
       /postgres(?:ql)?:\/\/|mongodb(?:\+srv)?:\/\/|\n\s+at /,
@@ -69,4 +77,98 @@ test('el artefacto carga tres migraciones JS y sus nueve entidades sin herramien
     },
   );
   assert.equal(result.status, 0, result.stderr);
+});
+
+function productionEnvironment() {
+  return {
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgresql://localhost/compiled_test',
+    DATABASE_SSL: 'true',
+    MONGODB_URI: 'mongodb+srv://cluster.example.test/compiled_test',
+    MONGODB_DATABASE: 'compiled_test',
+    JWT_SECRET: randomBytes(32).toString('hex'),
+    CORS_ORIGIN: 'https://frontend.example.test',
+  };
+}
+
+for (const entry of ['migrate', 'start-render']) {
+  test(`${entry} compilado muestra fallo PostgreSQL sin datos privados y sale con código 1`, () => {
+    const directory = mkdtempSync(
+      resolve(tmpdir(), 'chorotega-startup-probe-'),
+    );
+    try {
+      const preload = resolve(directory, 'preload.cjs');
+      writeFileSync(
+        preload,
+        `
+        const { DataSource } = require(${JSON.stringify(resolve(root, 'node_modules/typeorm'))});
+        DataSource.prototype.initialize = async function () {
+          throw Object.assign(new Error('postgresql://user:password-private-marker@host/db'), {code:'ENOTFOUND'});
+        };
+      `,
+      );
+      const result = spawnSync(
+        process.execPath,
+        ['--require', preload, `dist/deployment/${entry}.js`],
+        {
+          cwd: root,
+          env: productionEnvironment(),
+          encoding: 'utf8',
+          timeout: 10_000,
+        },
+      );
+      assert.equal(result.status, 1, result.stderr);
+      assert.match(
+        result.stderr,
+        /etapa=migraciones_postgresql tipo=Error codigo=ENOTFOUND/,
+      );
+      assert.doesNotMatch(
+        result.stderr,
+        /password-private-marker|postgresql:\/\/|\n\s+at /,
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+}
+
+test('Nest real falla en un proveedor sin imprimir el error privado antes del diagnóstico', () => {
+  const directory = mkdtempSync(resolve(tmpdir(), 'chorotega-startup-probe-'));
+  try {
+    const preload = resolve(directory, 'preload.cjs');
+    writeFileSync(
+      preload,
+      `
+      const migrations = require(${JSON.stringify(resolve(root, 'dist/database/production-migrations.js'))});
+      migrations.runProductionMigrations = async () => 0;
+      const { AppModule } = require(${JSON.stringify(resolve(root, 'dist/app.module.js'))});
+      // Sustituye las conexiones por un proveedor fallido solo en este proceso.
+      Reflect.defineMetadata('imports', [], AppModule);
+      Reflect.defineMetadata('providers', [{ provide: 'startup-probe', useFactory() {
+        throw Object.assign(new Error('mongodb+srv://user:password-private-marker@host/db -----BEGIN CERTIFICATE----- certificate-private-marker'), {name:'MongoServerSelectionError',code:'ENOTFOUND'});
+      }}], AppModule);
+    `,
+    );
+    const result = spawnSync(
+      process.execPath,
+      ['--require', preload, 'dist/deployment/start-render.js'],
+      {
+        cwd: root,
+        env: productionEnvironment(),
+        encoding: 'utf8',
+        timeout: 10_000,
+      },
+    );
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(
+      result.stderr,
+      /etapa=arranque_nestjs tipo=MongoServerSelectionError codigo=ENOTFOUND/,
+    );
+    assert.doesNotMatch(
+      result.stdout + result.stderr,
+      /password-private-marker|certificate-private-marker|mongodb\+srv:\/\/|BEGIN CERTIFICATE|\n\s+at /,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
