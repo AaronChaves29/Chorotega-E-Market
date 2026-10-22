@@ -15,6 +15,11 @@ function environment(): NodeJS.ProcessEnv {
 }
 
 describe('Arranque Render antes de aceptar tráfico', () => {
+  let diagnostics: jest.SpyInstance;
+  beforeEach(() => {
+    diagnostics = jest.spyOn(console, 'error').mockImplementation();
+  });
+  afterEach(() => jest.restoreAllMocks());
   it('valida, espera las migraciones y solo entonces arranca Nest', async () => {
     let finish!: (count: number) => void;
     const migrate = jest.fn(
@@ -30,6 +35,7 @@ describe('Arranque Render antes de aceptar tráfico', () => {
     finish(3);
     await result;
     expect(start).toHaveBeenCalledTimes(1);
+    expect(diagnostics).not.toHaveBeenCalled();
   });
   it('no conecta ni migra cuando falta configuración crítica', async () => {
     const migrate = jest.fn().mockResolvedValue(0);
@@ -39,6 +45,9 @@ describe('Arranque Render antes de aceptar tráfico', () => {
     ).rejects.toThrow('DATABASE_URL');
     expect(migrate).not.toHaveBeenCalled();
     expect(start).not.toHaveBeenCalled();
+    expect(diagnostics).toHaveBeenCalledWith(
+      expect.stringContaining('etapa=validacion_variables'),
+    );
   });
   it('un fallo de migración impide arrancar HTTP', async () => {
     const migrate = jest.fn().mockRejectedValue(new Error('Migración fallida'));
@@ -47,6 +56,23 @@ describe('Arranque Render antes de aceptar tráfico', () => {
       startRender(environment(), { migrate, start }),
     ).rejects.toThrow('Migración fallida');
     expect(start).not.toHaveBeenCalled();
+    expect(diagnostics).toHaveBeenCalledWith(
+      expect.stringContaining('etapa=migraciones_postgresql'),
+    );
+  });
+  it('distingue un fallo de Nest de uno de migraciones y conserva el error para el código de salida', async () => {
+    const migrate = jest.fn().mockResolvedValue(0);
+    const original = Object.assign(
+      new Error('mongodb+srv://user:private-password@private-host/database'),
+      { name: 'MongoServerSelectionError', code: 'ENOTFOUND' },
+    );
+    const start = jest.fn().mockRejectedValue(original);
+    await expect(startRender(environment(), { migrate, start })).rejects.toBe(
+      original,
+    );
+    expect(diagnostics).toHaveBeenCalledWith(
+      '[Startup] etapa=arranque_nestjs tipo=MongoServerSelectionError codigo=ENOTFOUND mensaje=Mensaje original omitido por seguridad.',
+    );
   });
   it('cada reinicio comprueba pendientes, incluso cuando no hay nuevas migraciones', async () => {
     const migrate = jest.fn().mockResolvedValue(0);
