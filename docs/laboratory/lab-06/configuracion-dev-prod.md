@@ -1,5 +1,7 @@
 # Configuración del backend por ambiente
 
+Este documento conserva el alcance y los resultados históricos del primer bloque del Laboratorio 6. El despliegue y MVC se implementaron posteriormente: consultar [despliegue actual](despliegue-render.md), [módulo MVC](admin-mvc.md) y [evidencia de entrega](entrega-final.md). Las exclusiones y suites omitidas que se describen abajo corresponden a aquel bloque, no al estado final.
+
 El bloque configura arranque, validación, TLS, CORS y cierre de NestJS. Conserva los contratos REST, permisos, JWT, reglas de negocio y las opciones de no sincronizar ni ejecutar migraciones automáticamente. No implementa despliegue ni interfaz administrativa.
 
 ## Ambientes y prioridad
