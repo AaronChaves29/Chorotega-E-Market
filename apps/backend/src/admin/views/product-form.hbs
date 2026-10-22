@@ -1,0 +1,154 @@
+<html lang='es'><head><meta charset='utf-8' /><meta
+      name='viewport'
+      content='width=device-width, initial-scale=1'
+    /><title>Crear producto · Chorotega E-Market</title><style>
+      body {
+        font: 16px system-ui;
+        max-width: 70rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      label {
+        display: block;
+        margin-top: 1rem;
+      }
+      input,
+      textarea {
+        display: block;
+        padding: 0.5rem;
+        max-width: 100%;
+        width: 30rem;
+      }
+      button {
+        margin: 1rem 0;
+        padding: 0.5rem 1rem;
+      }
+      .error {
+        color: #a01010;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      th,
+      td {
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+        padding: 0.5rem;
+      }
+      nav {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+      }
+      nav form {
+        margin-left: auto;
+      }
+      a {
+        color: #163e9a;
+      }
+    </style></head>
+  <body><nav aria-label='Administración'><a
+        href='/admin/products'
+      >Productos</a><a href='/admin/stores'>Tiendas</a><form
+        method='post'
+        action='/admin/logout'
+      ><input type='hidden' name='_csrf' value='{{csrf}}' /><button
+          type='submit'
+        >Cerrar sesión</button></form></nav><main><h1>Crear producto</h1>
+      {{#if errors._form}}<p
+          class='error'
+          role='alert'
+        >{{errors._form}}</p>{{/if}}
+      <p>Use identificadores existentes de tienda y categoría. El servidor
+        valida sus relaciones.</p><form
+        method='post'
+        action='/admin/products'
+      ><input type='hidden' name='_csrf' value='{{csrf}}' />
+        <label for='idTienda'>ID de tienda</label>
+        <input
+          id='idTienda'
+          name='idTienda'
+          value='{{values.idTienda}}'
+          inputmode='numeric'
+          required
+        />
+        {{#if errors.idTienda}}<p
+            class='error'
+            role='alert'
+            id='error-idTienda'
+          >{{errors.idTienda}}</p>{{/if}}
+        <label for='idCategoria'>ID de categoría</label>
+        <input
+          id='idCategoria'
+          name='idCategoria'
+          value='{{values.idCategoria}}'
+          inputmode='numeric'
+          required
+        />
+        {{#if errors.idCategoria}}<p
+            class='error'
+            role='alert'
+            id='error-idCategoria'
+          >{{errors.idCategoria}}</p>{{/if}}
+        <label for='nombre'>Nombre</label>
+        <input
+          id='nombre'
+          name='nombre'
+          value='{{values.nombre}}'
+          maxlength='150'
+          required
+        />
+        {{#if errors.nombre}}<p
+            class='error'
+            role='alert'
+            id='error-nombre'
+          >{{errors.nombre}}</p>{{/if}}
+        <label for='descripcion'>Descripción</label>
+        <textarea
+          id='descripcion'
+          name='descripcion'
+          maxlength='500'
+        >{{values.descripcion}}</textarea>
+        {{#if errors.descripcion}}<p
+            class='error'
+            role='alert'
+            id='error-descripcion'
+          >{{errors.descripcion}}</p>{{/if}}
+        <label for='precio'>Precio</label>
+        <input
+          id='precio'
+          name='precio'
+          value='{{values.precio}}'
+          inputmode='decimal'
+          required
+        />
+        {{#if errors.precio}}<p
+            class='error'
+            role='alert'
+            id='error-precio'
+          >{{errors.precio}}</p>{{/if}}
+        <label for='cantidadDisponible'>Cantidad disponible</label>
+        <input
+          id='cantidadDisponible'
+          name='cantidadDisponible'
+          value='{{values.cantidadDisponible}}'
+          inputmode='numeric'
+          required
+        />
+        {{#if errors.cantidadDisponible}}<p
+            class='error'
+            role='alert'
+            id='error-cantidadDisponible'
+          >{{errors.cantidadDisponible}}</p>{{/if}}
+        <label for='estado'>Estado (opcional: ACTIVO, INACTIVO o AGOTADO)</label>
+        <input id='estado' name='estado' value='{{values.estado}}' />
+        {{#if errors.estado}}<p
+            class='error'
+            role='alert'
+            id='error-estado'
+          >{{errors.estado}}</p>{{/if}}
+        <button type='submit'>Guardar producto</button></form><a
+        href='/admin/products'
+      >Volver al listado</a>
+    </main></body></html>

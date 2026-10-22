@@ -1,0 +1,76 @@
+<html lang='es'><head><meta charset='utf-8' /><meta
+      name='viewport'
+      content='width=device-width, initial-scale=1'
+    /><title>Administración de productos · Chorotega E-Market</title><style>
+      body {
+        font: 16px system-ui;
+        max-width: 70rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      label {
+        display: block;
+        margin-top: 1rem;
+      }
+      input,
+      textarea {
+        display: block;
+        padding: 0.5rem;
+        max-width: 100%;
+        width: 30rem;
+      }
+      button {
+        margin: 1rem 0;
+        padding: 0.5rem 1rem;
+      }
+      .error {
+        color: #a01010;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      th,
+      td {
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+        padding: 0.5rem;
+      }
+      nav {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+      }
+      nav form {
+        margin-left: auto;
+      }
+      a {
+        color: #163e9a;
+      }
+    </style></head>
+  <body><nav aria-label='Administración'><a
+        href='/admin/products'
+      >Productos</a><a href='/admin/stores'>Tiendas</a><form
+        method='post'
+        action='/admin/logout'
+      ><input type='hidden' name='_csrf' value='{{csrf}}' /><button
+          type='submit'
+        >Cerrar sesión</button></form></nav><main><h1>Administración de
+        productos</h1>
+      <a href='/admin/products/new'>Crear producto</a><table><thead><tr><th
+            >ID</th><th>Nombre</th><th>Tienda</th><th>Categoría</th><th
+            >Precio</th><th>Existencias</th><th>Estado</th></tr></thead><tbody
+        >{{#each content}}<tr><td>{{idProducto}}</td><td>{{nombre}}</td><td
+              >{{idTienda}}</td><td>{{idCategoria}}</td><td>{{precio}}</td><td
+              >{{cantidadDisponible}}</td><td>{{estado}}</td></tr>{{else}}<tr
+            ><td colspan='7'>No hay productos en esta página.</td></tr>{{/each}}</tbody></table><p
+      >Total de registros: {{totalElements}}. Página {{displayPage}}.</p><nav
+        aria-label='Paginación'
+      >{{#if previous}}<a
+            rel='prev'
+            href='{{previous}}'
+          >Anterior</a>{{/if}}{{#if next}}<a
+            rel='next'
+            href='{{next}}'
+          >Siguiente</a>{{/if}}</nav>
+    </main></body></html>

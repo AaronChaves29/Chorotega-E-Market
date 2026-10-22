@@ -16,7 +16,7 @@ Se documenta la configuración manual en lugar de agregar un Blueprint: permite 
 | Runtime                           | Node                                                                    |
 | NODE_VERSION                      | 22.22.0, igual a la versión fijada por el CI del backend                |
 | Build Command                     | `npm ci --include=dev && npm run build && npm prune --omit=dev`         |
-| Start Command                     | `npm run start:render`                                                  |
+| Start Command                     | `npm run start`                                                         |
 | Health Check Path                 | `/api/database/health`                                                  |
 | Pre-Deploy Command, plan gratuito | Vacío                                                                   |
 | Auto-Deploy inicial               | Off; activar solo después de verificar el primer despliegue y sus datos |

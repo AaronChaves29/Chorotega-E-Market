@@ -338,7 +338,7 @@ show collections
 Consulta la bitácora de pedidos:
 
 ```javascript
-db.bitacora_pedidos.find().pretty()
+db.bitacora_pedidos.find().pretty();
 ```
 
 La colección `bitacora_pedidos` almacena los eventos importantes asociados al ciclo de vida de los pedidos.
@@ -346,7 +346,7 @@ La colección `bitacora_pedidos` almacena los eventos importantes asociados al c
 Para salir:
 
 ```javascript
-exit
+exit;
 ```
 
 ## Ejecutar el backend
@@ -394,6 +394,14 @@ npm run dev
 
 Utiliza la dirección y el puerto que indique la terminal.
 
+### Administración MVC — Laboratorio 6
+
+El backend incorpora vistas Handlebars en `/admin/login`, `/admin/products` y `/admin/stores`, con acceso exclusivo ADMIN, listados paginados, formularios de creación, validación por campo, Post/Redirect/Get y CSRF vinculado a la sesión.
+
+En desarrollo utilizar `npm run start:dev`. Después del build de producción, `npm run start` y `npm run start:render` ejecutan el mismo arranque compilado con validación y migraciones previas a HTTP. No se crean cuentas ni datos de ejemplo automáticamente.
+
+Consultar [el flujo MVC, seguridad, pruebas y verificación en Render](docs/laboratory/lab-06/admin-mvc.md). La API REST y su documento OpenAPI conservan sus 35 operaciones. La regresión de formularios con Chrome/Chromium y PostgreSQL temporal se ejecuta con `npm run test:browser`, después del build y con Docker disponible.
+
 ### Frontend — SPA en React y Next.js
 
 El frontend de Chorotega E-Market está desarrollado con Next.js, React y TypeScript. Se encuentra en `apps/frontend/` dentro del monorepositorio y consume la API REST de NestJS.
@@ -409,9 +417,9 @@ El frontend de Chorotega E-Market está desarrollado con Next.js, React y TypeSc
 
 **Variables de entorno del frontend:**
 
-| Variable | Propósito |
-| --- | --- |
-| `API_URL` | Dirección base de la API NestJS, utilizada exclusivamente por las rutas del servidor de Next.js. |
+| Variable              | Propósito                                                                                                                  |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `API_URL`             | Dirección base de la API NestJS, utilizada exclusivamente por las rutas del servidor de Next.js.                           |
 | `NEXT_PUBLIC_API_URL` | Variable pública disponible para el navegador. La implementación actual no la necesita para las solicitudes centralizadas. |
 
 En desarrollo, las variables locales pueden configurarse mediante `apps/frontend/.env.local`, archivo que no debe incluirse en el repositorio.

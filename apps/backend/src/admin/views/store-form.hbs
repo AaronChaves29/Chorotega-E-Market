@@ -1,0 +1,151 @@
+<html lang='es'><head><meta charset='utf-8' /><meta
+      name='viewport'
+      content='width=device-width, initial-scale=1'
+    /><title>Crear tienda · Chorotega E-Market</title><style>
+      body {
+        font: 16px system-ui;
+        max-width: 70rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      label {
+        display: block;
+        margin-top: 1rem;
+      }
+      input,
+      textarea {
+        display: block;
+        padding: 0.5rem;
+        max-width: 100%;
+        width: 30rem;
+      }
+      button {
+        margin: 1rem 0;
+        padding: 0.5rem 1rem;
+      }
+      .error {
+        color: #a01010;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      th,
+      td {
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+        padding: 0.5rem;
+      }
+      nav {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+      }
+      nav form {
+        margin-left: auto;
+      }
+      a {
+        color: #163e9a;
+      }
+    </style></head>
+  <body><nav aria-label='Administración'><a
+        href='/admin/products'
+      >Productos</a><a href='/admin/stores'>Tiendas</a><form
+        method='post'
+        action='/admin/logout'
+      ><input type='hidden' name='_csrf' value='{{csrf}}' /><button
+          type='submit'
+        >Cerrar sesión</button></form></nav><main><h1>Crear tienda</h1>
+      {{#if errors._form}}<p
+          class='error'
+          role='alert'
+        >{{errors._form}}</p>{{/if}}
+      <p>El propietario debe ser un usuario EMPRENDEDOR activo.</p><form
+        method='post'
+        action='/admin/stores'
+      ><input type='hidden' name='_csrf' value='{{csrf}}' />
+        <label for='idEmprendedor'>ID del emprendedor</label>
+        <input
+          id='idEmprendedor'
+          name='idEmprendedor'
+          value='{{values.idEmprendedor}}'
+          inputmode='numeric'
+          required
+        />
+        {{#if errors.idEmprendedor}}<p
+            class='error'
+            role='alert'
+            id='error-idEmprendedor'
+          >{{errors.idEmprendedor}}</p>{{/if}}
+        <label for='nombre'>Nombre</label>
+        <input
+          id='nombre'
+          name='nombre'
+          value='{{values.nombre}}'
+          maxlength='150'
+          required
+        />
+        {{#if errors.nombre}}<p
+            class='error'
+            role='alert'
+            id='error-nombre'
+          >{{errors.nombre}}</p>{{/if}}
+        <label for='direccion'>Dirección</label>
+        <input
+          id='direccion'
+          name='direccion'
+          value='{{values.direccion}}'
+          maxlength='255'
+          required
+        />
+        {{#if errors.direccion}}<p
+            class='error'
+            role='alert'
+            id='error-direccion'
+          >{{errors.direccion}}</p>{{/if}}
+        <label for='descripcion'>Descripción</label>
+        <textarea
+          id='descripcion'
+          name='descripcion'
+          maxlength='500'
+        >{{values.descripcion}}</textarea>
+        {{#if errors.descripcion}}<p
+            class='error'
+            role='alert'
+            id='error-descripcion'
+          >{{errors.descripcion}}</p>{{/if}}
+        <label for='telefono'>Teléfono</label>
+        <input
+          id='telefono'
+          name='telefono'
+          value='{{values.telefono}}'
+          maxlength='20'
+        />
+        {{#if errors.telefono}}<p
+            class='error'
+            role='alert'
+            id='error-telefono'
+          >{{errors.telefono}}</p>{{/if}}
+        <label for='horario'>Horario</label>
+        <input
+          id='horario'
+          name='horario'
+          value='{{values.horario}}'
+          maxlength='150'
+        />
+        {{#if errors.horario}}<p
+            class='error'
+            role='alert'
+            id='error-horario'
+          >{{errors.horario}}</p>{{/if}}
+        <label for='estado'>Estado (opcional: ACTIVA o INACTIVA)</label>
+        <input id='estado' name='estado' value='{{values.estado}}' />
+        {{#if errors.estado}}<p
+            class='error'
+            role='alert'
+            id='error-estado'
+          >{{errors.estado}}</p>{{/if}}
+        <button type='submit'>Guardar tienda</button></form><a
+        href='/admin/stores'
+      >Volver al listado</a>
+    </main></body></html>
