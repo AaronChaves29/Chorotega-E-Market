@@ -1,42 +1,54 @@
+import { createEnvironmentOptions } from './config/environment';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-
-import { DatabaseController } from './database.controller';
-import { DatabaseService } from './database.service';
-import { DatabaseModule } from './database.module';
+import { ProductsModule } from './modules/products/products.module';
+import { HealthModule } from './modules/health/health.module';
+import { createDatabaseOptions } from './database/database.options';
+import { UsersHttpModule } from './modules/users/users-http.module';
+import { UsersModule } from './modules/users/users.module';
+import { StoresModule } from './modules/stores/stores.module';
+import { CategoriesModule } from './modules/categories/categories.module';
+import { OrderAuditsModule } from './modules/order-audits/order-audits.module';
+import { CouriersModule } from './modules/couriers/couriers.module';
+import { DeliveriesModule } from './modules/deliveries/deliveries.module';
+import { NeighborhoodsModule } from './modules/neighborhoods/neighborhoods.module';
+import { OrderDetailsModule } from './modules/order-details/order-details.module';
+import { OrdersHttpModule } from './modules/orders/orders-http.module';
+import { OrdersModule } from './modules/orders/orders.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-    }),
+    ConfigModule.forRoot(createEnvironmentOptions()),
 
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
-        const databaseUrl = configService.get<string>('DATABASE_URL');
-
-        if (!databaseUrl) {
-          throw new Error(
-            'La variable de entorno DATABASE_URL no está configurada.',
-          );
-        }
-
-        return {
-          type: 'postgres',
-          url: databaseUrl,
-          autoLoadEntities: true,
-          synchronize: false,
-          ssl: {
-            rejectUnauthorized: false,
+      useFactory: (configService: ConfigService) =>
+        createDatabaseOptions(
+          configService.get<string>('DATABASE_URL'),
+          configService.get<string>('DATABASE_SSL'),
+          {
+            production: configService.get<string>('NODE_ENV') === 'production',
+            ca: configService.get<string>('DATABASE_CA_CERT'),
           },
-        };
-      },
+        ),
     }),
-    DatabaseModule,
+
+    HealthModule,
+    ProductsModule,
+    UsersModule,
+    UsersHttpModule,
+    StoresModule,
+    CategoriesModule,
+    OrderAuditsModule,
+    CouriersModule,
+    DeliveriesModule,
+    NeighborhoodsModule,
+    OrderDetailsModule,
+    OrdersModule,
+    OrdersHttpModule,
+    AuthModule,
   ],
-  controllers: [DatabaseController],
-  providers: [DatabaseService],
 })
 export class AppModule {}
