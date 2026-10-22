@@ -92,27 +92,33 @@ export async function runProductionMigrations(
         ? error
         : new Error(
             'No se completaron las migraciones. Revise conexión, TLS, permisos e historial antes de reintentar.',
+            { cause: error },
           );
   } finally {
     if (runner?.isTransactionActive) {
       try {
         await runner.rollbackTransaction();
-      } catch {
+      } catch (error) {
         failure = new Error(
           'Falló la reversión de la transacción de migraciones. No se iniciará HTTP.',
+          { cause: failure ?? error },
         );
       }
     }
     try {
       await runner?.release();
-    } catch {
-      failure = new Error('No se pudo liberar la conexión de migraciones.');
+    } catch (error) {
+      failure = new Error('No se pudo liberar la conexión de migraciones.', {
+        cause: failure ?? error,
+      });
     }
     if (initialized) {
       try {
         await dataSource.destroy();
-      } catch {
-        failure = new Error('No se pudo cerrar la conexión de migraciones.');
+      } catch (error) {
+        failure = new Error('No se pudo cerrar la conexión de migraciones.', {
+          cause: failure ?? error,
+        });
       }
     }
   }

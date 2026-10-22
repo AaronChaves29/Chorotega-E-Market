@@ -120,14 +120,19 @@ describe('Migraciones de producción', () => {
   });
   it('revierte fallo intermedio y no propaga SQL ni credenciales', async () => {
     const { source, execute, spies } = setup();
-    execute.mockRejectedValue(new Error('private-sql-marker'));
-    await expect(runProductionMigrations(source)).rejects.toThrow(
+    const original = Object.assign(new Error('private-sql-marker'), {
+      code: '42P07',
+    });
+    execute.mockRejectedValue(original);
+    const result = runProductionMigrations(source);
+    await expect(result).rejects.toThrow(
       /^No se completaron las migraciones\./,
     );
     expect(spies.rollbackTransaction).toHaveBeenCalledTimes(1);
     expect(spies.commitTransaction).not.toHaveBeenCalled();
     expect(spies.release).toHaveBeenCalledTimes(1);
     expect(spies.destroy).toHaveBeenCalledTimes(1);
+    await expect(result).rejects.toHaveProperty('cause', original);
   });
   it('un reinicio vuelve a consultar pendientes sin reutilizar estado de ejecución', async () => {
     const first = setup();
