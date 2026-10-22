@@ -1,0 +1,85 @@
+<html lang='es'><head><meta charset='utf-8' /><meta
+      name='viewport'
+      content='width=device-width, initial-scale=1'
+    /><title>Acceso administrativo · Chorotega E-Market</title><style>
+      body {
+        font: 16px system-ui;
+        max-width: 70rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      label {
+        display: block;
+        margin-top: 1rem;
+      }
+      input,
+      textarea {
+        display: block;
+        padding: 0.5rem;
+        max-width: 100%;
+        width: 30rem;
+      }
+      button {
+        margin: 1rem 0;
+        padding: 0.5rem 1rem;
+      }
+      .error {
+        color: #a01010;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      th,
+      td {
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+        padding: 0.5rem;
+      }
+      nav {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+      }
+      nav form {
+        margin-left: auto;
+      }
+      a {
+        color: #163e9a;
+      }
+    </style></head>
+  <body><main><h1>Acceso administrativo</h1>
+      {{#if errors._form}}<p
+          class='error'
+          role='alert'
+        >{{errors._form}}</p>{{/if}}
+      <form method='post' action='/admin/login'><input
+          type='hidden'
+          name='_csrf'
+          value='{{csrf}}'
+        />
+        <label for='correo'>Correo</label><input
+          id='correo'
+          type='email'
+          name='correo'
+          value='{{correo}}'
+          autocomplete='username'
+          required
+        />
+        {{#if errors.correo}}<p
+            class='error'
+            role='alert'
+          >{{errors.correo}}</p>{{/if}}
+        <label for='clave'>Contraseña</label><input
+          id='clave'
+          type='password'
+          name='clave'
+          autocomplete='current-password'
+          required
+        />
+        {{#if errors.clave}}<p
+            class='error'
+            role='alert'
+          >{{errors.clave}}</p>{{/if}}
+        <button type='submit'>Ingresar</button></form>
+    </main></body></html>

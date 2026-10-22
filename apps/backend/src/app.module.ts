@@ -17,6 +17,7 @@ import { OrderDetailsModule } from './modules/order-details/order-details.module
 import { OrdersHttpModule } from './modules/orders/orders-http.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { AuthModule } from './auth/auth.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { AuthModule } from './auth/auth.module';
     OrdersModule,
     OrdersHttpModule,
     AuthModule,
+    AdminModule,
   ],
 })
 export class AppModule {}

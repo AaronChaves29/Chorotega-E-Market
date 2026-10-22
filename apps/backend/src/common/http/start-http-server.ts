@@ -7,11 +7,13 @@ import {
 } from '../../config/environment';
 import { configureHttp } from './configure-http';
 import { configureOpenApi } from './configure-openapi';
+import { configureAdminViews } from '../../admin/admin-views';
 
 export async function startHttpServer(app: INestApplication): Promise<void> {
   try {
     const config = app.get(ConfigService);
     const environment = readNodeEnvironment(config.get<string>('NODE_ENV'));
+    configureAdminViews(app);
     configureHttp(
       app,
       readCorsOrigins(config.get<string>('CORS_ORIGIN'), environment),

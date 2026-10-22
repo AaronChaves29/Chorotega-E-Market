@@ -18,6 +18,6 @@ import { CategoriesModule } from '../categories/categories.module';
   ],
   controllers: [ProductsController],
   providers: [ProductsService, ProductsRepository],
-  exports: [ProductsRepository],
+  exports: [ProductsRepository, ProductsService],
 })
 export class ProductsModule {}
