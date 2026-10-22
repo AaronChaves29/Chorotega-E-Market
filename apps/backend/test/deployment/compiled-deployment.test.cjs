@@ -11,7 +11,43 @@ const scripts = JSON.parse(
   readFileSync(resolve(root, 'package.json'), 'utf8'),
 ).scripts;
 
+test('las seis vistas compiladas renderizan con dependencias de runtime y escapan datos', () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      '-e',
+      `
+    const assert = require('node:assert/strict');
+    const express = require('express');
+    const { configureAdminViews } = require('./dist/admin/admin-views.js');
+    const server = express();
+    configureAdminViews({ getHttpAdapter: () => ({ getInstance: () => server }) });
+    const views = ['login', 'products', 'stores', 'product-form', 'store-form', 'error'];
+    Promise.all(views.map(view => new Promise((resolve, reject) => {
+      server.render(view, { csrf: 'synthetic-csrf', content: [{nombre:'<script>unsafe</script>'}], values: {nombre:'<script>unsafe</script>'}}, (error, html) => {
+        if (error) return reject(error);
+        try {
+          assert.match(html, /<!doctype html>/i);
+          assert.doesNotMatch(html, /<script>/);
+          if (['products', 'stores', 'product-form', 'store-form'].includes(view)) assert.match(html, /&lt;script&gt;/);
+          resolve();
+        } catch(error) { reject(error); }
+      });
+    }))).catch(error => { console.error(error.message); process.exitCode = 1; });
+  `,
+    ],
+    {
+      cwd: root,
+      env: { NODE_ENV: 'production' },
+      encoding: 'utf8',
+      timeout: 10000,
+    },
+  );
+  assert.equal(result.status, 0, result.stderr);
+});
+
 test('los comandos de Render usan JS compilado sin ts-node, Nest CLI ni seeds', () => {
+  assert.equal(scripts.start, 'node dist/deployment/start-render.js');
   assert.equal(scripts['start:render'], 'node dist/deployment/start-render.js');
   assert.equal(
     scripts['migration:run:prod'],

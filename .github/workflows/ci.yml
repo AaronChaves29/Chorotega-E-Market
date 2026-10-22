@@ -64,6 +64,9 @@ jobs:
       - name: Compilar backend
         run: npm run build
 
+      - name: Verificar artefacto compilado
+        run: npm run test:deployment
+
       - name: Ejecutar migraciones
         run: npm run migration:run
 
@@ -84,6 +87,9 @@ jobs:
 
       - name: Ejecutar pruebas de integración con Testcontainers
         run: npm run test:integration
+
+      - name: Verificar formularios MVC en Chrome con PostgreSQL temporal
+        run: npm run test:browser
 
   frontend:
     name: Build Frontend

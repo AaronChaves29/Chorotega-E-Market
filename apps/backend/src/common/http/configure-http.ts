@@ -28,7 +28,11 @@ export function configureHttp(
     });
   }
   app.setGlobalPrefix('api/v1', {
-    exclude: [{ path: 'api/database/health', method: RequestMethod.GET }],
+    exclude: [
+      { path: 'api/database/health', method: RequestMethod.GET },
+      { path: 'admin', method: RequestMethod.ALL },
+      { path: 'admin/{*path}', method: RequestMethod.ALL },
+    ],
   });
   app.useGlobalPipes(
     new ValidationPipe({

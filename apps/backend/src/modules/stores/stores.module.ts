@@ -12,6 +12,6 @@ import { StoresController } from './controllers/stores.controller';
   imports: [AuthModule, TypeOrmModule.forFeature([Store]), UsersModule],
   controllers: [StoresController],
   providers: [StoresRepository, StoresService],
-  exports: [StoresRepository],
+  exports: [StoresRepository, StoresService],
 })
 export class StoresModule {}
