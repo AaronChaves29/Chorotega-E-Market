@@ -53,6 +53,7 @@ function add(
   });
 }
 add('post', 'auth/login', [201, 400, 401, 500]);
+add('post', 'auth/register', [201, 400, 409, 500]);
 for (const resource of ['stores', 'categories', 'products']) {
   add('get', resource, [200, 400, 500]);
   add('get', resource + '/{id}', [200, 400, 404, 500]);
@@ -177,7 +178,7 @@ const responseModels: Record<string, string> = {
   couriers: 'CourierResponseDto',
 };
 
-describe('OpenAPI HTTP: contrato generado de las 35 operaciones', () => {
+describe('OpenAPI HTTP: contrato generado de las 36 operaciones', () => {
   let context: Awaited<ReturnType<typeof createHttpTestApp>> | undefined;
   let document: OpenAPIObject;
   const previousSecret = process.env.JWT_SECRET;
@@ -254,7 +255,7 @@ describe('OpenAPI HTTP: contrato generado de las 35 operaciones', () => {
       version: '1.0.0',
     });
   });
-  it('contiene exactamente las 35 rutas y métodos esperados, sin duplicaciones', () => {
+  it('contiene exactamente las 36 rutas y métodos esperados, sin duplicaciones', () => {
     const actual = Object.entries(document.paths).flatMap(([path, item]) =>
       Object.keys(item)
         .filter((method) => ['get', 'post', 'patch', 'delete'].includes(method))
@@ -263,7 +264,7 @@ describe('OpenAPI HTTP: contrato generado de las 35 operaciones', () => {
     expect(actual.sort()).toEqual(
       expected.map((x) => `${x.method} ${x.path}`).sort(),
     );
-    expect(actual).toHaveLength(35);
+    expect(actual).toHaveLength(36);
     expect(document.paths).not.toHaveProperty('/api/v1/api/v1/couriers');
     expect(document.paths).not.toHaveProperty('/api/v1/api/v1/neighborhoods');
     expect(document.paths['/api/v1/users'].post).toBeUndefined();
@@ -323,7 +324,10 @@ describe('OpenAPI HTTP: contrato generado de las 35 operaciones', () => {
         if (!r || '$ref' in r) throw new Error('Respuesta inesperada');
         expect(r.content).toBeUndefined();
       }
-      if (entry.statuses.includes(201) && entry.path !== '/api/v1/auth/login') {
+      if (
+        entry.statuses.includes(201) &&
+        !['/api/v1/auth/login', '/api/v1/auth/register'].includes(entry.path)
+      ) {
         const r = op.responses['201'];
         if (!r || '$ref' in r) throw new Error('Respuesta inesperada');
         expect(r.headers).toHaveProperty('Location');
@@ -505,7 +509,7 @@ describe('OpenAPI HTTP: contrato generado de las 35 operaciones', () => {
       });
     }
   });
-  it('la colección HTTP incluye las 35 operaciones documentadas', () => {
+  it('la colección HTTP incluye las operaciones documentadas', () => {
     const collection = readFileSync(
       resolve(__dirname, '../../../../../docs/laboratory/lab-05/api.http'),
       'utf8',
@@ -632,10 +636,12 @@ describe('OpenAPI HTTP: contrato generado de las 35 operaciones', () => {
       clientEmail: client.correo,
       courierEmail: owner.correo,
       entrepreneurEmail: entrepreneur.correo,
+      registerEmail: `${randomUUID()}@example.test`,
       adminPassword: password,
       clientPassword: password,
       courierPassword: password,
       entrepreneurPassword: password,
+      registerPassword: password,
       userId: String(client.idUsuario),
       entrepreneurId: String(entrepreneur.idUsuario),
       catalogStoreId: String(store.idTienda),
@@ -697,11 +703,15 @@ describe('OpenAPI HTTP: contrato generado de las 35 operaciones', () => {
           /application\/problem\+json/,
         );
       if (status === 204) expect(response.text).toBe('');
-      if (status === 201 && !url.includes('/auth/login'))
+      if (
+        status === 201 &&
+        !url.includes('/auth/login') &&
+        !url.includes('/auth/register')
+      )
         expect(response.headers.location).toEqual(expect.any(String));
       executed.push(name);
     }
-    expect(executed).toHaveLength(44);
+    expect(executed).toHaveLength(45);
     expect(
       await orders.findOneByOrFail({ idPedido: prepared.idPedido }),
     ).toMatchObject({ estado: 'ENTREGADO' });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type {
     CreateOrderRequest,
@@ -29,6 +29,9 @@ export default function CreateOrderForm() {
     const [selectedNeighborhoodId, setSelectedNeighborhoodId] = useState("");
     const [deliveryAddress, setDeliveryAddress] = useState("");
     const router = useRouter();
+    const confirmationCloseButtonRef = useRef<HTMLButtonElement>(null);
+    const confirmationActionButtonRef = useRef<HTMLButtonElement>(null);
+    const submissionLockRef = useRef(false);
 
     const [selectedProducts, setSelectedProducts] = useState<
         Record<number, Product>
@@ -36,6 +39,53 @@ export default function CreateOrderForm() {
 
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState("");
+    const [orderCreated, setOrderCreated] = useState(false);
+
+    const goToOrders = useCallback(() => {
+        router.push("/pedidos");
+        router.refresh();
+    }, [router]);
+
+    useEffect(() => {
+        if (!orderCreated) return;
+
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        confirmationCloseButtonRef.current?.focus();
+
+        function handleDialogKeyDown(event: KeyboardEvent) {
+            if (event.key === "Escape") {
+                goToOrders();
+                return;
+            }
+
+            if (event.key !== "Tab") return;
+
+            const closeButton = confirmationCloseButtonRef.current;
+            const actionButton = confirmationActionButtonRef.current;
+
+            if (
+                event.shiftKey &&
+                document.activeElement === closeButton
+            ) {
+                event.preventDefault();
+                actionButton?.focus();
+            } else if (
+                !event.shiftKey &&
+                document.activeElement === actionButton
+            ) {
+                event.preventDefault();
+                closeButton?.focus();
+            }
+        }
+
+        document.addEventListener("keydown", handleDialogKeyDown);
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            document.removeEventListener("keydown", handleDialogKeyDown);
+        };
+    }, [goToOrders, orderCreated]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -199,7 +249,7 @@ export default function CreateOrderForm() {
         `₡${value.toLocaleString("es-CR")}`;
 
     async function handleCreateOrder() {
-        if (submitting) return;
+        if (submissionLockRef.current) return;
 
         setSubmitError("");
 
@@ -237,6 +287,7 @@ export default function CreateOrderForm() {
             })),
         };
 
+        submissionLockRef.current = true;
         setSubmitting(true);
 
         try {
@@ -273,8 +324,7 @@ export default function CreateOrderForm() {
                 throw new Error(message);
             }
 
-            router.push("/pedidos");
-            router.refresh();
+            setOrderCreated(true);
         } catch (error) {
             setSubmitError(
                 error instanceof Error
@@ -282,43 +332,48 @@ export default function CreateOrderForm() {
                     : "No se pudo confirmar el resultado. Revisá tus pedidos antes de intentarlo nuevamente.",
             );
         } finally {
+            submissionLockRef.current = false;
             setSubmitting(false);
         }
     }
 
     return (
         <>
-            <section className="mt-8 rounded-lg border border-gray-200 p-6">
-                <h2 className="text-xl font-semibold">
+            <section className="create-order-section create-order-stores">
+                <h2 className="create-order-section-title">
                     1. Seleccioná una tienda
                 </h2>
 
-                <p className="mt-2 text-sm text-gray-600">
+                <p className="create-order-section-description">
                     Elegí la tienda donde querés realizar tu pedido.
                 </p>
 
                 {loading && (
-                    <p className="mt-4 text-sm">Cargando tiendas...</p>
+                    <p className="create-order-loading">Cargando tiendas...</p>
                 )}
 
                 {error && (
-                    <p role="alert" className="mt-4 text-sm text-red-600">
+                    <p role="alert" className="create-order-error">
                         {error}
                     </p>
                 )}
 
                 {!loading && !error && stores.length === 0 && (
-                    <p className="mt-4 text-sm text-gray-600">
+                    <p className="create-order-empty">
                         No hay tiendas disponibles en esta página.
                     </p>
                 )}
 
                 {!loading && !error && stores.length > 0 && (
-                    <div className="mt-4 space-y-3">
+                    <div className="create-order-store-list">
                         {stores.map((store) => (
                             <label
                                 key={store.idTienda}
-                                className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-4"
+                                className={`create-order-store-card ${
+                                    selectedStoreId === String(store.idTienda)
+                                        ? "is-selected"
+                                        : ""
+                                }`}
                             >
                                 <input
                                     type="radio"
@@ -334,16 +389,16 @@ export default function CreateOrderForm() {
                                         setSelectedProducts({});
                                         setSubmitError("");
                                     }}
-                                    className="mt-1"
+                                    className="create-order-radio"
                                 />
 
-                                <span>
-                                    <span className="block font-medium">
+                                <span className="create-order-store-copy">
+                                    <span className="create-order-store-name">
                                         {store.nombre}
                                     </span>
 
                                     {store.descripcion && (
-                                        <span className="mt-1 block text-sm text-gray-600">
+                                        <span className="create-order-store-description">
                                             {store.descripcion}
                                         </span>
                                     )}
@@ -354,17 +409,17 @@ export default function CreateOrderForm() {
                 )}
 
                 {totalPages > 1 && (
-                    <div className="mt-6 flex items-center justify-between">
+                    <div className="create-order-pagination">
                         <button
                             type="button"
                             disabled={page === 0 || loading}
                             onClick={() => setPage((current) => current - 1)}
-                            className="rounded border px-4 py-2 disabled:opacity-50"
+                            className="create-order-page-button"
                         >
                             Anterior
                         </button>
 
-                        <span className="text-sm">
+                        <span className="create-order-page-number">
                             Página {page + 1} de {totalPages}
                         </span>
 
@@ -372,7 +427,7 @@ export default function CreateOrderForm() {
                             type="button"
                             disabled={page + 1 >= totalPages || loading}
                             onClick={() => setPage((current) => current + 1)}
-                            className="rounded border px-4 py-2 disabled:opacity-50"
+                            className="create-order-page-button"
                         >
                             Siguiente
                         </button>
@@ -382,21 +437,21 @@ export default function CreateOrderForm() {
 
             {/* SECCIÓN 2: PRODUCTOS */}
             {selectedStoreId && (
-                <section className="mt-6 rounded-lg border border-gray-200 p-6">
-                    <h2 className="text-xl font-semibold">
+                <section className="create-order-section create-order-products">
+                    <h2 className="create-order-section-title">
                         2. Seleccioná los productos
                     </h2>
 
-                    <p className="mt-2 text-sm text-gray-600">
+                    <p className="create-order-section-description">
                         Indicá cuántas unidades querés comprar de cada producto.
                     </p>
 
                     {productsLoading && (
-                        <p className="mt-4">Cargando productos...</p>
+                        <p className="create-order-loading">Cargando productos...</p>
                     )}
 
                     {productsError && (
-                        <p role="alert" className="mt-4 text-red-600">
+                        <p role="alert" className="create-order-error">
                             {productsError}
                         </p>
                     )}
@@ -404,38 +459,38 @@ export default function CreateOrderForm() {
                     {!productsLoading &&
                         !productsError &&
                         products.length === 0 && (
-                            <p className="mt-4 text-gray-600">
+                            <p className="create-order-empty">
                                 Esta tienda no tiene productos disponibles.
                             </p>
                         )}
 
                     {!productsLoading && !productsError && (
-                        <div className="mt-4 space-y-4">
+                        <div className="create-order-product-list">
                             {products.map((product) => (
                                 <div
                                     key={product.idProducto}
-                                    className="rounded-lg border border-gray-200 p-4"
+                                    className="create-order-product-card"
                                 >
-                                    <h3 className="font-semibold">
+                                    <h3 className="create-order-product-name">
                                         {product.nombre}
                                     </h3>
 
                                     {product.descripcion && (
-                                        <p className="mt-1 text-sm text-gray-600">
+                                        <p className="create-order-product-description">
                                             {product.descripcion}
                                         </p>
                                     )}
 
-                                    <p className="mt-2 text-sm">
+                                    <p className="create-order-product-price">
                                         Precio: ₡
                                         {Number(product.precio).toLocaleString("es-CR")}
                                     </p>
 
-                                    <p className="text-sm">
+                                    <p className="create-order-stock">
                                         Disponibles: {product.cantidadDisponible}
                                     </p>
 
-                                    <label className="mt-3 block text-sm">
+                                    <label className="create-order-quantity-label">
                                         Cantidad
                                         <input
                                             type="number"
@@ -471,7 +526,7 @@ export default function CreateOrderForm() {
 
                                                 setSubmitError("");
                                             }}
-                                            className="mt-1 block w-28 rounded border px-3 py-2"
+                                            className="create-order-quantity"
                                         />
                                     </label>
                                 </div>
@@ -480,17 +535,17 @@ export default function CreateOrderForm() {
                     )}
 
                     {productTotalPages > 1 && (
-                        <div className="mt-6 flex items-center justify-between">
+                        <div className="create-order-pagination">
                             <button
                                 type="button"
                                 disabled={productPage === 0 || productsLoading}
                                 onClick={() => setProductPage((current) => current - 1)}
-                                className="rounded border px-4 py-2 disabled:opacity-50"
+                                className="create-order-page-button"
                             >
                                 Anterior
                             </button>
 
-                            <span className="text-sm">
+                            <span className="create-order-page-number">
                                 Página {productPage + 1} de {productTotalPages}
                             </span>
 
@@ -500,7 +555,7 @@ export default function CreateOrderForm() {
                                     productPage + 1 >= productTotalPages || productsLoading
                                 }
                                 onClick={() => setProductPage((current) => current + 1)}
-                                className="rounded border px-4 py-2 disabled:opacity-50"
+                                className="create-order-page-button"
                             >
                                 Siguiente
                             </button>
@@ -509,29 +564,29 @@ export default function CreateOrderForm() {
                 </section>
             )}
             {selectedStoreId && (
-                <section className="mt-6 rounded-lg border border-gray-200 p-6">
-                    <h2 className="text-xl font-semibold">
+                <section className="create-order-section create-order-delivery">
+                    <h2 className="create-order-section-title">
                         3. Datos de entrega
                     </h2>
 
-                    <p className="mt-2 text-sm text-gray-600">
+                    <p className="create-order-section-description">
                         Seleccioná el barrio e indicá la dirección donde querés recibir
                         tu pedido.
                     </p>
 
-                    <div className="mt-5 space-y-5">
-                        <div>
+                    <div className="create-order-delivery-fields">
+                        <div className="create-order-field">
                             <label
                                 htmlFor="neighborhood"
-                                className="block text-sm font-medium"
+                                className="create-order-label"
                             >
                                 Barrio
                             </label>
 
                             {neighborhoodsLoading ? (
-                                <p className="mt-2 text-sm">Cargando barrios...</p>
+                                <p className="create-order-loading">Cargando barrios...</p>
                             ) : neighborhoodsError ? (
-                                <p role="alert" className="mt-2 text-sm text-red-600">
+                                <p role="alert" className="create-order-error">
                                     {neighborhoodsError}
                                 </p>
                             ) : (
@@ -541,7 +596,7 @@ export default function CreateOrderForm() {
                                     onChange={(event) =>
                                         setSelectedNeighborhoodId(event.target.value)
                                     }
-                                    className="mt-2 w-full rounded border border-gray-300 bg-transparent px-3 py-2"
+                                    className="create-order-input"
                                 >
                                     <option value="">Seleccioná un barrio</option>
 
@@ -558,10 +613,10 @@ export default function CreateOrderForm() {
                             )}
                         </div>
 
-                        <div>
+                        <div className="create-order-field">
                             <label
                                 htmlFor="delivery-address"
-                                className="block text-sm font-medium"
+                                className="create-order-label"
                             >
                                 Dirección de entrega
                             </label>
@@ -575,10 +630,10 @@ export default function CreateOrderForm() {
                                 maxLength={255}
                                 rows={3}
                                 placeholder="Ejemplo: Casa azul, 100 metros al norte de la escuela"
-                                className="mt-2 w-full rounded border border-gray-300 bg-transparent px-3 py-2"
+                                className="create-order-input create-order-textarea"
                             />
 
-                            <p className="mt-1 text-xs text-gray-500">
+                            <p className="create-order-help">
                                 Máximo 255 caracteres.
                             </p>
                         </div>
@@ -586,21 +641,21 @@ export default function CreateOrderForm() {
                 </section>
             )}
             {selectedStoreId && (
-                <section className="mt-6 rounded-lg border border-gray-200 p-6">
-                    <h2 className="text-xl font-semibold">
+                <section className="create-order-section create-order-summary">
+                    <h2 className="create-order-section-title">
                         4. Resumen del pedido
                     </h2>
 
                     {selectedItems.length === 0 ? (
-                        <p className="mt-4 text-sm text-gray-600">
+                        <p className="create-order-empty">
                             Seleccioná al menos un producto para ver el resumen.
                         </p>
                     ) : (
-                        <div className="mt-4 space-y-3">
+                        <div className="create-order-summary-items">
                             {selectedItems.map(({ product, quantity }) => (
                                 <div
                                     key={product.idProducto}
-                                    className="flex justify-between gap-4 text-sm"
+                                    className="create-order-summary-item"
                                 >
                                     <span>
                                         {product.nombre} × {quantity}
@@ -612,13 +667,13 @@ export default function CreateOrderForm() {
                                 </div>
                             ))}
 
-                            <div className="border-t border-gray-200 pt-4">
-                                <div className="flex justify-between text-sm">
+                            <div className="create-order-totals">
+                                <div className="create-order-total-row">
                                     <span>Subtotal estimado</span>
                                     <span>{formatColones(subtotal)}</span>
                                 </div>
 
-                                <div className="mt-2 flex justify-between text-sm">
+                                <div className="create-order-total-row">
                                     <span>Envío estimado</span>
                                     <span>
                                         {selectedNeighborhood
@@ -627,7 +682,7 @@ export default function CreateOrderForm() {
                                     </span>
                                 </div>
 
-                                <div className="mt-4 flex justify-between font-semibold">
+                                <div className="create-order-total-row create-order-grand-total">
                                     <span>Total estimado</span>
                                     <span>
                                         {selectedNeighborhood
@@ -639,13 +694,13 @@ export default function CreateOrderForm() {
                         </div>
                     )}
 
-                    <p className="mt-4 text-xs text-gray-500">
-                        Los precios y las existencias se verificarán al confirmar el pedido.
-                        El backend calculará el total definitivo.
+                    <p className="create-order-disclaimer">
+                        Al confirmar, revisaremos los precios y la disponibilidad y
+                        actualizaremos el total de tu pedido.
                     </p>
 
                     {submitError && (
-                        <p role="alert" className="mt-4 text-sm text-red-600">
+                        <p role="alert" className="create-order-error">
                             {submitError}
                         </p>
                     )}
@@ -660,11 +715,62 @@ export default function CreateOrderForm() {
                             !deliveryAddress.trim() ||
                             deliveryAddress.length > 255
                         }
-                        className="mt-6 w-full rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="create-order-confirm"
                     >
                         {submitting ? "Confirmando pedido..." : "Confirmar pedido"}
                     </button>
                 </section>
+            )}
+            {orderCreated && (
+                <div className="create-order-dialog-backdrop">
+                    <section
+                        aria-labelledby="create-order-success-title"
+                        aria-describedby="create-order-success-message"
+                        aria-modal="true"
+                        className="create-order-success-dialog"
+                        role="dialog"
+                    >
+                        <button
+                            aria-label="Cerrar confirmación y ver mis pedidos"
+                            className="create-order-dialog-close"
+                            onClick={goToOrders}
+                            ref={confirmationCloseButtonRef}
+                            type="button"
+                        >
+                            <span aria-hidden="true">×</span>
+                        </button>
+                        <div aria-hidden="true" className="create-order-success-icon">
+                            <svg
+                                fill="none"
+                                viewBox="0 0 32 32"
+                                xmlns="http://www.w3.org/2000/svg"
+                            >
+                                <path
+                                    d="m8 16.5 5.2 5.2L24.5 10"
+                                    stroke="currentColor"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2.8"
+                                />
+                            </svg>
+                        </div>
+                        <h2 id="create-order-success-title">
+                            ¡Tu pedido se creó con éxito!
+                        </h2>
+                        <p id="create-order-success-message">
+                            Gracias por apoyar los emprendimientos locales. Podés consultar
+                            el estado de tu pedido en cualquier momento.
+                        </p>
+                        <button
+                            className="create-order-success-action"
+                            onClick={goToOrders}
+                            ref={confirmationActionButtonRef}
+                            type="button"
+                        >
+                            Ver mis pedidos
+                        </button>
+                    </section>
+                </div>
             )}
         </>
     );
