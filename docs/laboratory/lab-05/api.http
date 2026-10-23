@@ -9,10 +9,12 @@
 @clientEmail = cliente@example.test
 @courierEmail = repartidor@example.test
 @entrepreneurEmail = emprendedor@example.test
+@registerEmail = nuevo-cliente@example.test
 @adminPassword = {{$processEnv CHOROTEGA_ADMIN_PASSWORD}}
 @clientPassword = {{$processEnv CHOROTEGA_CLIENT_PASSWORD}}
 @courierPassword = {{$processEnv CHOROTEGA_COURIER_PASSWORD}}
 @entrepreneurPassword = {{$processEnv CHOROTEGA_ENTREPRENEUR_PASSWORD}}
+@registerPassword = {{$processEnv CHOROTEGA_REGISTER_PASSWORD}}
 @adminToken = {{loginAdmin.response.body.$.token}}
 @clientToken = {{loginClient.response.body.$.token}}
 @courierToken = {{loginCourier.response.body.$.token}}
@@ -34,6 +36,20 @@
 @deliveryId = {{assignDelivery.response.body.$.idEntrega}}
 @existingCategoryName = REEMPLAZAR_POR_CATEGORIA_EXISTENTE
 @otherStoreProductId = 2
+
+### Auth — registro Client
+# @name registerClient
+# expected-status: 201
+POST {{baseUrl}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "nombre": "Nuevo Cliente",
+  "apellido": "Prueba",
+  "correo": "{{registerEmail}}",
+  "telefono": "88888888",
+  "clave": "{{registerPassword}}"
+}
 
 ### Auth — login Admin
 # @name loginAdmin
