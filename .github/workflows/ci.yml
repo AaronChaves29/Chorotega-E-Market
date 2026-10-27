@@ -83,13 +83,32 @@ jobs:
             < ../../database/postgres/seeds/V1__seed_initial_data.sql
 
       - name: Ejecutar pruebas unitarias y cobertura de negocio
-        run: npm run test:cov -- --runInBand
+        run: npm run test:cov -- --runInBand --json --outputFile=coverage/jest-unit-results.json
 
       - name: Ejecutar pruebas de integración con Testcontainers
-        run: npm run test:integration
+        run: npm run test:integration -- --json --outputFile=coverage/jest-integration-results.json
 
       - name: Verificar formularios MVC en Chrome con PostgreSQL temporal
         run: npm run test:browser
+
+      - name: Publicar cobertura y resultados de Jest
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-and-test-results
+          path: |
+            apps/backend/coverage/jest-unit-results.json
+            apps/backend/coverage/jest-integration-results.json
+            apps/backend/coverage/coverage-summary.json
+            apps/backend/coverage/lcov.info
+            apps/backend/coverage/index.html
+            apps/backend/coverage/*.css
+            apps/backend/coverage/*.js
+            apps/backend/coverage/*.png
+            apps/backend/coverage/orders/
+            apps/backend/coverage/deliveries/
+          if-no-files-found: warn
+          retention-days: 14
 
   frontend:
     name: Build Frontend
@@ -118,3 +137,16 @@ jobs:
 
       - name: Compilar frontend
         run: npm run build
+
+  # Bloqueado hasta confirmar el mecanismo real de Render y Vercel.
+  # No retirar false hasta implementar y revisar ambos despliegues.
+  deploy:
+    name: Deploy production (disabled)
+    needs: [backend, frontend]
+    if: ${{ false && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.backend.result == 'success' && needs.frontend.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bloqueo de despliegue pendiente de configuración externa
+        run: |
+          echo "::error::Confirmar integración de Render/Vercel y GitHub Secrets antes de habilitar producción."
+          exit 1
