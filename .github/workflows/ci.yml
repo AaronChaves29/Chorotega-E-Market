@@ -67,6 +67,9 @@ jobs:
       - name: Verificar artefacto compilado
         run: npm run test:deployment
 
+      - name: Verificar orquestación de despliegue sin red ni credenciales
+        run: node --test ../../scripts/ci/production-deploy.test.mjs
+
       - name: Ejecutar migraciones
         run: npm run migration:run
 
@@ -125,7 +128,7 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version: "24"
           cache: npm
           cache-dependency-path: apps/frontend/package-lock.json
 
@@ -138,15 +141,45 @@ jobs:
       - name: Compilar frontend
         run: npm run build
 
-  # Bloqueado hasta confirmar el mecanismo real de Render y Vercel.
-  # No retirar false hasta implementar y revisar ambos despliegues.
+  # Retirar false únicamente después de configurar Secrets y bloquear
+  # el auto-deploy Git de main en Vercel. No ejecutar desde PR.
   deploy:
     name: Deploy production (disabled)
     needs: [backend, frontend]
     if: ${{ false && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.backend.result == 'success' && needs.frontend.result == 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: chorotega-production
+      cancel-in-progress: false
+    env:
+      DEPLOY_SHA: ${{ github.sha }}
+      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      BACKEND_HEALTH_URL: ${{ vars.BACKEND_HEALTH_URL }}
+      FRONTEND_HEALTH_URL: ${{ vars.FRONTEND_HEALTH_URL }}
+      VERCEL_TELEMETRY_DISABLED: "1"
     steps:
-      - name: Bloqueo de despliegue pendiente de configuración externa
-        run: |
-          echo "::error::Confirmar integración de Render/Vercel y GitHub Secrets antes de habilitar producción."
-          exit 1
+      - name: Obtener el SHA aprobado
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Configurar Node.js para Vercel
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Validar configuración antes de cualquier despliegue
+        run: node scripts/ci/production-deploy.mjs preflight
+      - name: Instalar CLI oficial fijada
+        run: npm install --global vercel@65.4.0
+      - name: Preparar build Vercel desde la raíz del monorepo
+        run: node scripts/ci/production-deploy.mjs vercel-build
+      - name: Desplegar Render y esperar SHA live y health
+        run: node scripts/ci/production-deploy.mjs render
+      - name: Publicar Vercel prebuilt y comprobar frontend
+        run: node scripts/ci/production-deploy.mjs vercel-deploy
