@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -49,6 +50,16 @@ export class AuthService {
   }
 
   async login(dto: LoginDto): Promise<LoginResponseDto> {
+    return this.issueCredentials(await this.authenticateCredentials(dto));
+  }
+
+  async loginAdmin(dto: LoginDto): Promise<LoginResponseDto> {
+    const user = await this.authenticateCredentials(dto);
+    if (user.rol !== 'ADMIN') throw new ForbiddenException();
+    return this.issueCredentials(user);
+  }
+
+  private async authenticateCredentials(dto: LoginDto): Promise<User> {
     const user = await this.usersRepository.findByEmail(dto.correo);
 
     if (!user || !user.claveHash) {
@@ -57,10 +68,14 @@ export class AuthService {
 
     const claveValida = await bcrypt.compare(dto.clave, user.claveHash);
 
-    if (!claveValida) {
+    if (!claveValida || user.estado !== 'ACTIVO') {
       throw new UnauthorizedException('Credenciales inválidas.');
     }
 
+    return user;
+  }
+
+  private async issueCredentials(user: User): Promise<LoginResponseDto> {
     const token = await this.jwtService.signAsync({
       sub: user.correo,
       idUsuario: user.idUsuario,

@@ -9,7 +9,7 @@ jest.mock('bcrypt', () => ({
   hash: jest.fn(),
 }));
 
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from '../modules/users/entities/user.entity';
@@ -29,6 +29,7 @@ describe('AuthService', () => {
     correo: 'repartidor@chorotega.test',
     claveHash: 'hash-de-prueba',
     rol: 'REPARTIDOR',
+    estado: 'ACTIVO',
   };
 
   beforeEach(() => {
@@ -58,11 +59,13 @@ describe('AuthService', () => {
     findByEmailMock.mockResolvedValue(null);
     hashMock.mockResolvedValue('bcrypt-hash');
     saveMock.mockImplementation((savedUser) =>
-      Object.assign(savedUser, {
-        idUsuario: 4,
-        estado: 'ACTIVO',
-        fechaCreacion: createdAt,
-      }),
+      Promise.resolve(
+        Object.assign(savedUser, {
+          idUsuario: 4,
+          estado: 'ACTIVO',
+          fechaCreacion: createdAt,
+        }),
+      ),
     );
 
     const result = await service.register({
@@ -214,5 +217,42 @@ describe('AuthService', () => {
     ).rejects.toThrow(UnauthorizedException);
 
     expect(signAsyncMock).not.toHaveBeenCalled();
+  });
+
+  it('no emite JWT para una cuenta inactiva con contraseña correcta', async () => {
+    findByEmailMock.mockResolvedValue({ ...user, estado: 'INACTIVO' });
+    compareMock.mockResolvedValue(true);
+    await expect(
+      service.login({ correo: user.correo, clave: 'correcta' }),
+    ).rejects.toThrow('Credenciales inválidas.');
+    expect(signAsyncMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['CLIENTE', 'EMPRENDEDOR', 'REPARTIDOR'])(
+    'el acceso MVC rechaza %s sin emitir credenciales',
+    async (rol) => {
+      findByEmailMock.mockResolvedValue({ ...user, rol });
+      compareMock.mockResolvedValue(true);
+      await expect(
+        service.loginAdmin({ correo: user.correo, clave: 'correcta' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(findByEmailMock).toHaveBeenCalledTimes(1);
+      expect(signAsyncMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('el acceso MVC de ADMIN activo consulta credenciales una sola vez', async () => {
+    findByEmailMock.mockResolvedValue({ ...user, rol: 'ADMIN' });
+    compareMock.mockResolvedValue(true);
+    signAsyncMock.mockResolvedValue('jwt-de-prueba');
+    await expect(
+      service.loginAdmin({ correo: user.correo, clave: 'correcta' }),
+    ).resolves.toMatchObject({
+      token: 'jwt-de-prueba',
+      tipo: 'Bearer',
+      expiraEnSegundos: 3600,
+    });
+    expect(findByEmailMock).toHaveBeenCalledTimes(1);
+    expect(signAsyncMock).toHaveBeenCalledTimes(1);
   });
 });

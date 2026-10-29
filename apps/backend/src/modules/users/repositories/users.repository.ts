@@ -8,6 +8,10 @@ import type { PaginationResult } from '../../../common/pagination/pagination-res
 import type { UserSearchQueryDto } from '../dtos/user-search-query.dto';
 
 export type UserProfileData = Pick<User, 'nombre' | 'apellido' | 'telefono'>;
+export type UserAuthenticationData = Pick<
+  User,
+  'idUsuario' | 'correo' | 'rol' | 'estado'
+>;
 
 @Injectable()
 export class UsersRepository extends TypeOrmBaseRepository<
@@ -25,6 +29,13 @@ export class UsersRepository extends TypeOrmBaseRepository<
   async findByEmail(correo: string): Promise<User | null> {
     return this.repository.findOne({
       where: { correo },
+    });
+  }
+
+  findAuthenticationById(id: number): Promise<UserAuthenticationData | null> {
+    return this.repository.findOne({
+      where: this.whereId(id),
+      select: { idUsuario: true, correo: true, rol: true, estado: true },
     });
   }
 
