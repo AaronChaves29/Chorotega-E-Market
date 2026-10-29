@@ -120,7 +120,7 @@ describe('Pedidos: negocio transaccional', () => {
       await source
         .getRepository(Product)
         .findOneByOrFail({ idProducto: product.idProducto }),
-    ).toMatchObject({ cantidadDisponible: 2 });
+    ).toMatchObject({ cantidadDisponible: 2, version: product.version + 1 });
     await source
       .getRepository(Product)
       .update(product.idProducto, { precio: '99.00' });
@@ -145,7 +145,7 @@ describe('Pedidos: negocio transaccional', () => {
           IF NOT EXISTS (SELECT 1 FROM detalle_pedido WHERE id_pedido = NEW.id_pedido)
             OR NOT EXISTS (
               SELECT 1 FROM detalle_pedido d JOIN producto p USING (id_producto)
-              WHERE d.id_pedido = NEW.id_pedido AND p.cantidad_disponible = 4
+              WHERE d.id_pedido = NEW.id_pedido AND p.cantidad_disponible = 4 AND p.version = 2
             ) THEN
             RAISE EXCEPTION 'No se ejecutaron las escrituras previas esperadas';
           END IF;
@@ -166,7 +166,7 @@ describe('Pedidos: negocio transaccional', () => {
       await source
         .getRepository(Product)
         .findOneByOrFail({ idProducto: product.idProducto }),
-    ).toMatchObject({ cantidadDisponible: 5 });
+    ).toMatchObject({ cantidadDisponible: 5, version: product.version });
   });
 
   it('solo una de dos compras concurrentes obtiene la última unidad', async () => {
@@ -200,6 +200,6 @@ describe('Pedidos: negocio transaccional', () => {
       await source
         .getRepository(Product)
         .findOneByOrFail({ idProducto: product.idProducto }),
-    ).toMatchObject({ cantidadDisponible: 0 });
+    ).toMatchObject({ cantidadDisponible: 0, version: product.version + 1 });
   });
 });

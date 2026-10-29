@@ -231,6 +231,7 @@ Authorization: Bearer {{entrepreneurToken}}
 Content-Type: application/json
 
 {
+  "version": {{getProduct.response.body.$.version}},
   "descripcion": "Actualización parcial HTTP"
 }
 

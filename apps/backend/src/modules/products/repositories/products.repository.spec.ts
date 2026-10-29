@@ -115,11 +115,13 @@ describe('ProductsRepository: consultas fijas', () => {
         [sql, parameters] = this.getQueryAndParameters();
         return Promise.resolve({ affected: 0, generatedMaps: [], raw: [] });
       });
+    jest.spyOn(SelectQueryBuilder.prototype, 'getOne').mockResolvedValue(null);
     expect(
       await repository.updateForActor(
         9,
         { idTienda: 4, nombre: 'Nuevo' },
         { sub: 'owner@example.test', idUsuario: 7, rol: 'EMPRENDEDOR' },
+        1,
       ),
     ).toBeNull();
     expect(sql).toContain('UPDATE "producto"');
@@ -127,7 +129,10 @@ describe('ProductsRepository: consultas fijas', () => {
     expect(sql).toContain('"origen"."id_tienda" = "producto"."id_tienda"');
     expect(sql).toContain('FROM "tienda" "destino"');
     expect(sql).not.toContain('FROM "id_tienda"');
-    expect(parameters).toEqual([4, 'Nuevo', 9, 7, 4]);
+    expect(parameters).toEqual([4, 'Nuevo', 9, 1, 7, 4]);
+    expect(sql).toContain('"version" = "version" + 1');
+    expect(sql).toContain('"version" = $4');
+    expect(sql).toContain('RETURNING *');
   });
   it('genera DELETE condicionado por propietario con parámetros', async () => {
     jest

@@ -84,7 +84,7 @@ for (const entry of ['migrate', 'start-render']) {
   });
 }
 
-test('el artefacto carga tres migraciones JS y sus nueve entidades sin herramientas de desarrollo', () => {
+test('el artefacto carga cuatro migraciones JS y sus nueve entidades sin herramientas de desarrollo', () => {
   const result = spawnSync(
     process.execPath,
     [
@@ -97,7 +97,7 @@ test('el artefacto carga tres migraciones JS y sus nueve entidades sin herramien
       await source.buildMetadatas();
       assert.equal(source.isInitialized, false);
       assert.equal(source.entityMetadatas.length, 9);
-      assert.equal(source.migrations.length, 3);
+      assert.equal(source.migrations.length, 4);
       assert.equal(source.options.synchronize, false);
       assert.equal(source.options.migrationsRun, false);
       assert.equal(source.options.ssl.rejectUnauthorized, true);

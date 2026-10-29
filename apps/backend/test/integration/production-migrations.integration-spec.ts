@@ -42,7 +42,7 @@ describe('Migraciones de despliegue en PostgreSQL temporal', () => {
       logger: migrationLogger,
     });
   }
-  it('aplica las tres migraciones reales en una base vacía y registra solo tres entradas', async () => {
+  it('aplica las cuatro migraciones reales en una base vacía y registra solo cuatro entradas', async () => {
     await database.dataSource.query('CREATE DATABASE deployment_fresh');
     const options = source().options;
     if (options.type !== 'postgres' || !options.url)
@@ -53,14 +53,14 @@ describe('Migraciones de despliegue en PostgreSQL temporal', () => {
       runProductionMigrations(
         new DataSource({ ...options, url: url.toString() }),
       ),
-    ).resolves.toBe(3);
+    ).resolves.toBe(4);
     const inspector = new DataSource({ ...options, url: url.toString() });
     try {
       await inspector.initialize();
       const history: { count: string }[] = await inspector.query(
         'SELECT count(*) FROM typeorm_migrations',
       );
-      expect(history[0].count).toBe('3');
+      expect(history[0].count).toBe('4');
       const tables: { count: string }[] = await inspector.query(
         "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'",
       );
@@ -75,7 +75,7 @@ describe('Migraciones de despliegue en PostgreSQL temporal', () => {
     const rows: { count: string }[] = await database.dataSource.query(
       'SELECT count(*) FROM typeorm_migrations',
     );
-    expect(rows[0].count).toBe('3');
+    expect(rows[0].count).toBe('4');
     const users: { count: string }[] = await database.dataSource.query(
       'SELECT count(*) FROM usuario',
     );
@@ -110,7 +110,7 @@ describe('Migraciones de despliegue en PostgreSQL temporal', () => {
     const history: { count: string }[] = await database.dataSource.query(
       'SELECT count(*) FROM typeorm_migrations',
     );
-    expect(history[0].count).toBe('3');
+    expect(history[0].count).toBe('4');
     await expect(runProductionMigrations(source())).resolves.toBe(0);
   });
 });
