@@ -176,10 +176,11 @@ jobs:
       - name: Validar configuración antes de cualquier despliegue
         run: node scripts/ci/production-deploy.mjs preflight
       - name: Instalar CLI oficial fijada
+        timeout-minutes: 5
         run: npm install --global vercel@65.4.0
       - name: Preparar build Vercel desde la raíz del monorepo
         run: node scripts/ci/production-deploy.mjs vercel-build
       - name: Desplegar Render y esperar SHA live y health
         run: node scripts/ci/production-deploy.mjs render
-      - name: Publicar Vercel prebuilt y comprobar frontend
+      - name: Validar Vercel staged, promover y comprobar frontend
         run: node scripts/ci/production-deploy.mjs vercel-deploy
