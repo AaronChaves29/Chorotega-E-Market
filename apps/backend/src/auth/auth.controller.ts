@@ -1,6 +1,10 @@
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { ApiProblemResponses } from '../common/http/openapi-contract';
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import {
+  AuthRateLimitGuard,
+  LimitAuthOperation,
+} from './rate-limit/auth-rate-limit.guard';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
@@ -9,6 +13,7 @@ import { UserResponseDto } from '../modules/users/dtos/user-response.dto';
 
 @ApiTags('auth')
 @Controller('auth')
+@UseGuards(AuthRateLimitGuard)
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
@@ -20,8 +25,9 @@ export class AuthController {
     isArray: false,
     description: 'Respuesta pública mediante DTO.',
   })
-  @ApiProblemResponses([400, 401, 500])
+  @ApiProblemResponses([400, 401, 429, 500])
   @Post('login')
+  @LimitAuthOperation('login')
   login(@Body() dto: LoginDto): Promise<LoginResponseDto> {
     return this.authService.login(dto);
   }
@@ -38,8 +44,9 @@ export class AuthController {
     isArray: false,
     description: 'Cuenta de cliente creada sin datos de autenticación.',
   })
-  @ApiProblemResponses([400, 409, 500])
+  @ApiProblemResponses([400, 409, 429, 500])
   @Post('register')
+  @LimitAuthOperation('register')
   register(@Body() dto: RegisterDto): Promise<UserResponseDto> {
     return this.authService.register(dto);
   }

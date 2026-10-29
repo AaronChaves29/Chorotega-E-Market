@@ -42,10 +42,22 @@ export function ApiProblemResponses(statuses: number[]) {
             404: 'Recurso inexistente o no visible.',
             409: 'Conflicto con el estado o restricciones conocidas.',
             422: 'Regla de negocio no satisfecha.',
+            429: 'Demasiadas solicitudes; reintentar después del plazo indicado.',
             500: 'Error inesperado; mensaje seguro sin detalles internos.',
             503: 'Base de datos no disponible.',
           } as Record<number, string>
         )[status],
+        ...(status === 429
+          ? {
+              headers: {
+                'Retry-After': {
+                  description:
+                    'Segundos hasta que se recupera el presupuesto de esta operación.',
+                  schema: { type: 'integer', minimum: 1 },
+                },
+              },
+            }
+          : {}),
         content: {
           'application/problem+json': {
             schema: { $ref: getSchemaPath(ProblemDetailsDto) },
