@@ -7,6 +7,7 @@ import * as bcrypt from 'bcrypt';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { AuthService } from '../auth/auth.service';
+import { CurrentIdentityService } from '../auth/current-identity.service';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { UsersRepository } from '../modules/users/repositories/users.repository';
 import { ProductsService } from '../modules/products/products.service';
@@ -31,7 +32,7 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
   let app: INestApplication<App>;
   const password = randomUUID();
   const secret = randomBytes(32).toString('hex');
-  const users = { findByEmail: jest.fn() };
+  const users = { findByEmail: jest.fn(), findAuthenticationById: jest.fn() };
   const products = { search: jest.fn(), create: jest.fn() };
   const stores = { search: jest.fn(), create: jest.fn() };
   let hash: string;
@@ -50,6 +51,7 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
       controllers: [AdminAuthController, AdminCatalogController],
       providers: [
         AuthService,
+        CurrentIdentityService,
         RolesGuard,
         AdminSessionGuard,
         AdminCsrfGuard,
@@ -71,7 +73,14 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
       idUsuario: 7,
       correo: 'admin@example.test',
       rol: 'ADMIN',
+      estado: 'ACTIVO',
       claveHash: hash,
+    });
+    users.findAuthenticationById.mockResolvedValue({
+      idUsuario: 7,
+      correo: 'admin@example.test',
+      rol: 'ADMIN',
+      estado: 'ACTIVO',
     });
     const page = {
       content: [],
@@ -94,6 +103,7 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
       idUsuario: 7,
       correo: 'admin@example.test',
       rol: role,
+      estado: 'ACTIVO',
       claveHash: hash,
     });
     const agent = request.agent(app.getHttpServer());
@@ -163,6 +173,13 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
   it.each(['alterada', 'vencida', 'otro-rol'])(
     'GET login muestra formulario nuevo para sesión %s',
     async (kind) => {
+      if (kind === 'otro-rol')
+        users.findAuthenticationById.mockResolvedValue({
+          idUsuario: 7,
+          correo: 'user@example.test',
+          rol: 'CLIENTE',
+          estado: 'ACTIVO',
+        });
       let value = 'invalid';
       if (kind !== 'alterada') {
         const token = await app.get(JwtService).signAsync(
@@ -433,6 +450,12 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
   it.each(['CLIENTE', 'EMPRENDEDOR', 'REPARTIDOR'])(
     'RolesGuard rechaza sesión JWT válida de %s',
     async (rol) => {
+      users.findAuthenticationById.mockResolvedValue({
+        idUsuario: 7,
+        correo: 'user@example.test',
+        rol,
+        estado: 'ACTIVO',
+      });
       const token = await app
         .get(JwtService)
         .signAsync({ sub: 'user@example.test', idUsuario: 7, rol });

@@ -4,9 +4,9 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { AuthenticatedUser } from '../interfaces/authenticated-user.interface';
+import { CurrentIdentityService } from '../current-identity.service';
 
 type AuthenticatedRequest = Request & {
   user?: AuthenticatedUser;
@@ -14,7 +14,7 @@ type AuthenticatedRequest = Request & {
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(private readonly identities: CurrentIdentityService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
@@ -25,16 +25,8 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Token de acceso requerido.');
     }
 
-    try {
-      const payload: AuthenticatedUser =
-        await this.jwtService.verifyAsync(token);
-
-      request.user = payload;
-
-      return true;
-    } catch {
-      throw new UnauthorizedException('Token inválido o expirado.');
-    }
+    request.user = await this.identities.authenticate(token);
+    return true;
   }
 
   private extractToken(request: Request): string | undefined {
