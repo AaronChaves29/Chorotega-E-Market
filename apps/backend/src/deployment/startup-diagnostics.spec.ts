@@ -3,7 +3,7 @@ import { reportStartupFailure } from './startup-diagnostics';
 describe('Diagnósticos seguros de arranque', () => {
   let output: jest.SpyInstance;
   beforeEach(() => {
-    output = jest.spyOn(console, 'error').mockImplementation();
+    output = jest.spyOn(process.stdout, 'write').mockReturnValue(true);
   });
   afterEach(() => jest.restoreAllMocks());
   function line(): string {
@@ -14,9 +14,12 @@ describe('Diagnósticos seguros de arranque', () => {
     const error = new Error('La variable MONGODB_DATABASE es obligatoria.');
     error.stack = 'STACK_PRIVATE_MARKER';
     reportStartupFailure('validacion_variables', error);
-    expect(output).toHaveBeenCalledWith(
-      '[Startup] etapa=validacion_variables tipo=Error mensaje=La variable MONGODB_DATABASE es obligatoria.',
-    );
+    expect(JSON.parse(line())).toMatchObject({
+      event: 'startup_failure',
+      stage: 'validacion_variables',
+      type: 'Error',
+      message: 'La variable MONGODB_DATABASE es obligatoria.',
+    });
     expect(line()).not.toContain('STACK_PRIVATE_MARKER');
   });
   it('conserva el mensaje original conocido de TLS', () => {
@@ -37,7 +40,10 @@ describe('Diagnósticos seguros de arranque', () => {
       'migraciones_postgresql',
       new Error('Wrapper', { cause: original }),
     );
-    expect(line()).toContain('tipo=QueryFailedError codigo=42P07');
+    expect(JSON.parse(line())).toMatchObject({
+      type: 'QueryFailedError',
+      code: '42P07',
+    });
     expect(line()).toContain('Mensaje original omitido por seguridad.');
     expect(line()).not.toMatch(
       /SQL_PRIVATE|SQL_QUERY_PRIVATE|PARAMETER_PRIVATE/,
@@ -58,9 +64,12 @@ describe('Diagnósticos seguros de arranque', () => {
         'arranque_nestjs',
         Object.assign(new Error(message), { code: 'ENOTFOUND' }),
       );
-      expect(line()).toBe(
-        '[Startup] etapa=arranque_nestjs tipo=Error codigo=ENOTFOUND mensaje=Mensaje original omitido por seguridad.',
-      );
+      expect(JSON.parse(line())).toMatchObject({
+        stage: 'arranque_nestjs',
+        type: 'Error',
+        code: 'ENOTFOUND',
+        message: 'Mensaje original omitido por seguridad.',
+      });
     },
   );
   it('no permite filtrar secretos mediante nombre o código del error', () => {
@@ -81,9 +90,11 @@ describe('Diagnósticos seguros de arranque', () => {
     'no serializa valores lanzados que no sean Error: caso %#',
     (error: unknown) => {
       reportStartupFailure('arranque_nestjs', error);
-      expect(line()).toBe(
-        '[Startup] etapa=arranque_nestjs tipo=Error mensaje=Mensaje original omitido por seguridad.',
-      );
+      expect(JSON.parse(line())).toMatchObject({
+        stage: 'arranque_nestjs',
+        type: 'Error',
+        message: 'Mensaje original omitido por seguridad.',
+      });
     },
   );
   it('tolera causas cíclicas sin serializarlas', () => {

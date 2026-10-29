@@ -1,11 +1,11 @@
 import { validateEnvironment } from '../config/environment';
 import { migrate } from './migrate';
 import { reportStartupFailure, type StartupStage } from './startup-diagnostics';
+import { JsonLogger } from '../common/observability/json-logger';
 
 async function startNest(): Promise<void> {
   // AppModule se evalúa después de validar configuración y completar migraciones.
   const { NestFactory } = await import('@nestjs/core');
-  const { ConsoleLogger } = await import('@nestjs/common');
   const { AppModule } = await import('../app.module.js');
   const { startHttpServer } =
     await import('../common/http/start-http-server.js');
@@ -16,7 +16,9 @@ async function startNest(): Promise<void> {
     logger: false,
   });
   await startHttpServer(app);
-  app.useLogger(new ConsoleLogger());
+  const logger = new JsonLogger();
+  app.useLogger(logger);
+  logger.operational('backend_started');
 }
 
 export async function startRender(
@@ -38,9 +40,7 @@ export async function startRender(
 
 if (require.main === module) {
   void startRender().catch(() => {
-    console.error(
-      'No se inició el backend. Revise la configuración y el resultado de las migraciones.',
-    );
+    new JsonLogger().operational('startup_aborted', 'error');
     process.exitCode = 1;
   });
 }

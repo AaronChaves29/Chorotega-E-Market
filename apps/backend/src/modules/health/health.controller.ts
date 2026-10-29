@@ -1,8 +1,6 @@
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import {
-  ApiProblemResponses,
-  DatabaseHealthResponseDto,
-} from '../../common/http/openapi-contract';
+import { ApiProblemResponses } from '../../common/http/openapi-contract';
+import { DatabaseHealthResponseDto } from './dtos/database-health-response.dto';
 import { Controller, Get } from '@nestjs/common';
 import { HealthService } from './health.service';
 
@@ -12,7 +10,7 @@ export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 
   @ApiOperation({
-    summary: 'Consultar estado de PostgreSQL por ID',
+    summary: 'Consultar disponibilidad de PostgreSQL',
     description: 'Acceso público.',
   })
   @ApiResponse({

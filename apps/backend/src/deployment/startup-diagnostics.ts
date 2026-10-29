@@ -110,10 +110,27 @@ export function reportStartupFailure(
     'code' in error &&
     typeof error.code === 'string' &&
     safeCodes.has(error.code)
-      ? ` codigo=${error.code}`
-      : '';
-  // Nunca pasar el objeto Error a console/Nest: se serializa solo esta línea.
-  console.error(
-    `[Startup] etapa=${stage} tipo=${type}${code} mensaje=${message}`,
+      ? error.code
+      : undefined;
+  // Preserve existing allowlists. Never serialize the original Error/cause.
+  const allowedStage = [
+    'validacion_variables',
+    'migraciones_postgresql',
+    'arranque_nestjs',
+  ].includes(stage)
+    ? stage
+    : 'arranque_nestjs';
+  process.stdout.write(
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      event: 'startup_failure',
+      context: 'Startup',
+      reason: 'initialization_failed',
+      stage: allowedStage,
+      type,
+      ...(code ? { code } : {}),
+      message,
+    }) + '\n',
   );
 }
