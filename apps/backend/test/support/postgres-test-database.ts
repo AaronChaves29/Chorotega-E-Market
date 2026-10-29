@@ -18,6 +18,7 @@ import { Product } from '../../src/modules/products/entities/product.entity';
 import { Store } from '../../src/modules/stores/entities/store.entity';
 import { User } from '../../src/modules/users/entities/user.entity';
 import { AddPasswordHashToUser1791352458237 } from '../../src/database/migrations/1791352458237-AddPasswordHashToUser';
+import { AddProductVersion1793296800000 } from '../../src/database/migrations/1793296800000-AddProductVersion';
 
 export interface PostgresTestDatabase {
   readonly dataSource: DataSource;
@@ -89,6 +90,7 @@ export async function startPostgresTestDatabase(): Promise<PostgresTestDatabase>
         CreateInitialSchema1788732000000,
         AlignTimestampDefaults1788998400000,
         AddPasswordHashToUser1791352458237,
+        AddProductVersion1793296800000,
       ],
       extra: { connectionTimeoutMillis: 10_000 },
     });

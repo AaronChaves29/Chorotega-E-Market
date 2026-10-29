@@ -11,6 +11,7 @@ import type {
 } from 'typeorm';
 import { TypeOrmBaseRepository } from '../../../common/repositories/typeorm-base.repository';
 import { Product } from '../entities/product.entity';
+import { ProductVersionConflictError } from '../exceptions/product-version-conflict.error';
 import type { ProductSpecification } from '../specifications/product.specification';
 import { ProductStoreSpecification } from '../specifications/product-store.specification';
 import { ActiveProductSpecification } from '../specifications/active-product.specification';
@@ -50,17 +51,6 @@ export class ProductsRepository extends TypeOrmBaseRepository<
     return this.repository.create(data);
   }
 
-  async updateById(
-    id: number,
-    data: Partial<NewProductData>,
-  ): Promise<Product | null> {
-    if (Object.keys(data).length > 0) {
-      const result = await this.repository.update(this.whereId(id), data);
-      if (!result.affected) return null;
-    }
-    return this.findById(id);
-  }
-
   // La tienda se vuelve a autorizar bajo bloqueo dentro de la transacción.
   async saveInAuthorizedStore(
     product: Product,
@@ -81,28 +71,66 @@ export class ProductsRepository extends TypeOrmBaseRepository<
     id: number,
     data: Partial<NewProductData>,
     actor: AuthenticatedUser,
+    expectedVersion: number,
   ): Promise<Product | null> {
-    if (Object.keys(data).length === 0) {
-      const query = this.repository
-        .createQueryBuilder('producto')
-        .where('producto.idProducto = :productId', { productId: id });
-      this.applyWriteOwnership(query, actor);
-      return query.getOne();
-    }
     const query = this.repository
       .createQueryBuilder()
       .update(Product)
-      .set(data)
-      .where('"id_producto" = :productId', { productId: id });
+      // Se incrementa incluso cuando el PATCH solo contiene la precondición.
+      .set({ ...data, version: () => '"version" + 1' })
+      .where('"id_producto" = :productId', { productId: id })
+      .andWhere('"version" = :expectedVersion', { expectedVersion });
     this.applyWriteOwnership(query, actor);
-    if (actor.rol === 'EMPRENDEDOR' && data.idTienda !== undefined) {
+    this.applyDestinationOwnership(query, data, actor);
+    const result = await query.returning('*').execute();
+    if (!result.affected) {
+      // No se revela un conflicto para un producto o destino no autorizado.
+      const visible = this.repository
+        .createQueryBuilder('producto')
+        .where('producto.idProducto = :productId', { productId: id });
+      this.applyWriteOwnership(visible, actor);
+      this.applyDestinationOwnership(visible, data, actor);
+      if (!(await visible.getOne())) return null;
+      throw new ProductVersionConflictError();
+    }
+    // RETURNING pertenece al mismo UPDATE: no hay otra lectura que pueda devolver
+    // datos de una escritura posterior o de un traslado a una tienda ajena.
+    const [row] = result.raw as {
+      id_producto: number;
+      version: number;
+      id_tienda: number;
+      id_categoria: number;
+      nombre: string;
+      descripcion: string | null;
+      precio: string;
+      cantidad_disponible: number;
+      estado: string;
+      fecha_publicacion: Date;
+    }[];
+    return this.repository.create({
+      idProducto: row.id_producto,
+      version: row.version,
+      idTienda: row.id_tienda,
+      idCategoria: row.id_categoria,
+      nombre: row.nombre,
+      descripcion: row.descripcion,
+      precio: row.precio,
+      cantidadDisponible: row.cantidad_disponible,
+      estado: row.estado,
+      fechaPublicacion: row.fecha_publicacion,
+    });
+  }
+
+  private applyDestinationOwnership(
+    query: SelectQueryBuilder<Product> | UpdateQueryBuilder<Product>,
+    data: Partial<NewProductData>,
+    actor: AuthenticatedUser,
+  ): void {
+    if (actor.rol === 'EMPRENDEDOR' && data.idTienda !== undefined)
       query.andWhere(
         'EXISTS (SELECT 1 FROM "tienda" "destino" WHERE "destino"."id_tienda" = :destinationStoreId AND "destino"."id_emprendedor" = :scopeUserId)',
         { destinationStoreId: data.idTienda },
       );
-    }
-    const result = await query.execute();
-    return result.affected ? this.findById(id) : null;
   }
 
   async deleteForActor(id: number, actor: AuthenticatedUser): Promise<boolean> {

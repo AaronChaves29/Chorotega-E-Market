@@ -70,7 +70,7 @@ for (const resource of ['stores', 'categories', 'products']) {
   add(
     'patch',
     resource + '/{id}',
-    resource === 'categories'
+    resource !== 'stores'
       ? [200, 400, 401, 403, 404, 409, 500]
       : [200, 400, 401, 403, 404, 500],
     true,
@@ -424,13 +424,12 @@ describe('OpenAPI HTTP: contrato generado de las 36 operaciones', () => {
   });
   it('documenta PATCH parcial, campos nullable y contraseña writeOnly', () => {
     const models = document.components?.schemas ?? {};
-    for (const name of [
-      'UpdateUserDto',
-      'UpdateStoreDto',
-      'UpdateCategoryDto',
-      'UpdateProductDto',
-    ])
+    for (const name of ['UpdateUserDto', 'UpdateStoreDto', 'UpdateCategoryDto'])
       expect(schema(models[name]).required ?? []).toEqual([]);
+    expect(schema(models.UpdateProductDto).required).toEqual(['version']);
+    expect(
+      schema(schema(models.UpdateProductDto).properties?.version),
+    ).toMatchObject({ type: 'integer', minimum: 1 });
     expect(
       schema(schema(models.UpdateUserDto).properties?.telefono).nullable,
     ).toBe(true);

@@ -10,6 +10,7 @@ import { createDatabaseOptions } from './database.options';
 import { CreateInitialSchema1788732000000 } from './migrations/1788732000000-CreateInitialSchema';
 import { AlignTimestampDefaults1788998400000 } from './migrations/1788998400000-AlignTimestampDefaults';
 import { AddPasswordHashToUser1791352458237 } from './migrations/1791352458237-AddPasswordHashToUser';
+import { AddProductVersion1793296800000 } from './migrations/1793296800000-AddProductVersion';
 
 // Compartida por todos los arranques y comandos de migración de este backend.
 export const MIGRATION_LOCK = [509, 6001] as const;
@@ -46,6 +47,7 @@ export function createProductionMigrationDataSource(
       CreateInitialSchema1788732000000,
       AlignTimestampDefaults1788998400000,
       AddPasswordHashToUser1791352458237,
+      AddProductVersion1793296800000,
     ],
     logger: migrationLogger,
     logging: false,
