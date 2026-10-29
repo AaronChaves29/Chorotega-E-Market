@@ -21,6 +21,7 @@ export class AdminExceptionFilter implements ExceptionFilter<unknown> {
       404: 'El recurso no existe.',
       409: 'No se pudo completar la operación por un conflicto.',
       422: 'No se cumplen las condiciones para realizar la operación.',
+      429: 'Demasiadas solicitudes. Inténtelo más tarde.',
     };
     response.status(status).render('error', {
       status,

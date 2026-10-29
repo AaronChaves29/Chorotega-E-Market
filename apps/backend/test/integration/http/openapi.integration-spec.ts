@@ -52,8 +52,8 @@ function add(
     protected: protectedRoute,
   });
 }
-add('post', 'auth/login', [201, 400, 401, 500]);
-add('post', 'auth/register', [201, 400, 409, 500]);
+add('post', 'auth/login', [201, 400, 401, 429, 500]);
+add('post', 'auth/register', [201, 400, 409, 429, 500]);
 for (const resource of ['stores', 'categories', 'products']) {
   add('get', resource, [200, 400, 500]);
   add('get', resource + '/{id}', [200, 400, 404, 500]);

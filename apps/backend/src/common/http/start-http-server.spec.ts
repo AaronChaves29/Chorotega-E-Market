@@ -112,7 +112,9 @@ describe('Arranque HTTP con configuración validada, sin bases de datos', () => 
     expect(response.headers['access-control-allow-origin']).toBe(
       'https://frontend.example.test',
     );
-    expect(response.headers['access-control-expose-headers']).toBe('Location');
+    expect(response.headers['access-control-expose-headers']).toBe(
+      'Location,Retry-After',
+    );
     expect(response.headers.location).toBe('/api/v1/configuration-probe');
     expect(
       response.headers['access-control-allow-credentials'],

@@ -23,7 +23,7 @@ export function configureHttp(
       },
       methods: ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Authorization', 'Content-Type'],
-      exposedHeaders: ['Location'],
+      exposedHeaders: ['Location', 'Retry-After'],
       credentials: false,
     });
   }

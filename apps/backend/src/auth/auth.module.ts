@@ -7,9 +7,11 @@ import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { CurrentIdentityService } from './current-identity.service';
+import { AuthRateLimitModule } from './rate-limit/auth-rate-limit.module';
 
 @Module({
   imports: [
+    AuthRateLimitModule,
     UsersModule,
     ConfigModule,
     JwtModule.registerAsync({
@@ -26,6 +28,7 @@ import { CurrentIdentityService } from './current-identity.service';
   controllers: [AuthController],
   providers: [AuthService, CurrentIdentityService, JwtAuthGuard, RolesGuard],
   exports: [
+    AuthRateLimitModule,
     AuthService,
     CurrentIdentityService,
     JwtModule,

@@ -8,6 +8,9 @@ import request from 'supertest';
 import type { App } from 'supertest/types';
 import { AuthService } from '../auth/auth.service';
 import { CurrentIdentityService } from '../auth/current-identity.service';
+import { AuthRateLimitModule } from '../auth/rate-limit/auth-rate-limit.module';
+import { AUTH_RATE_LIMIT_OPTIONS } from '../auth/rate-limit/auth-rate-limit.config';
+import { regressionAuthRateLimits } from '../../test/support/auth-rate-limit-test-options';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { UsersRepository } from '../modules/users/repositories/users.repository';
 import { ProductsService } from '../modules/products/products.service';
@@ -40,6 +43,7 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
     hash = await bcrypt.hash(password, 4);
     const module = await Test.createTestingModule({
       imports: [
+        AuthRateLimitModule,
         ConfigModule.forRoot({
           ignoreEnvFile: true,
           ignoreEnvVars: true,
@@ -60,7 +64,10 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
         { provide: ProductsService, useValue: products },
         { provide: StoresService, useValue: stores },
       ],
-    }).compile();
+    })
+      .overrideProvider(AUTH_RATE_LIMIT_OPTIONS)
+      .useValue(regressionAuthRateLimits())
+      .compile();
     app = module.createNestApplication<INestApplication<App>>();
     configureAdminViews(app);
     configureHttp(app);

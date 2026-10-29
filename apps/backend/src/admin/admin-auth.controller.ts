@@ -12,6 +12,10 @@ import {
 import { ApiExcludeController } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AuthService } from '../auth/auth.service';
+import {
+  AuthRateLimitGuard,
+  LimitAuthOperation,
+} from '../auth/rate-limit/auth-rate-limit.guard';
 import { LoginDto } from '../auth/dto/login.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -51,7 +55,8 @@ export class AdminAuthController {
   }
 
   @Post('login')
-  @UseGuards(AdminCsrfGuard)
+  @LimitAuthOperation('adminLogin')
+  @UseGuards(AuthRateLimitGuard, AdminCsrfGuard)
   async login(
     @Body() body: Record<string, unknown>,
     @Req() request: Request,
