@@ -1,14 +1,16 @@
 # S2 — Logger JSON y health seguro
 
-Estado: primera parte implementada y revisada localmente; eventos de seguridad pendientes.
+Estado: base JSON/health implementada; S2.3 añade los tres eventos descritos abajo.
 No se ejecutó ningún despliegue ni se modificaron proveedores o Secrets.
 
 ## Base y coordinación con Aarón
 
 Rama `feat/lab-07-observability`, desde origin/develop `fef25b3` tras fetch.
-La base incluye #96 (rate limiting). Sus archivos AuthService, JWT/roles/rate-limit
+La base de la primera parte incluye #96 (rate limiting). En esa primera parte,
+los archivos AuthService, JWT/roles/rate-limit
 guards, controladores de autenticación, filtros MVC, configuración HTTP compartida
-y pruebas de seguridad se conservan intactos.
+y pruebas de seguridad se conservaron intactos. S2.3 documenta más abajo los
+archivos compartidos que ahora reciben instrumentación mínima.
 
 Conflicto identificado antes de implementar: `common/http/openapi-contract.ts`
 fue modificado recientemente por Aarón. No se edita. El controlador health ahora
@@ -100,12 +102,93 @@ igual que el arranque productivo. Las 17 pruebas simuladas de scripts/ci tambié
 aprobaron, sin desplegar ni modificar ese script. Las pruebas y cobertura anteriores
 de 515/8 quedan reemplazadas por los resultados finales de 516/9.
 
-## Pendiente de S2
+## S2.3 — Eventos de seguridad
 
-No implementados: login_failed, access_denied, concurrency_conflict, correlación
-de solicitudes ni métricas. Coordinar puntos de registro con Aarón para cubrir
-REST/MVC sin duplicar eventos ni cambiar autenticación/autorización. Un 409 no
-identifica por sí solo concurrencia. No se modifica el workflow ni su false.
+Rama `feat/lab-07-security-events`, desde origin/develop `9518a8d` tras fetch.
+Se comprobaron los PR #96, #97 y #98 integrados. No existían estos eventos en la
+base; no se duplica instrumentación anterior.
+
+Antes de editar se identificaron y explicaron los puntos compartidos de Aarón:
+AuthService, filtros REST/MVC y ProductsRepository. Los cambios en esos archivos
+son imports y llamadas al JsonLogger antes de decisiones que ya existían. No se
+cambian SQL, bloqueo optimista, autorización, transacciones, rate limiting,
+respuestas HTTP ni emisión/verificación de JWT. Guards y controladores quedan intactos.
+
+Contrato: una línea JSON en stdout, timestamp ISO, level=warn y estos valores fijos:
+
+| event | context | reason |
+| --- | --- | --- |
+| login_failed | Authentication | credentials_rejected |
+| access_denied | Authorization | forbidden |
+| concurrency_conflict | ProductsRepository | optimistic_version_mismatch |
+
+No se agregan correo, identificadores personales, producto, versiones, Request,
+headers, cuerpos, JWT, cookies, direcciones, SQL, stacks o mensajes de excepciones.
+No hay entradas arbitrarias al contrato: JsonLogger usa su catálogo permitido.
+Los puntos instrumentados utilizan `security(event)`, que fija warn y aísla fallos
+síncronos de escritura. No reintenta ni imprime el error del destino, para conservar
+la excepción/respuesta original y evitar duplicados. Si falla el destino, el evento
+puede perderse: no es persistencia garantizada. Errores asíncronos del stream,
+terminación del proceso o fallos de recolección de Render no están garantizados por
+un try/catch; requieren supervisión de infraestructura y ensayo autorizado.
+
+Puntos y exclusiones:
+
+- AuthService.authenticateCredentials registra justo antes del 401 de credenciales
+  inválidas/cuenta inactiva. Es común a REST y loginAdmin; cubre el 401 que MVC
+  captura y transforma a HTML sin pasar por el filtro. No registra errores internos.
+- ProblemDetailsFilter y AdminExceptionFilter registran únicamente 403. Así
+  cubren RolesGuard, permisos de recursos, CORS y CSRF donde la respuesta sea 403,
+  sin instrumentar cada guard/servicio. Nest selecciona el filtro MVC o el global;
+  no se llama un filtro desde el otro. Ningún filtro vuelve a registrar el 401.
+- Login administrativo con credenciales válidas y rol insuficiente registra
+  access_denied (403), no login_failed. Los 429 previos por rate limiting y 400 de
+  validación no se etiquetan como credenciales comprobadas. No cambia la protección.
+- ProductsRepository registra solo cuando el UPDATE condicional por versión no
+  afecta filas Y se confirma visibilidad/propiedad antes de lanzar
+  ProductVersionConflictError. El servicio mantiene su traducción 409 sin otro log.
+  Los 409 por correo, FK, stock o reglas de estado NO se etiquetan como concurrencia.
+- Un 404 deliberadamente opaco no se convierte en evento de denegación: no permite
+  distinguir inexistencia de falta de visibilidad. Un 401 de JWT tampoco se
+  clasifica aquí como permisos insuficientes.
+
+Pruebas nuevas: HTTP real con AuthService/RolesGuard/filtro y persistencia simulada;
+401, 403 y 409 conservados; exactamente un evento JSON, secretos ausentes; otro
+409 sin evento; producto no visible conserva 404 sin revelar conflicto. La prueba
+optimista local usa el repositorio y servicio reales con respuestas del query
+builder simuladas; no demuestra concurrencia PostgreSQL real.
+
+Las pruebas MVC existentes ahora comprueban exactamente login_failed en el login
+rechazado y access_denied en los tres roles no ADMIN. La integración PostgreSQL
+existente de dos PATCH concurrentes conserva sus aserciones y agrega la exigencia
+de un solo concurrency_conflict. Requiere Docker; no se ha ejecutado localmente.
+
+Pendientes: correlación y métricas; validación de logs en Render y pruebas reales
+con PostgreSQL temporal. No se modifica el workflow ni su bloqueo false.
+
+Validación inicial S2.3 del 2 de noviembre de 2026: lint y build backend aprobados;
+Jest con cobertura: 529 tests aprobados en 43 archivos, cero fallidos/omitidos.
+El pase focalizado de eventos y MVC aprobó 43 tests en dos archivos (subconjunto,
+no sumar a 529). Cobertura de negocio: statements 97,50 %, branches 84,63 %,
+functions 92 % y lines 97,74 %; umbrales de 70 % intactos. El lint inicial detectó
+un mock async sin await: se corrigió a jest.fn().mockResolvedValue antes de la
+validación final. No se instalaron dependencias ni se ejecutaron despliegues.
+
+La consulta docker info no pudo conectar con el motor; integración/API con
+Testcontainers, especialmente product-optimistic-concurrency.integration-spec.ts,
+y navegador siguen pendientes. No se atribuye a la nueva instrumentación una
+prueba de conflicto PostgreSQL real aprobada. Los tests locales verifican JSON,
+secretos ausentes y conteo exacto para los recorridos instrumentados; no prueban
+todos los posibles puntos de denegación externos al backend.
+
+Revisión posterior antes de commit: se detectó que un stdout.write que lanzara
+excepción podía sustituir el error original. Se añadió security(event) con warn
+fijo y captura síncrona sin reintentos. Pruebas nuevas fuerzan ese fallo en
+REST 401/403/409 y MVC 403, conservando las respuestas y sin devolver el error del
+destino. Resultado ejecutado de esta revisión: 106 tests focalizados aprobados en
+seis archivos, cero fallidos/omitidos; lint y build aprobados y git diff --check
+correcto. Las 529 pruebas con cobertura corresponden al pase completo anterior,
+no a una nueva ejecución de toda la suite después de esta corrección.
 
 Las pruebas con mocks no demuestran disponibilidad de Supabase/Atlas ni logs en
 Render. El umbral existente de 70 % sigue aplicado a pedidos/entregas; no es la

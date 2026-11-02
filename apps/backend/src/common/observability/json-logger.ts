@@ -8,8 +8,15 @@ const operations = {
   },
   startup_aborted: { context: 'Startup', reason: 'startup_failed' },
   migrations_aborted: { context: 'Migrations', reason: 'migration_failed' },
+  login_failed: { context: 'Authentication', reason: 'credentials_rejected' },
+  access_denied: { context: 'Authorization', reason: 'forbidden' },
+  concurrency_conflict: {
+    context: 'ProductsRepository',
+    reason: 'optimistic_version_mismatch',
+  },
 } as const;
 type Operation = keyof typeof operations;
+type SecurityEvent = 'login_failed' | 'access_denied' | 'concurrency_conflict';
 const contexts = new Set([
   'Bootstrap',
   'NestFactory',
@@ -52,6 +59,15 @@ const errorCodes = new Set([
 export class JsonLogger extends ConsoleLogger {
   constructor() {
     super({ json: true, colors: false, compact: true });
+  }
+
+  security(event: SecurityEvent): void {
+    try {
+      this.operational(event, 'warn');
+    } catch {
+      // Best effort: a synchronous sink failure must never replace the original
+      // authentication/authorization/version exception. No retry or private error log.
+    }
   }
 
   operational(event: Operation, level: LogLevel = 'log', count?: number): void {

@@ -15,6 +15,7 @@ import { UserResponseDto } from '../modules/users/dtos/user-response.dto';
 import { LoginDto } from './dto/login.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
 import { RegisterDto } from './dto/register.dto';
+import { JsonLogger } from '../common/observability/json-logger';
 
 @Injectable()
 export class AuthService {
@@ -63,12 +64,14 @@ export class AuthService {
     const user = await this.usersRepository.findByEmail(dto.correo);
 
     if (!user || !user.claveHash) {
+      new JsonLogger().security('login_failed');
       throw new UnauthorizedException('Credenciales inválidas.');
     }
 
     const claveValida = await bcrypt.compare(dto.clave, user.claveHash);
 
     if (!claveValida || user.estado !== 'ACTIVO') {
+      new JsonLogger().security('login_failed');
       throw new UnauthorizedException('Credenciales inválidas.');
     }
 

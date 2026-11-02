@@ -202,19 +202,33 @@ describe('Productos: concurrencia optimista con HTTP y PostgreSQL real', () => {
   });
 
   it('dos PATCH concurrentes de la misma versión permiten exactamente una escritura', async () => {
-    const results = await Promise.all([
-      patch({ nombre: 'A', cantidadDisponible: 6, version: 1 }),
-      patch({ nombre: 'B', cantidadDisponible: 7, version: 1 }, 'EMPRENDEDOR'),
-    ]);
-    expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
-    const winner = results.find((r) => r.status === 200)!
-      .body as ProductResponseDto;
-    conflict(results.find((r) => r.status === 409)!);
-    expect(await current()).toMatchObject({
-      nombre: winner.nombre,
-      cantidadDisponible: winner.cantidadDisponible,
-      version: 2,
-    });
+    const output = jest.spyOn(process.stdout, 'write').mockReturnValue(true);
+    try {
+      const results = await Promise.all([
+        patch({ nombre: 'A', cantidadDisponible: 6, version: 1 }),
+        patch(
+          { nombre: 'B', cantidadDisponible: 7, version: 1 },
+          'EMPRENDEDOR',
+        ),
+      ]);
+      expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+      const winner = results.find((r) => r.status === 200)!
+        .body as ProductResponseDto;
+      conflict(results.find((r) => r.status === 409)!);
+      expect(await current()).toMatchObject({
+        nombre: winner.nombre,
+        cantidadDisponible: winner.cantidadDisponible,
+        version: 2,
+      });
+      const records = output.mock.calls.map(
+        ([chunk]) => JSON.parse(String(chunk)) as { event: string },
+      );
+      expect(
+        records.filter((record) => record.event === 'concurrency_conflict'),
+      ).toHaveLength(1);
+    } finally {
+      output.mockRestore();
+    }
   });
 
   it.each([undefined, null, 0, -1, 1.5, '1', 2147483648])(
