@@ -5,12 +5,14 @@ import {
   HttpException,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { JsonLogger } from '../common/observability/json-logger';
 
 @Catch()
 export class AdminExceptionFilter implements ExceptionFilter<unknown> {
   catch(error: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
     const status = error instanceof HttpException ? error.getStatus() : 500;
+    if (status === 403) new JsonLogger().security('access_denied');
     if (status === 401) {
       response.redirect(303, '/admin/login');
       return;

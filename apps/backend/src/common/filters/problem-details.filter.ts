@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { toProblemDetails } from '../http/problem-details';
+import { JsonLogger } from '../observability/json-logger';
 
 @Catch()
 export class ProblemDetailsFilter implements ExceptionFilter<unknown> {
@@ -14,6 +15,7 @@ export class ProblemDetailsFilter implements ExceptionFilter<unknown> {
     const response = http.getResponse<Response>();
     // Se omiten parámetros de consulta que podrían contener datos sensibles.
     const problem = toProblemDetails(error, request.path);
+    if (problem.status === 403) new JsonLogger().security('access_denied');
     response
       .status(problem.status)
       .type('application/problem+json')

@@ -12,6 +12,7 @@ import type {
 import { TypeOrmBaseRepository } from '../../../common/repositories/typeorm-base.repository';
 import { Product } from '../entities/product.entity';
 import { ProductVersionConflictError } from '../exceptions/product-version-conflict.error';
+import { JsonLogger } from '../../../common/observability/json-logger';
 import type { ProductSpecification } from '../specifications/product.specification';
 import { ProductStoreSpecification } from '../specifications/product-store.specification';
 import { ActiveProductSpecification } from '../specifications/active-product.specification';
@@ -91,6 +92,7 @@ export class ProductsRepository extends TypeOrmBaseRepository<
       this.applyWriteOwnership(visible, actor);
       this.applyDestinationOwnership(visible, data, actor);
       if (!(await visible.getOne())) return null;
+      new JsonLogger().security('concurrency_conflict');
       throw new ProductVersionConflictError();
     }
     // RETURNING pertenece al mismo UPDATE: no hay otra lectura que pueda devolver
