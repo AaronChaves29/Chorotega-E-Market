@@ -122,6 +122,10 @@ describe('DeliveriesService', () => {
     );
   });
 
+  afterEach(() => {
+    expect(couriersRepository.findByUserId.mock.calls).toHaveLength(0);
+  });
+
   describe('assignDelivery', () => {
     it.each([
       ['pedido como texto', { idPedido: '1', idRepartidor: 1 }],
@@ -444,7 +448,7 @@ describe('DeliveriesService', () => {
       transactionalDeliveriesRepository.findOne.mockResolvedValue(delivery);
       transactionalOrdersRepository.findOne.mockResolvedValue(order);
 
-      couriersRepository.findByUserId.mockResolvedValue(courier);
+      transactionalCouriersRepository.findOne.mockResolvedValue(courier);
 
       transactionalDeliveriesRepository.save.mockImplementation((value) =>
         Promise.resolve(value as Delivery),
@@ -460,7 +464,10 @@ describe('DeliveriesService', () => {
       expect(delivery.estado).toBe('EN_CAMINO');
       expect(order.estado).toBe('EN_CAMINO');
 
-      expect(couriersRepository.findByUserId.mock.calls).toEqual([[idUsuario]]);
+      expect(couriersRepository.findByUserId.mock.calls).toHaveLength(0);
+      expect(transactionalCouriersRepository.findOne.mock.calls[0]).toEqual([
+        { where: { idUsuario } },
+      ]);
 
       expect(dataSource.transaction.mock.calls).toHaveLength(1);
 
@@ -490,7 +497,7 @@ describe('DeliveriesService', () => {
       } as Courier;
 
       transactionalDeliveriesRepository.findOne.mockResolvedValue(delivery);
-      couriersRepository.findByUserId.mockResolvedValue(courier);
+      transactionalCouriersRepository.findOne.mockResolvedValue(courier);
 
       await expect(service.startDelivery(1, idUsuario)).rejects.toBeInstanceOf(
         InvalidDeliveryStateException,
@@ -511,7 +518,9 @@ describe('DeliveriesService', () => {
       } as Courier;
 
       transactionalDeliveriesRepository.findOne.mockResolvedValue(delivery);
-      couriersRepository.findByUserId.mockResolvedValue(authenticatedCourier);
+      transactionalCouriersRepository.findOne.mockResolvedValue(
+        authenticatedCourier,
+      );
 
       await expect(service.startDelivery(1, idUsuario)).rejects.toBeInstanceOf(
         DeliveryAccessDeniedException,
@@ -531,7 +540,7 @@ describe('DeliveriesService', () => {
       } as Delivery;
 
       transactionalDeliveriesRepository.findOne.mockResolvedValue(delivery);
-      couriersRepository.findByUserId.mockResolvedValue(null);
+      transactionalCouriersRepository.findOne.mockResolvedValue(null);
 
       await expect(service.startDelivery(1, idUsuario)).rejects.toBeInstanceOf(
         DeliveryAccessDeniedException,
@@ -582,7 +591,7 @@ describe('DeliveriesService', () => {
       transactionalOrdersRepository.findOne.mockResolvedValue(order);
       transactionalCouriersRepository.findOne.mockResolvedValue(courier);
 
-      couriersRepository.findByUserId.mockResolvedValue(courier);
+      transactionalCouriersRepository.findOne.mockResolvedValue(courier);
 
       transactionalDeliveriesRepository.save.mockImplementation((value) =>
         Promise.resolve(value as Delivery),
@@ -604,7 +613,10 @@ describe('DeliveriesService', () => {
       expect(order.estado).toBe('ENTREGADO');
       expect(courier.disponibilidad).toBe('DISPONIBLE');
 
-      expect(couriersRepository.findByUserId.mock.calls).toEqual([[idUsuario]]);
+      expect(couriersRepository.findByUserId.mock.calls).toHaveLength(0);
+      expect(transactionalCouriersRepository.findOne.mock.calls[0]).toEqual([
+        { where: { idUsuario } },
+      ]);
 
       expect(dataSource.transaction.mock.calls).toHaveLength(1);
 
@@ -639,7 +651,7 @@ describe('DeliveriesService', () => {
       } as Courier;
 
       transactionalDeliveriesRepository.findOne.mockResolvedValue(delivery);
-      couriersRepository.findByUserId.mockResolvedValue(courier);
+      transactionalCouriersRepository.findOne.mockResolvedValue(courier);
 
       await expect(
         service.completeDelivery(1, idUsuario),
@@ -672,9 +684,9 @@ describe('DeliveriesService', () => {
       transactionalDeliveriesRepository.findOne.mockResolvedValue(delivery);
       transactionalOrdersRepository.findOne.mockResolvedValue(order);
 
-      couriersRepository.findByUserId.mockResolvedValue(authenticatedCourier);
-
-      transactionalCouriersRepository.findOne.mockResolvedValue(null);
+      transactionalCouriersRepository.findOne
+        .mockResolvedValueOnce(authenticatedCourier)
+        .mockResolvedValueOnce(null);
 
       await expect(
         service.completeDelivery(1, idUsuario),
@@ -700,7 +712,9 @@ describe('DeliveriesService', () => {
       } as Courier;
 
       transactionalDeliveriesRepository.findOne.mockResolvedValue(delivery);
-      couriersRepository.findByUserId.mockResolvedValue(authenticatedCourier);
+      transactionalCouriersRepository.findOne.mockResolvedValue(
+        authenticatedCourier,
+      );
 
       await expect(
         service.completeDelivery(1, idUsuario),
@@ -720,7 +734,7 @@ describe('DeliveriesService', () => {
       } as Delivery;
 
       transactionalDeliveriesRepository.findOne.mockResolvedValue(delivery);
-      couriersRepository.findByUserId.mockResolvedValue(null);
+      transactionalCouriersRepository.findOne.mockResolvedValue(null);
 
       await expect(
         service.completeDelivery(1, idUsuario),

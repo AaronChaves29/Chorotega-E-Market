@@ -20,7 +20,7 @@ import { orderReadyForDelivery } from '../domain/delivery-assignment.specificati
 import { Neighborhood } from '../../neighborhoods/entities/neighborhood.entity';
 import { NeighborhoodNotFoundException } from '../exceptions/neighborhood-not-found.exception';
 import { InactiveNeighborhoodException } from '../exceptions/inactive-neighborhood.exception';
-import { DataSource } from 'typeorm';
+import { DataSource, type EntityManager } from 'typeorm';
 import { Order } from '../../orders/entities/order.entity';
 import { Courier } from '../../couriers/entities/courier.entity';
 import { DeliverySearchFilters } from '../interfaces/delivery-search-filters.interface';
@@ -120,7 +120,7 @@ export class DeliveriesService {
         throw new DeliveryNotFoundException(idEntrega);
       }
 
-      await this.assertCourierOwnsDelivery(delivery, idUsuario);
+      await this.assertCourierOwnsDelivery(delivery, idUsuario, manager);
 
       if (delivery.estado !== 'ASIGNADA') {
         throw new InvalidDeliveryStateException(delivery.estado, 'ASIGNADA');
@@ -165,7 +165,7 @@ export class DeliveriesService {
         throw new DeliveryNotFoundException(idEntrega);
       }
 
-      await this.assertCourierOwnsDelivery(delivery, idUsuario);
+      await this.assertCourierOwnsDelivery(delivery, idUsuario, manager);
 
       if (delivery.estado !== 'EN_CAMINO') {
         throw new InvalidDeliveryStateException(delivery.estado, 'EN_CAMINO');
@@ -306,8 +306,11 @@ export class DeliveriesService {
   private async assertCourierOwnsDelivery(
     delivery: Delivery,
     idUsuario: number,
+    manager: EntityManager,
   ): Promise<void> {
-    const courier = await this.couriersRepository.findByUserId(idUsuario);
+    const courier = await new CouriersRepository(
+      manager.getRepository(Courier),
+    ).findByUserId(idUsuario);
 
     if (!courier || courier.idRepartidor !== delivery.idRepartidor) {
       throw new DeliveryAccessDeniedException();
