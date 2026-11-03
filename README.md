@@ -51,7 +51,7 @@ Supabase aloja PostgreSQL. La autenticación implementada se realiza en NestJS; 
 - JWT firmado y emitido por NestJS; roles tomados del usuario persistido.
 - Cookie HttpOnly en el frontend y sesión cifrada con CSRF en el panel MVC.
 
-Supabase Auth y Google OAuth figuran como decisiones previstas en el [ADR-001 histórico](docs/adr/ADR-001-Seleccion-Stack-Tecnologico.md), pero no están implementados en el flujo actual. No existe registro público ni un endpoint para autoasignarse ADMIN.
+Supabase Auth y Google OAuth figuran como decisiones previstas en el [ADR-001 histórico](docs/adr/ADR-001-Seleccion-Stack-Tecnologico.md), pero no están implementados en el flujo actual. El registro público crea únicamente cuentas CLIENTE; no existe un endpoint para autoasignarse ADMIN.
 
 ### Herramientas
 
@@ -386,7 +386,7 @@ Con el backend en ejecución en el puerto 3000:
 
 - Swagger UI: <http://localhost:3000/docs>.
 - Especificación JSON: <http://localhost:3000/docs-json>.
-- Colección de las 35 operaciones: [api.http](docs/laboratory/lab-05/api.http).
+- Colección de las 36 operaciones actuales: [api.http](docs/laboratory/lab-05/api.http).
 
 Los endpoints protegidos permiten utilizar **Authorize** con un JWT obtenido
 mediante `/api/v1/auth/login`. La documentación refleja los permisos actuales;
@@ -417,7 +417,7 @@ El backend incorpora vistas Handlebars en `/admin/login`, `/admin/products` y `/
 
 En desarrollo utilizar `npm run start:dev`. Después del build de producción, `npm run start` y `npm run start:render` ejecutan el mismo arranque compilado con validación y migraciones previas a HTTP. No se crean cuentas ni datos de ejemplo automáticamente.
 
-Consultar [el flujo MVC, seguridad, pruebas y verificación en Render](docs/laboratory/lab-06/admin-mvc.md). La API REST y su documento OpenAPI conservan sus 35 operaciones. La regresión de formularios con Chrome/Chromium y PostgreSQL temporal se ejecuta con `npm run test:browser`, después del build y con Docker disponible.
+Consultar [el flujo MVC, seguridad, pruebas y verificación en Render](docs/laboratory/lab-06/admin-mvc.md). Las rutas MVC son independientes de las 36 operaciones REST actuales documentadas en OpenAPI, incluido el registro público de clientes. La regresión de formularios con Chrome/Chromium y PostgreSQL temporal se ejecuta con `npm run test:browser`, después del build y con Docker disponible.
 
 ### Frontend — SPA en React y Next.js
 
@@ -505,11 +505,35 @@ Los casos y la evidencia se describen en
 [Pruebas de integración del catálogo](docs/laboratory/lab-03/catalog-integration-tests.md)
 y [Validación final del Laboratorio 3](docs/laboratory/lab-03/validacion-final.md).
 
+## Seguridad y concurrencia — Laboratorio 7
+
+La edición de productos utiliza bloqueo optimista porque dos administradores o
+una edición de existencias y una compra pueden modificar el mismo inventario.
+Cada producto expone `version`; PATCH `/api/v1/products/:id` exige la versión leída
+y condiciona la escritura atómica por ID, propiedad y versión esperada,
+incrementando la versión al guardar.
+Una versión desactualizada devuelve HTTP 409 con Problem Details para recargar
+y conciliar los cambios, en lugar de sobrescribirlos silenciosamente.
+
+Las compras mantienen bloqueos pesimistas sobre productos, adquiridos en orden
+por ID dentro de la transacción de pedidos: descuento de inventario, detalles y
+confirmación deben completarse o revertirse juntos. Estas escrituras incrementan
+también la versión, por lo que una edición antigua no repone existencias vendidas.
+La migración `1793296800000-AddProductVersion` debe aplicarse antes de utilizar
+el backend y el contrato nuevos; no se ha verificado su aplicación productiva en
+el cierre documental.
+
+Consultar la [auditoría final de seguridad](AUDITORIA-SEGURIDAD.md) y el
+[diseño y pruebas de concurrencia](docs/laboratory/lab-07/concurrencia-optimista.md).
+Los bloques 1–5 están integrados en `develop`; al 3 de noviembre no están en
+`main`, y el despliegue automático continúa deshabilitado. Los resultados del
+Lab 6 que siguen son históricos, no evidencia de publicación del Lab 7.
+
 ## Integración continua
 
 GitHub Actions ejecuta jobs independientes para backend y frontend.
 
-El [CI aprobado de producción](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/39828366237), correspondiente a `main` en `d45b97cf0caae338a86a8dc6c393573759308d47`, verificó 455 unitarias, 565 integraciones, ocho pruebas del artefacto y nueve escenarios de Chrome. Los resultados y sus límites se detallan en [la entrega del Lab 6](docs/laboratory/lab-06/entrega-final.md).
+El [CI histórico aprobado del Lab 6](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/39828366237), correspondiente a `main` en `d45b97cf0caae338a86a8dc6c393573759308d47`, verificó 455 unitarias, 565 integraciones, ocho pruebas del artefacto y nueve escenarios de Chrome. Los resultados y sus límites se detallan en [la entrega del Lab 6](docs/laboratory/lab-06/entrega-final.md).
 
 El job del backend:
 
