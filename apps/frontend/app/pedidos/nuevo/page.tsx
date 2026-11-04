@@ -12,23 +12,23 @@ export default async function NewOrderPage() {
   }
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <Link
-        href="/pedidos"
-        className="text-sm text-blue-600 hover:underline"
-      >
-        ← Volver a mis pedidos
-      </Link>
+    <main className="create-order-page">
+      <div className="create-order-page-inner">
+        <Link href="/pedidos" className="create-order-back">
+          <span aria-hidden="true">←</span> Volver a mis pedidos
+        </Link>
 
-      <h1 className="mt-6 text-3xl font-bold">
-        Crear nuevo pedido
-      </h1>
+        <header className="create-order-header">
+          <p className="create-order-eyebrow">CHOROTEGA E-MARKET</p>
+          <h1>Crear nuevo pedido</h1>
+          <p>
+            Elegí una tienda, seleccioná tus productos e indicá dónde recibir
+            tu pedido.
+          </p>
+        </header>
 
-      <p className="mt-2 text-gray-600">
-        Seleccioná una tienda, elegí los productos que necesitás
-        e indicá dónde querés recibir tu pedido.
-      </p>
-      <CreateOrderForm />
+        <CreateOrderForm />
+      </div>
     </main>
   );
 }

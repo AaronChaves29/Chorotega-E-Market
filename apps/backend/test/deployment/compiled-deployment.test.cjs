@@ -69,22 +69,37 @@ for (const entry of ['migrate', 'start-render']) {
       },
     );
     assert.equal(result.status, 1);
-    assert.equal(result.stdout, '');
-    assert.match(result.stderr, /No se inició|Migraciones no completadas/);
+    assert.equal(result.stderr, '');
+    const records = result.stdout
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    const diagnostic = records.find(
+      (record) => record.event === 'startup_failure',
+    );
+    assert.equal(
+      diagnostic.stage,
+      entry === 'migrate' ? 'migraciones_postgresql' : 'validacion_variables',
+    );
+    assert.equal(diagnostic.type, 'Error');
     assert.match(
-      result.stderr,
-      new RegExp(
-        `etapa=${entry === 'migrate' ? 'migraciones_postgresql' : 'validacion_variables'} tipo=Error mensaje=La variable(?: de entorno)? DATABASE_URL`,
+      diagnostic.message,
+      /La variable(?: de entorno)? DATABASE_URL/,
+    );
+    assert(
+      records.every(
+        (record) =>
+          record.timestamp && record.level && record.context && record.reason,
       ),
     );
     assert.doesNotMatch(
-      result.stderr,
+      result.stdout + result.stderr,
       /postgres(?:ql)?:\/\/|mongodb(?:\+srv)?:\/\/|\n\s+at /,
     );
   });
 }
 
-test('el artefacto carga tres migraciones JS y sus nueve entidades sin herramientas de desarrollo', () => {
+test('el artefacto carga cuatro migraciones JS y sus nueve entidades sin herramientas de desarrollo', () => {
   const result = spawnSync(
     process.execPath,
     [
@@ -97,7 +112,7 @@ test('el artefacto carga tres migraciones JS y sus nueve entidades sin herramien
       await source.buildMetadatas();
       assert.equal(source.isInitialized, false);
       assert.equal(source.entityMetadatas.length, 9);
-      assert.equal(source.migrations.length, 3);
+      assert.equal(source.migrations.length, 4);
       assert.equal(source.options.synchronize, false);
       assert.equal(source.options.migrationsRun, false);
       assert.equal(source.options.ssl.rejectUnauthorized, true);
@@ -154,12 +169,22 @@ for (const entry of ['migrate', 'start-render']) {
         },
       );
       assert.equal(result.status, 1, result.stderr);
-      assert.match(
-        result.stderr,
-        /etapa=migraciones_postgresql tipo=Error codigo=ENOTFOUND/,
+      assert.equal(result.stderr, '');
+      const records = result.stdout
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+      assert(
+        records.some(
+          (record) =>
+            record.event === 'startup_failure' &&
+            record.stage === 'migraciones_postgresql' &&
+            record.type === 'Error' &&
+            record.code === 'ENOTFOUND',
+        ),
       );
       assert.doesNotMatch(
-        result.stderr,
+        result.stdout + result.stderr,
         /password-private-marker|postgresql:\/\/|\n\s+at /,
       );
     } finally {
@@ -168,13 +193,16 @@ for (const entry of ['migrate', 'start-render']) {
   });
 }
 
-test('Nest real falla en un proveedor sin imprimir el error privado antes del diagnóstico', () => {
-  const directory = mkdtempSync(resolve(tmpdir(), 'chorotega-startup-probe-'));
-  try {
-    const preload = resolve(directory, 'preload.cjs');
-    writeFileSync(
-      preload,
-      `
+for (const entry of ['deployment/start-render', 'main']) {
+  test(`${entry}: Nest real falla en un proveedor sin imprimir el error privado antes del diagnóstico`, () => {
+    const directory = mkdtempSync(
+      resolve(tmpdir(), 'chorotega-startup-probe-'),
+    );
+    try {
+      const preload = resolve(directory, 'preload.cjs');
+      writeFileSync(
+        preload,
+        `
       const migrations = require(${JSON.stringify(resolve(root, 'dist/database/production-migrations.js'))});
       migrations.runProductionMigrations = async () => 0;
       const { AppModule } = require(${JSON.stringify(resolve(root, 'dist/app.module.js'))});
@@ -184,27 +212,38 @@ test('Nest real falla en un proveedor sin imprimir el error privado antes del di
         throw Object.assign(new Error('mongodb+srv://user:password-private-marker@host/db -----BEGIN CERTIFICATE----- certificate-private-marker'), {name:'MongoServerSelectionError',code:'ENOTFOUND'});
       }}], AppModule);
     `,
-    );
-    const result = spawnSync(
-      process.execPath,
-      ['--require', preload, 'dist/deployment/start-render.js'],
-      {
-        cwd: root,
-        env: productionEnvironment(),
-        encoding: 'utf8',
-        timeout: 10_000,
-      },
-    );
-    assert.equal(result.status, 1, result.stderr);
-    assert.match(
-      result.stderr,
-      /etapa=arranque_nestjs tipo=MongoServerSelectionError codigo=ENOTFOUND/,
-    );
-    assert.doesNotMatch(
-      result.stdout + result.stderr,
-      /password-private-marker|certificate-private-marker|mongodb\+srv:\/\/|BEGIN CERTIFICATE|\n\s+at /,
-    );
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
-});
+      );
+      const result = spawnSync(
+        process.execPath,
+        ['--require', preload, `dist/${entry}.js`],
+        {
+          cwd: root,
+          env: productionEnvironment(),
+          encoding: 'utf8',
+          timeout: 10_000,
+        },
+      );
+      assert.equal(result.status, 1, result.stderr);
+      assert.equal(result.stderr, '');
+      const records = result.stdout
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+      assert(
+        records.some(
+          (record) =>
+            record.event === 'startup_failure' &&
+            record.stage === 'arranque_nestjs' &&
+            record.type === 'MongoServerSelectionError' &&
+            record.code === 'ENOTFOUND',
+        ),
+      );
+      assert.doesNotMatch(
+        result.stdout + result.stderr,
+        /password-private-marker|certificate-private-marker|mongodb\+srv:\/\/|BEGIN CERTIFICATE|\n\s+at /,
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+}

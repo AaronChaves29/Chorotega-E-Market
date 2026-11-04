@@ -6,6 +6,7 @@ import { ProductsRepository } from './repositories/products.repository';
 import { StoresRepository } from '../stores/repositories/stores.repository';
 import { CategoriesRepository } from '../categories/repositories/categories.repository';
 import { Product } from './entities/product.entity';
+import { ProductVersionConflictError } from './exceptions/product-version-conflict.error';
 import { ProductSearchQueryDto } from './dto/product-search-query.dto';
 
 describe('ProductsService: operaciones REST', () => {
@@ -26,6 +27,7 @@ describe('ProductsService: operaciones REST', () => {
   );
   const product = Object.assign(new Product(), {
     idProducto: 1,
+    version: 1,
     idTienda: 1,
     idCategoria: 1,
     nombre: 'Prueba',
@@ -83,6 +85,7 @@ describe('ProductsService: operaciones REST', () => {
       'idTienda',
       'nombre',
       'precio',
+      'version',
     ]);
     expect(result.content[0]).not.toBeInstanceOf(Product);
     expect(result.content[0].precio).toBe('10.25');
@@ -102,7 +105,11 @@ describe('ProductsService: operaciones REST', () => {
   );
 
   it('PATCH envía solo cambios, convierte precio a string y admite descripción null', async () => {
-    await service.update(1, { precio: 2.5, descripcion: null }, actor);
+    await service.update(
+      1,
+      { version: 1, precio: 2.5, descripcion: null },
+      actor,
+    );
     expect(products.updateForActor).toHaveBeenCalledWith(
       1,
       {
@@ -110,6 +117,7 @@ describe('ProductsService: operaciones REST', () => {
         descripcion: null,
       },
       actor,
+      1,
     );
     expect(stores.findById).not.toHaveBeenCalled();
     expect(categories.findById).not.toHaveBeenCalled();
@@ -122,7 +130,7 @@ describe('ProductsService: operaciones REST', () => {
         null,
       );
       await expect(
-        service.update(1, { [field]: 999 }, actor),
+        service.update(1, { version: 1, [field]: 999 }, actor),
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(products.updateForActor).not.toHaveBeenCalled();
     },
@@ -131,10 +139,33 @@ describe('ProductsService: operaciones REST', () => {
   it('PATCH no inserta un producto eliminado antes de la actualización', async () => {
     products.updateForActor.mockResolvedValue(null);
     await expect(
-      service.update(1, { nombre: 'Nuevo' }, actor),
+      service.update(1, { version: 1, nombre: 'Nuevo' }, actor),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(products.saveInAuthorizedStore).not.toHaveBeenCalled();
   });
+
+  it('traduce únicamente un conflicto de versión conocido a 409', async () => {
+    products.updateForActor.mockRejectedValue(
+      new ProductVersionConflictError(),
+    );
+    await expect(
+      service.update(1, { version: 1, nombre: 'Nuevo' }, actor),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it.each([undefined, null, 0, -1, 1.5, '1', 2147483648])(
+    'rechaza versión inválida %j también desde el servicio',
+    async (version) => {
+      const dto = {
+        version,
+        nombre: 'Nuevo',
+      } as unknown as import('./dto/update-product.dto').UpdateProductDto;
+      await expect(service.update(1, dto, actor)).rejects.toThrow(
+        'La versión debe ser',
+      );
+      expect(products.updateForActor).not.toHaveBeenCalled();
+    },
+  );
 
   function failure(constraint: string) {
     return new QueryFailedError(
@@ -172,7 +203,7 @@ describe('ProductsService: operaciones REST', () => {
     async (constraint) => {
       products.updateForActor.mockRejectedValue(failure(constraint));
       await expect(
-        service.update(1, { idTienda: 1, idCategoria: 1 }, actor),
+        service.update(1, { version: 1, idTienda: 1, idCategoria: 1 }, actor),
       ).rejects.toBeInstanceOf(NotFoundException);
     },
   );
@@ -186,7 +217,7 @@ describe('ProductsService: operaciones REST', () => {
       const result =
         operation === 'create'
           ? service.create(input, actor)
-          : service.update(1, { nombre: 'Nuevo' }, actor);
+          : service.update(1, { version: 1, nombre: 'Nuevo' }, actor);
       await expect(result).rejects.toBe(error);
     },
   );
@@ -197,7 +228,7 @@ describe('ProductsService: operaciones REST', () => {
       await expect(service.create(input, denied)).rejects.toThrow(
         'Rol no autorizado',
       );
-      await expect(service.update(1, {}, denied)).rejects.toThrow(
+      await expect(service.update(1, { version: 1 }, denied)).rejects.toThrow(
         'Rol no autorizado',
       );
       await expect(service.remove(1, denied)).rejects.toThrow(
@@ -212,7 +243,7 @@ describe('ProductsService: operaciones REST', () => {
     await expect(service.create(input, missing)).rejects.toThrow(
       'Identidad autenticada',
     );
-    await expect(service.update(1, {}, missing)).rejects.toThrow(
+    await expect(service.update(1, { version: 1 }, missing)).rejects.toThrow(
       'Identidad autenticada',
     );
     await expect(service.remove(1, missing)).rejects.toThrow(
@@ -226,9 +257,9 @@ describe('ProductsService: operaciones REST', () => {
     await expect(service.create(input, owner)).rejects.toBeInstanceOf(
       NotFoundException,
     );
-    await expect(service.update(1, {}, owner)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      service.update(1, { version: 1 }, owner),
+    ).rejects.toBeInstanceOf(NotFoundException);
     await expect(service.remove(1, owner)).rejects.toBeInstanceOf(
       NotFoundException,
     );
@@ -239,12 +270,13 @@ describe('ProductsService: operaciones REST', () => {
   it('comprueba origen y destino al trasladar un producto propio', async () => {
     const owner = { ...actor, idUsuario: 3, rol: 'EMPRENDEDOR' };
     stores.findById.mockResolvedValue({ idTienda: 1, idEmprendedor: 3 });
-    await service.update(1, { idTienda: 2 }, owner);
+    await service.update(1, { version: 1, idTienda: 2 }, owner);
     expect(stores.findById.mock.calls).toEqual([[1], [2]]);
     expect(products.updateForActor).toHaveBeenCalledWith(
       1,
       { idTienda: 2 },
       owner,
+      1,
     );
   });
   it('rechaza destino ajeno sin escribir', async () => {
@@ -253,7 +285,7 @@ describe('ProductsService: operaciones REST', () => {
       .mockResolvedValueOnce({ idTienda: 1, idEmprendedor: 3 })
       .mockResolvedValueOnce({ idTienda: 2, idEmprendedor: 4 });
     await expect(
-      service.update(1, { idTienda: 2 }, owner),
+      service.update(1, { version: 1, idTienda: 2 }, owner),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(products.updateForActor).not.toHaveBeenCalled();
   });

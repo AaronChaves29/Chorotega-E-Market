@@ -177,7 +177,12 @@ describe('Catálogo: seguridad de escrituras con JWT real y PostgreSQL', () => {
     resource: (typeof operations)[number][1],
   ) {
     if (method !== 'post')
-      return method === 'patch' ? { nombre: 'Actualizado' } : {};
+      return method === 'patch'
+        ? {
+            nombre: 'Actualizado',
+            ...(resource === 'products' ? { version: product.version } : {}),
+          }
+        : {};
     if (resource === 'stores')
       return {
         idEmprendedor: users.EMPRENDEDOR.idUsuario,
@@ -428,7 +433,7 @@ describe('Catálogo: seguridad de escrituras con JWT real y PostgreSQL', () => {
         await request(server())
           [method](`/api/v1/products/${foreignProduct.idProducto}`)
           .set('Authorization', `Bearer ${tokens.EMPRENDEDOR}`)
-          .send({ nombre: 'No persistir' })
+          .send({ nombre: 'No persistir', version: 1 })
           .expect(404),
         404,
       );
@@ -443,7 +448,7 @@ describe('Catálogo: seguridad de escrituras con JWT real y PostgreSQL', () => {
     const response = await request(server())
       .patch(`/api/v1/products/${product.idProducto}`)
       .set('Authorization', `Bearer ${tokens.EMPRENDEDOR}`)
-      .send({ idTienda: destination.idTienda })
+      .send({ idTienda: destination.idTienda, version: 1 })
       .expect(200);
     expect(response.body).toMatchObject({
       idTienda: destination.idTienda,
@@ -454,7 +459,7 @@ describe('Catálogo: seguridad de escrituras con JWT real y PostgreSQL', () => {
     await request(server())
       .patch(`/api/v1/products/${product.idProducto}`)
       .set('Authorization', `Bearer ${tokens.EMPRENDEDOR}`)
-      .send({ idTienda: foreign.idTienda, nombre: 'No persistir' })
+      .send({ idTienda: foreign.idTienda, nombre: 'No persistir', version: 1 })
       .expect(404);
     expect(
       await context!.database.dataSource
@@ -466,14 +471,14 @@ describe('Catálogo: seguridad de escrituras con JWT real y PostgreSQL', () => {
     await request(server())
       .patch(`/api/v1/products/${foreignProduct.idProducto}`)
       .set('Authorization', `Bearer ${tokens.EMPRENDEDOR}`)
-      .send({ idTienda: destination.idTienda })
+      .send({ idTienda: destination.idTienda, version: 1 })
       .expect(404);
   });
   it('ADMIN puede administrar y trasladar productos de otro propietario', async () => {
     await request(server())
       .patch(`/api/v1/products/${foreignProduct.idProducto}`)
       .set('Authorization', `Bearer ${tokens.ADMIN}`)
-      .send({ idTienda: own.idTienda })
+      .send({ idTienda: own.idTienda, version: 1 })
       .expect(200);
     await request(server())
       .delete(`/api/v1/products/${foreignProduct.idProducto}`)
@@ -504,15 +509,19 @@ describe('Catálogo: seguridad de escrituras con JWT real y PostgreSQL', () => {
         product.idProducto,
         { idTienda: destination.idTienda },
         actor,
+        1,
       ),
     ).toBeNull();
-    expect(await repo.updateForActor(product.idProducto, {}, actor)).toBeNull();
+    expect(
+      await repo.updateForActor(product.idProducto, {}, actor, 1),
+    ).toBeNull();
     expect(await repo.deleteForActor(product.idProducto, actor)).toBe(false);
     expect(
       await repo.updateForActor(
         foreignProduct.idProducto,
         { nombre: 'No persistir' },
         actor,
+        1,
       ),
     ).toBeNull();
     expect(
@@ -532,6 +541,7 @@ describe('Catálogo: seguridad de escrituras con JWT real y PostgreSQL', () => {
         product.idProducto,
         { idTienda: destination.idTienda, nombre: 'No persistir' },
         actor,
+        1,
       ),
     ).toBeNull();
     expect(
@@ -585,7 +595,7 @@ describe('Catálogo: seguridad de escrituras con JWT real y PostgreSQL', () => {
         responsePromise = request(server())
           [method](`/api/v1/products/${product.idProducto}`)
           .set('Authorization', `Bearer ${tokens.EMPRENDEDOR}`)
-          .send({ nombre: 'No persistir' })
+          .send({ nombre: 'No persistir', version: 1 })
           .then((response) => response);
         const deadline = Date.now() + 5000;
         let blocked = false;

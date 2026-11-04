@@ -345,7 +345,8 @@ describe('Pedidos y detalles: HTTP autorizado y compra transaccional', () => {
     ['producto inactivo', 422],
     ['tienda inactiva', 422],
     ['barrio inactivo', 422],
-    ['comprador inactivo', 422],
+    // Una cuenta inactiva ya no supera la autenticación HTTP.
+    ['comprador inactivo', 401],
     ['stock insuficiente', 409],
     ['productos duplicados', 422],
     ['tiendas mezcladas', 422],
@@ -514,8 +515,16 @@ describe('Pedidos y detalles: HTTP autorizado y compra transaccional', () => {
         const selects = log.mock.calls
           .map((call) => call[0])
           .filter((sql) => sql.startsWith('SELECT'));
-        expect(selects.length).toBeGreaterThan(0);
-        expect(selects.length).toBeLessThanOrEqual(3);
+        // La lectura de identidad es fija por solicitud, no por pedido.
+        const identityReads = selects.filter((sql) =>
+          sql.includes('FROM "usuario"'),
+        );
+        const businessReads = selects.filter(
+          (sql) => !sql.includes('FROM "usuario"'),
+        );
+        expect(identityReads).toHaveLength(1);
+        expect(businessReads.length).toBeGreaterThan(0);
+        expect(businessReads.length).toBeLessThanOrEqual(3);
         expect(
           selects.some((sql) => sql.includes('JOIN "detalle_pedido"')),
         ).toBe(true);

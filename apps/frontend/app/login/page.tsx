@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
@@ -8,6 +9,7 @@ export default function LoginPage() {
 
   const [correo, setCorreo] = useState("");
   const [clave, setClave] = useState("");
+  const [mostrarClave, setMostrarClave] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [mensaje, setMensaje] = useState("");
 
@@ -46,71 +48,118 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
-      <section className="w-full max-w-md rounded-xl bg-white p-8 shadow-md">
-        <h1 className="text-center text-2xl font-bold text-gray-900">
-          Chorotega E-Market
-        </h1>
-
-        <p className="mt-2 text-center text-gray-600">
-          Iniciar sesión
-        </p>
-
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          <div>
-            <label
-              htmlFor="correo"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Correo electrónico
-            </label>
-
-            <input
-              id="correo"
-              type="email"
-              required
-              autoComplete="email"
-              value={correo}
-              onChange={(event) => setCorreo(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
-              placeholder="correo@ejemplo.com"
-            />
+    <main className="login-page">
+      <section className="login-story" aria-label="Chorotega E-Market">
+        <div className="login-story-content">
+          <div className="login-brand" aria-label="Chorotega E-Market">
+            <span className="login-brand-mark" aria-hidden="true">
+              <span />
+            </span>
+            <span>Chorotega <strong>E-Market</strong></span>
           </div>
 
-          <div>
-            <label
-              htmlFor="clave"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Contraseña
-            </label>
-
-            <input
-              id="clave"
-              type="password"
-              required
-              autoComplete="current-password"
-              value={clave}
-              onChange={(event) => setClave(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
-              placeholder="Ingresá tu contraseña"
-            />
+          <div className="login-intro">
+            <p className="login-eyebrow">IDENTIDAD QUE NOS UNE</p>
+            <h1>Lo nuestro,<br />cerca de vos.</h1>
+            <p className="login-story-copy">
+              Descubrí el talento, los sabores y las historias de quienes hacen
+              grande nuestra tierra.
+            </p>
           </div>
 
-          <button
-            type="submit"
-            disabled={cargando}
-            className="w-full rounded-lg bg-green-700 px-4 py-2 font-semibold text-white hover:bg-green-800 disabled:opacity-50"
-          >
-            {cargando ? "Ingresando..." : "Iniciar sesión"}
-          </button>
-        </form>
+          <div className="login-artwork" aria-hidden="true">
+            <span className="login-artwork-sun" />
+            <span className="login-artwork-hill login-artwork-hill-back" />
+            <span className="login-artwork-hill login-artwork-hill-front" />
+            <span className="login-artwork-vase" />
+            <span className="login-artwork-vase-neck" />
+            <span className="login-artwork-vase-pattern" />
+            <span className="login-artwork-leaf login-artwork-leaf-one" />
+            <span className="login-artwork-leaf login-artwork-leaf-two" />
+            <span className="login-artwork-caption">HECHO CON ORGULLO LOCAL</span>
+          </div>
 
-        {mensaje && (
-          <p role="alert" className="mt-4 text-center text-sm text-red-600">
-            {mensaje}
+          <p className="login-story-footer">
+            Un mercado con raíces guanacastecas.
           </p>
-        )}
+        </div>
+        <span className="login-story-orbit login-story-orbit-one" aria-hidden="true" />
+        <span className="login-story-orbit login-story-orbit-two" aria-hidden="true" />
+      </section>
+
+      <section className="login-form-panel" aria-labelledby="login-title">
+        <div className="login-form-wrap">
+          <p className="login-form-kicker">TU COMUNIDAD TE ESPERA</p>
+          <h2 id="login-title">Qué bueno verte</h2>
+          <p className="login-form-description">
+            Ingresá a tu cuenta para continuar.
+          </p>
+
+          <form onSubmit={handleSubmit} className="login-form">
+            <div className="login-field">
+              <label htmlFor="correo">Correo electrónico</label>
+              <input
+                id="correo"
+                type="email"
+                required
+                autoComplete="email"
+                value={correo}
+                onChange={(event) => setCorreo(event.target.value)}
+                placeholder="correo@ejemplo.com"
+              />
+            </div>
+
+            <div className="login-field">
+              <label htmlFor="clave">Contraseña</label>
+              <div className="login-password">
+                <input
+                  id="clave"
+                  type={mostrarClave ? "text" : "password"}
+                  required
+                  autoComplete="current-password"
+                  value={clave}
+                  onChange={(event) => setClave(event.target.value)}
+                  placeholder="Ingresá tu contraseña"
+                />
+                <button
+                  type="button"
+                  className="login-password-toggle"
+                  aria-label={
+                    mostrarClave ? "Ocultar contraseña" : "Mostrar contraseña"
+                  }
+                  aria-pressed={mostrarClave}
+                  onClick={() => setMostrarClave((visible) => !visible)}
+                >
+                  {mostrarClave ? "Ocultar" : "Mostrar"}
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" disabled={cargando} className="login-submit">
+              {cargando ? "Ingresando..." : "Iniciar sesión"}
+              {!cargando && <span aria-hidden="true">→</span>}
+            </button>
+          </form>
+
+          {mensaje && (
+            <p role="alert" className="login-error">
+              {mensaje}
+            </p>
+          )}
+
+          <p className="login-form-footer">
+            Apoyá lo local. Descubrí algo único.
+            <span className="mt-3 block">
+              ¿No tenés cuenta?{" "}
+              <Link
+                className="font-semibold text-[#315b47] underline decoration-[#a8b5a7] underline-offset-4"
+                href="/registro"
+              >
+                Registrate
+              </Link>
+            </span>
+          </p>
+        </div>
       </section>
     </main>
   );

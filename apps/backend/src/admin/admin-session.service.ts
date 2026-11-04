@@ -1,6 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
 import {
   createCipheriv,
   createDecipheriv,
@@ -10,6 +9,7 @@ import {
 } from 'node:crypto';
 import type { Request, Response } from 'express';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
+import { CurrentIdentityService } from '../auth/current-identity.service';
 
 export interface AdminSession {
   csrf: string;
@@ -26,7 +26,7 @@ export class AdminSessionService {
 
   constructor(
     config: ConfigService,
-    private readonly jwt: JwtService,
+    private readonly identities: CurrentIdentityService,
   ) {
     // Clave con propósito separado; no se guarda el JWT en claro en la cookie.
     this.key = Buffer.from(
@@ -135,19 +135,6 @@ export class AdminSessionService {
 
   async actor(session: AdminSession | undefined): Promise<AuthenticatedUser> {
     if (!session?.token) throw new UnauthorizedException();
-    try {
-      const user = await this.jwt.verifyAsync<AuthenticatedUser>(session.token);
-      if (
-        !Number.isInteger(user.idUsuario) ||
-        user.idUsuario < 1 ||
-        user.idUsuario > 2_147_483_647 ||
-        typeof user.rol !== 'string' ||
-        typeof user.sub !== 'string'
-      )
-        throw new Error();
-      return user;
-    } catch {
-      throw new UnauthorizedException();
-    }
+    return this.identities.authenticate(session.token);
   }
 }

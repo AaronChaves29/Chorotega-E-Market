@@ -3,11 +3,17 @@ import {
   type INestApplication,
   type ModuleMetadata,
 } from '@nestjs/common';
-import { Test, type TestingModule } from '@nestjs/testing';
+import {
+  Test,
+  type TestingModule,
+  type TestingModuleBuilder,
+} from '@nestjs/testing';
 import { getDataSourceToken } from '@nestjs/typeorm';
 import type { App } from 'supertest/types';
 import { configureHttp } from '../../src/common/http/configure-http';
 import { startPostgresTestDatabase } from './postgres-test-database';
+import { AUTH_RATE_LIMIT_OPTIONS } from '../../src/auth/rate-limit/auth-rate-limit.config';
+import { regressionAuthRateLimits } from './auth-rate-limit-test-options';
 
 @Module({})
 class HttpTestDatabaseModule {}
@@ -15,6 +21,7 @@ class HttpTestDatabaseModule {}
 export async function createHttpTestApp(
   imports: NonNullable<ModuleMetadata['imports']>,
   setup?: (app: INestApplication<App>) => void,
+  configureModule?: (builder: TestingModuleBuilder) => TestingModuleBuilder,
 ) {
   const database = await startPostgresTestDatabase();
   let module: TestingModule | undefined;
@@ -39,7 +46,7 @@ export async function createHttpTestApp(
 
   try {
     // Importar módulos funcionales, nunca AppModule ni ConfigModule.forRoot().
-    module = await Test.createTestingModule({
+    let builder = Test.createTestingModule({
       imports: [
         {
           module: HttpTestDatabaseModule,
@@ -51,7 +58,11 @@ export async function createHttpTestApp(
         },
         ...imports,
       ],
-    }).compile();
+    })
+      .overrideProvider(AUTH_RATE_LIMIT_OPTIONS)
+      .useValue(regressionAuthRateLimits());
+    if (configureModule) builder = configureModule(builder);
+    module = await builder.compile();
     app = module.createNestApplication<INestApplication<App>>();
     configureHttp(app);
     setup?.(app);

@@ -60,10 +60,7 @@ describe('Base HTTP sobre PostgreSQL temporal', () => {
     const response = await request(server())
       .get('/api/database/health')
       .expect(200);
-    expect(response.body).toMatchObject({
-      status: 'connected',
-      database: 'chorotega_test',
-    });
+    expect(response.body).toEqual({ status: 'connected' });
     await request(server()).get('/api/v1/api/database/health').expect(404);
   });
 

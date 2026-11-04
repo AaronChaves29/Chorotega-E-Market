@@ -152,6 +152,7 @@ describe('Productos: API real con PostgreSQL', () => {
       descripcion: null,
       estado: 'ACTIVO',
       idProducto: expect.any(Number) as number,
+      version: 1,
       fechaPublicacion: expect.any(String) as string,
     });
     expect(response.headers.location).toBe(`${path}/${product.idProducto}`);
@@ -225,10 +226,11 @@ describe('Productos: API real con PostgreSQL', () => {
     const response = await request(server())
       .patch(`${path}/${product.idProducto}`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ descripcion: null, precio: 2.5 })
+      .send({ descripcion: null, precio: 2.5, version: product.version })
       .expect(200);
     expect(response.body).toEqual({
       ...product,
+      version: product.version + 1,
       descripcion: null,
       precio: '2.50',
     });
@@ -239,9 +241,12 @@ describe('Productos: API real con PostgreSQL', () => {
     await request(server())
       .patch(`${path}/${product.idProducto}`)
       .set('Authorization', `Bearer ${token}`)
-      .send({})
+      .send({ version: (response.body as ProductJson).version })
       .expect(200)
-      .expect(response.body as ProductJson);
+      .expect({
+        ...(response.body as ProductJson),
+        version: (response.body as ProductJson).version + 1,
+      });
   });
 
   it('PATCH permite cambiar relaciones existentes y campos editables', async () => {
@@ -256,9 +261,9 @@ describe('Productos: API real con PostgreSQL', () => {
     await request(server())
       .patch(`${path}/${product.idProducto}`)
       .set('Authorization', `Bearer ${token}`)
-      .send(changes)
+      .send({ ...changes, version: product.version })
       .expect(200)
-      .expect({ ...product, ...changes });
+      .expect({ ...product, ...changes, version: product.version + 1 });
   });
 
   it('PATCH inexistente devuelve 404 sin insertar', async () => {
@@ -266,7 +271,7 @@ describe('Productos: API real con PostgreSQL', () => {
       await request(server())
         .patch(`${path}/999`)
         .set('Authorization', `Bearer ${token}`)
-        .send({ nombre: 'Nuevo' })
+        .send({ nombre: 'Nuevo', version: 1 })
         .expect(404),
       404,
     );
@@ -281,7 +286,7 @@ describe('Productos: API real con PostgreSQL', () => {
         await request(server())
           .patch(`${path}/${product.idProducto}`)
           .set('Authorization', `Bearer ${token}`)
-          .send({ [field]: 999 })
+          .send({ [field]: 999, version: product.version })
           .expect(404),
         404,
       );
@@ -305,7 +310,7 @@ describe('Productos: API real con PostgreSQL', () => {
       await request(server())
         .patch(`${path}/${product.idProducto}`)
         .set('Authorization', `Bearer ${token}`)
-        .send(body)
+        .send({ version: product.version, ...body })
         .expect(400),
       400,
     );

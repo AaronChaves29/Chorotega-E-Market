@@ -2,6 +2,8 @@ import { ApiProperty } from '@nestjs/swagger';
 export class ProductResponseDto {
   @ApiProperty({ type: 'integer' })
   idProducto!: number;
+  @ApiProperty({ type: 'integer', minimum: 1, example: 1 })
+  version!: number;
   @ApiProperty({ type: 'integer' })
   idTienda!: number;
   @ApiProperty({ type: 'integer' })

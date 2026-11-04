@@ -15,9 +15,12 @@ function environment(): NodeJS.ProcessEnv {
 }
 
 describe('Arranque Render antes de aceptar tráfico', () => {
-  let diagnostics: jest.SpyInstance;
+  let diagnostics: jest.SpyInstance<
+    boolean,
+    Parameters<typeof process.stdout.write>
+  >;
   beforeEach(() => {
-    diagnostics = jest.spyOn(console, 'error').mockImplementation();
+    diagnostics = jest.spyOn(process.stdout, 'write').mockReturnValue(true);
   });
   afterEach(() => jest.restoreAllMocks());
   it('valida, espera las migraciones y solo entonces arranca Nest', async () => {
@@ -46,7 +49,7 @@ describe('Arranque Render antes de aceptar tráfico', () => {
     expect(migrate).not.toHaveBeenCalled();
     expect(start).not.toHaveBeenCalled();
     expect(diagnostics).toHaveBeenCalledWith(
-      expect.stringContaining('etapa=validacion_variables'),
+      expect.stringContaining('"stage":"validacion_variables"'),
     );
   });
   it('un fallo de migración impide arrancar HTTP', async () => {
@@ -57,7 +60,7 @@ describe('Arranque Render antes de aceptar tráfico', () => {
     ).rejects.toThrow('Migración fallida');
     expect(start).not.toHaveBeenCalled();
     expect(diagnostics).toHaveBeenCalledWith(
-      expect.stringContaining('etapa=migraciones_postgresql'),
+      expect.stringContaining('"stage":"migraciones_postgresql"'),
     );
   });
   it('distingue un fallo de Nest de uno de migraciones y conserva el error para el código de salida', async () => {
@@ -70,9 +73,12 @@ describe('Arranque Render antes de aceptar tráfico', () => {
     await expect(startRender(environment(), { migrate, start })).rejects.toBe(
       original,
     );
-    expect(diagnostics).toHaveBeenCalledWith(
-      '[Startup] etapa=arranque_nestjs tipo=MongoServerSelectionError codigo=ENOTFOUND mensaje=Mensaje original omitido por seguridad.',
-    );
+    expect(JSON.parse(String(diagnostics.mock.calls[0][0]))).toMatchObject({
+      stage: 'arranque_nestjs',
+      type: 'MongoServerSelectionError',
+      code: 'ENOTFOUND',
+      message: 'Mensaje original omitido por seguridad.',
+    });
   });
   it('cada reinicio comprueba pendientes, incluso cuando no hay nuevas migraciones', async () => {
     const migrate = jest.fn().mockResolvedValue(0);

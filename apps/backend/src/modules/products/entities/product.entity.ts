@@ -7,6 +7,7 @@ import {
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
+  VersionColumn,
 } from 'typeorm';
 import type { Relation } from 'typeorm';
 import { Category } from '../../categories/entities/category.entity';
@@ -26,6 +27,9 @@ export class Product {
     primaryKeyConstraintName: 'producto_pkey',
   })
   idProducto!: number;
+
+  @VersionColumn({ type: 'int', default: 1 })
+  version!: number;
 
   @Column({ name: 'id_tienda', type: 'int' })
   idTienda!: number;

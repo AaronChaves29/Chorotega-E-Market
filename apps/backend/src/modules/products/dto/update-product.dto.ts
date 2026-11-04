@@ -1,4 +1,4 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsIn,
   IsInt,
@@ -13,6 +13,19 @@ import {
 } from 'class-validator';
 
 export class UpdateProductDto {
+  @ApiProperty({
+    type: 'integer',
+    minimum: 1,
+    maximum: 2147483647,
+    description:
+      'Versión leída del producto. Una versión desactualizada produce 409.',
+    example: 1,
+  })
+  @IsInt()
+  @Min(1)
+  @Max(2_147_483_647)
+  version!: number;
+
   @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 2147483647 })
   @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsInt()

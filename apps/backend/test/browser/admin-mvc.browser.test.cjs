@@ -24,6 +24,9 @@ const {
 const {
   AddPasswordHashToUser1791352458237,
 } = require('../../dist/database/migrations/1791352458237-AddPasswordHashToUser.js');
+const {
+  AddProductVersion1793296800000,
+} = require('../../dist/database/migrations/1793296800000-AddProductVersion.js');
 const { User } = require('../../dist/modules/users/entities/user.entity.js');
 const { Store } = require('../../dist/modules/stores/entities/store.entity.js');
 const {
@@ -57,6 +60,7 @@ test(
           CreateInitialSchema1788732000000,
           AlignTimestampDefaults1788998400000,
           AddPasswordHashToUser1791352458237,
+          AddProductVersion1793296800000,
         ],
         logging: false,
       });

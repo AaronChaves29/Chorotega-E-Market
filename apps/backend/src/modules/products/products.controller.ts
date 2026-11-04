@@ -114,7 +114,7 @@ export class ProductsController {
   @ApiOperation({
     summary: 'Actualizar parcialmente productos',
     description:
-      'JWT requerido. ADMIN o EMPRENDEDOR propietario. Actualización parcial; null solo en campos nullable.',
+      'JWT requerido. ADMIN o EMPRENDEDOR propietario. Requiere version vigente en el body; conflicto 409 si cambió. Los demás campos son parciales; null solo en campos nullable.',
   })
   @ApiParam({
     name: 'id',
@@ -128,7 +128,7 @@ export class ProductsController {
     isArray: false,
     description: 'Respuesta pública mediante DTO.',
   })
-  @ApiProblemResponses([400, 401, 403, 404, 500])
+  @ApiProblemResponses([400, 401, 403, 404, 409, 500])
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'EMPRENDEDOR')

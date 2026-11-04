@@ -7,6 +7,10 @@ import * as bcrypt from 'bcrypt';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { AuthService } from '../auth/auth.service';
+import { CurrentIdentityService } from '../auth/current-identity.service';
+import { AuthRateLimitModule } from '../auth/rate-limit/auth-rate-limit.module';
+import { AUTH_RATE_LIMIT_OPTIONS } from '../auth/rate-limit/auth-rate-limit.config';
+import { regressionAuthRateLimits } from '../../test/support/auth-rate-limit-test-options';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { UsersRepository } from '../modules/users/repositories/users.repository';
 import { ProductsService } from '../modules/products/products.service';
@@ -31,7 +35,7 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
   let app: INestApplication<App>;
   const password = randomUUID();
   const secret = randomBytes(32).toString('hex');
-  const users = { findByEmail: jest.fn() };
+  const users = { findByEmail: jest.fn(), findAuthenticationById: jest.fn() };
   const products = { search: jest.fn(), create: jest.fn() };
   const stores = { search: jest.fn(), create: jest.fn() };
   let hash: string;
@@ -39,6 +43,7 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
     hash = await bcrypt.hash(password, 4);
     const module = await Test.createTestingModule({
       imports: [
+        AuthRateLimitModule,
         ConfigModule.forRoot({
           ignoreEnvFile: true,
           ignoreEnvVars: true,
@@ -50,6 +55,7 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
       controllers: [AdminAuthController, AdminCatalogController],
       providers: [
         AuthService,
+        CurrentIdentityService,
         RolesGuard,
         AdminSessionGuard,
         AdminCsrfGuard,
@@ -58,7 +64,10 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
         { provide: ProductsService, useValue: products },
         { provide: StoresService, useValue: stores },
       ],
-    }).compile();
+    })
+      .overrideProvider(AUTH_RATE_LIMIT_OPTIONS)
+      .useValue(regressionAuthRateLimits())
+      .compile();
     app = module.createNestApplication<INestApplication<App>>();
     configureAdminViews(app);
     configureHttp(app);
@@ -71,7 +80,14 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
       idUsuario: 7,
       correo: 'admin@example.test',
       rol: 'ADMIN',
+      estado: 'ACTIVO',
       claveHash: hash,
+    });
+    users.findAuthenticationById.mockResolvedValue({
+      idUsuario: 7,
+      correo: 'admin@example.test',
+      rol: 'ADMIN',
+      estado: 'ACTIVO',
     });
     const page = {
       content: [],
@@ -94,6 +110,7 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
       idUsuario: 7,
       correo: 'admin@example.test',
       rol: role,
+      estado: 'ACTIVO',
       claveHash: hash,
     });
     const agent = request.agent(app.getHttpServer());
@@ -140,10 +157,21 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
   it.each(['CLIENTE', 'EMPRENDEDOR', 'REPARTIDOR'])(
     'rechaza login administrativo de %s',
     async (role) => {
-      const { result } = await login(role);
-      expect(result.status).toBe(403);
-      expect(result.text).not.toContain(password);
-      expect(result.headers['set-cookie']).toBeUndefined();
+      const output = jest.spyOn(process.stdout, 'write').mockReturnValue(true);
+      try {
+        const { result } = await login(role);
+        expect(result.status).toBe(403);
+        expect(result.text).not.toContain(password);
+        expect(result.headers['set-cookie']).toBeUndefined();
+        const records = output.mock.calls.map(
+          ([chunk]) => JSON.parse(String(chunk)) as { event: string },
+        );
+        expect(records.map((record) => record.event)).toEqual([
+          'access_denied',
+        ]);
+      } finally {
+        output.mockRestore();
+      }
     },
   );
   it('GET login conserva una sesión ADMIN válida y su CSRF', async () => {
@@ -160,9 +188,31 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
       .expect(303);
     expect(products.create).toHaveBeenCalledTimes(1);
   });
+  it('un fallo síncrono del log no cambia el rechazo MVC de permisos', async () => {
+    const output = jest
+      .spyOn(process.stdout, 'write')
+      .mockImplementation(() => {
+        throw new Error('private-log-sink');
+      });
+    try {
+      const { result } = await login('CLIENTE');
+      expect(result.status).toBe(403);
+      expect(result.text).not.toContain('private-log-sink');
+      expect(output).toHaveBeenCalledTimes(1);
+    } finally {
+      output.mockRestore();
+    }
+  });
   it.each(['alterada', 'vencida', 'otro-rol'])(
     'GET login muestra formulario nuevo para sesión %s',
     async (kind) => {
+      if (kind === 'otro-rol')
+        users.findAuthenticationById.mockResolvedValue({
+          idUsuario: 7,
+          correo: 'user@example.test',
+          rol: 'CLIENTE',
+          estado: 'ACTIVO',
+        });
       let value = 'invalid';
       if (kind !== 'alterada') {
         const token = await app.get(JwtService).signAsync(
@@ -205,20 +255,32 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
     expect(users.findByEmail).not.toHaveBeenCalled();
   });
   it('credenciales inválidas devuelven HTML seguro sin conservar la contraseña', async () => {
-    users.findByEmail.mockResolvedValue(null);
-    const agent = request.agent(app.getHttpServer());
-    const form = await agent.get('/admin/login');
-    const result = await agent
-      .post('/admin/login')
-      .type('form')
-      .send({
-        _csrf: csrf(form.text),
-        correo: 'admin@example.test',
-        clave: password,
-      })
-      .expect(401);
-    expect(result.text).toContain('Credenciales inválidas.');
-    expect(result.text).not.toContain(password);
+    const output = jest.spyOn(process.stdout, 'write').mockReturnValue(true);
+    try {
+      users.findByEmail.mockResolvedValue(null);
+      const agent = request.agent(app.getHttpServer());
+      const form = await agent.get('/admin/login');
+      const result = await agent
+        .post('/admin/login')
+        .type('form')
+        .send({
+          _csrf: csrf(form.text),
+          correo: 'admin@example.test',
+          clave: password,
+        })
+        .expect(401);
+      expect(result.text).toContain('Credenciales inválidas.');
+      expect(result.text).not.toContain(password);
+      const records = output.mock.calls.map(
+        ([chunk]) => JSON.parse(String(chunk)) as { event: string },
+      );
+      expect(records.map((record) => record.event)).toEqual(['login_failed']);
+      expect(
+        output.mock.calls.map(([chunk]) => String(chunk)).join(''),
+      ).not.toContain(password);
+    } finally {
+      output.mockRestore();
+    }
   });
   it.each(['products', 'stores'])(
     'renderiza listado %s y conserva paginación en los enlaces',
@@ -433,6 +495,12 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
   it.each(['CLIENTE', 'EMPRENDEDOR', 'REPARTIDOR'])(
     'RolesGuard rechaza sesión JWT válida de %s',
     async (rol) => {
+      users.findAuthenticationById.mockResolvedValue({
+        idUsuario: 7,
+        correo: 'user@example.test',
+        rol,
+        estado: 'ACTIVO',
+      });
       const token = await app
         .get(JwtService)
         .signAsync({ sub: 'user@example.test', idUsuario: 7, rol });

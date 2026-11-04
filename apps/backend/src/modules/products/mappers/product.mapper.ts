@@ -5,6 +5,7 @@ export class ProductMapper {
   static toResponseDto(product: Product): ProductResponseDto {
     return {
       idProducto: product.idProducto,
+      version: product.version,
       idTienda: product.idTienda,
       idCategoria: product.idCategoria,
       nombre: product.nombre,

@@ -5,12 +5,14 @@ import {
   HttpException,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { JsonLogger } from '../common/observability/json-logger';
 
 @Catch()
 export class AdminExceptionFilter implements ExceptionFilter<unknown> {
   catch(error: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
     const status = error instanceof HttpException ? error.getStatus() : 500;
+    if (status === 403) new JsonLogger().security('access_denied');
     if (status === 401) {
       response.redirect(303, '/admin/login');
       return;
@@ -21,6 +23,7 @@ export class AdminExceptionFilter implements ExceptionFilter<unknown> {
       404: 'El recurso no existe.',
       409: 'No se pudo completar la operación por un conflicto.',
       422: 'No se cumplen las condiciones para realizar la operación.',
+      429: 'Demasiadas solicitudes. Inténtelo más tarde.',
     };
     response.status(status).render('error', {
       status,

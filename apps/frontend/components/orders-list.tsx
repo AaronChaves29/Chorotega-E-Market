@@ -17,12 +17,12 @@ const STATE_LABELS: Record<OrderState, string> = {
 };
 
 const STATE_STYLES: Record<OrderState, string> = {
-  PENDIENTE: "bg-yellow-100 text-yellow-800",
-  CONFIRMADO: "bg-blue-100 text-blue-800",
-  PREPARANDO: "bg-orange-100 text-orange-800",
-  EN_CAMINO: "bg-purple-100 text-purple-800",
-  ENTREGADO: "bg-green-100 text-green-800",
-  CANCELADO: "bg-red-100 text-red-800",
+  PENDIENTE: "orders-status-pending",
+  CONFIRMADO: "orders-status-confirmed",
+  PREPARANDO: "orders-status-preparing",
+  EN_CAMINO: "orders-status-on-the-way",
+  ENTREGADO: "orders-status-delivered",
+  CANCELADO: "orders-status-cancelled",
 };
 
 function formatMoney(value: string): string {
@@ -110,7 +110,7 @@ export default function OrdersList() {
 
   if (loading) {
     return (
-      <div role="status" className="mt-8 rounded-lg border p-6 text-gray-600">
+      <div role="status" className="orders-message orders-loading">
         Cargando pedidos...
       </div>
     );
@@ -118,8 +118,8 @@ export default function OrdersList() {
 
   if (error) {
     return (
-      <div role="alert" className="mt-8 rounded-lg border border-red-200 p-6">
-        <p className="text-red-700">{error}</p>
+      <div role="alert" className="orders-message orders-error">
+        <p>{error}</p>
 
         <button
           type="button"
@@ -128,7 +128,7 @@ export default function OrdersList() {
             setError(null);
             setRetryCount((value) => value + 1);
           }}
-          className="mt-4 rounded bg-gray-900 px-4 py-2 text-white"
+          className="orders-secondary-button"
         >
           Reintentar
         </button>
@@ -138,11 +138,11 @@ export default function OrdersList() {
 
   if (!data || data.content.length === 0) {
     return (
-      <div className="mt-8 rounded-lg border p-8 text-center">
-        <h2 className="text-xl font-semibold">
+      <div className="orders-message orders-empty">
+        <h2>
           {page === 0 ? "Todavía no tenés pedidos" : "No hay pedidos en esta página"}
         </h2>
-        <p className="mt-2 text-gray-600">
+        <p>
           {page === 0
             ? "Cuando realicés tu primer pedido, aparecerá aquí."
             : "Podés regresar a la página anterior."}
@@ -155,7 +155,7 @@ export default function OrdersList() {
               setLoading(true);
               setPage((value) => Math.max(0, value - 1));
             }}
-            className="mt-4 rounded border px-4 py-2"
+            className="orders-secondary-button"
           >
             Página anterior
           </button>
@@ -165,48 +165,44 @@ export default function OrdersList() {
   }
 
   return (
-    <section className="mt-8 space-y-5">
-      <p className="text-sm text-gray-600">
+    <section className="orders-list">
+      <p className="orders-count">
         {data.totalElements} pedido(s) encontrado(s)
       </p>
 
-      <div className="space-y-4">
+      <div className="orders-cards">
         {data.content.map((order: Order) => (
-          <article
-            key={order.idPedido}
-            className="rounded-lg border border-gray-200 bg-white p-5 text-gray-900 shadow-sm"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold">
+          <article key={order.idPedido} className="order-card">
+            <div className="order-card-header">
+              <h2>
                 Pedido #{order.idPedido}
               </h2>
 
               <span
-                className={`rounded-full px-3 py-1 text-sm font-medium ${STATE_STYLES[order.estado]
-                  }`}
+                className={`orders-status ${STATE_STYLES[order.estado]}`}
               >
                 {STATE_LABELS[order.estado]}
               </span>
             </div>
 
-            <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-              <div>
-                <dt className="text-gray-600">Fecha</dt>
-                <dd className="font-medium">
+            <dl className="order-details">
+              <div className="order-detail">
+                <dt>Fecha</dt>
+                <dd>
                   {formatDate(order.fechaCreacion)}
                 </dd>
               </div>
 
-              <div>
-                <dt className="text-gray-600">Total</dt>
-                <dd className="font-semibold">
+              <div className="order-detail">
+                <dt>Total</dt>
+                <dd className="order-total">
                   {formatMoney(order.total)}
                 </dd>
               </div>
 
-              <div className="sm:col-span-2">
-                <dt className="text-gray-600">Dirección de entrega</dt>
-                <dd className="font-medium">
+              <div className="order-detail order-detail-address">
+                <dt>Dirección de entrega</dt>
+                <dd>
                   {order.direccionEntrega}
                 </dd>
               </div>
@@ -217,7 +213,7 @@ export default function OrdersList() {
 
       <nav
         aria-label="Paginación de pedidos"
-        className="flex flex-wrap items-center justify-between gap-4 pt-4"
+        className="orders-pagination"
       >
         <button
           type="button"
@@ -226,12 +222,12 @@ export default function OrdersList() {
             setLoading(true);
             setPage((value) => Math.max(0, value - 1));
           }}
-          className="rounded border border-gray-500 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-40"
+          className="orders-page-button"
         >
           Anterior
         </button>
 
-        <span className="text-sm text-gray-600">
+        <span className="orders-page-number">
           Página {data.page + 1} de {data.totalPages}
           {" · "} {PAGE_SIZE} por página
         </span>
@@ -243,7 +239,7 @@ export default function OrdersList() {
             setLoading(true);
             setPage((value) => value + 1);
           }}
-          className="rounded border border-gray-500 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-40"
+          className="orders-page-button"
         >
           Siguiente
         </button>

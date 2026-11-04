@@ -3,14 +3,28 @@ import { JwtService } from '@nestjs/jwt';
 import type { Response } from 'express';
 import { randomBytes } from 'node:crypto';
 import { AdminSessionService, ADMIN_COOKIE } from './admin-session.service';
+import { CurrentIdentityService } from '../auth/current-identity.service';
+import { UsersRepository } from '../modules/users/repositories/users.repository';
 
 describe('Sesión MVC cifrada y CSRF vinculado', () => {
   const secret = randomBytes(32).toString('hex');
   const jwt = new JwtService({ secret });
+  const findAuthenticationById = jest.fn();
+  const identities = new CurrentIdentityService(jwt, {
+    findAuthenticationById,
+  } as unknown as UsersRepository);
+  beforeEach(() => {
+    findAuthenticationById.mockReset().mockResolvedValue({
+      idUsuario: 1,
+      correo: 'admin@example.test',
+      rol: 'ADMIN',
+      estado: 'ACTIVO',
+    });
+  });
   const service = () =>
     new AdminSessionService(
       new ConfigService({ JWT_SECRET: secret, NODE_ENV: 'production' }),
-      jwt,
+      identities,
     );
   function issue(sessions = service(), token?: string) {
     const cookie = jest.fn<void, [string, string, object]>();
@@ -72,7 +86,7 @@ describe('Sesión MVC cifrada y CSRF vinculado', () => {
       expect(sessions.read({ headers: { cookie } })).toBeUndefined();
     const other = new AdminSessionService(
       new ConfigService({ JWT_SECRET: randomBytes(32).toString('hex') }),
-      jwt,
+      identities,
     );
     expect(other.read(request)).toBeUndefined();
   });

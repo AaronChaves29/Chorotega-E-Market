@@ -7,20 +7,8 @@ export class HealthService {
 
   async checkConnection() {
     try {
-      const result: Array<{
-        database_name: string;
-        current_time: Date;
-      }> = await this.dataSource.query(`
-        SELECT
-          current_database() AS database_name,
-          NOW() AS current_time
-      `);
-
-      return {
-        status: 'connected',
-        database: result[0].database_name,
-        timestamp: result[0].current_time,
-      };
+      await this.dataSource.query('SELECT 1');
+      return { status: 'connected' as const };
     } catch {
       throw new ServiceUnavailableException({
         status: 'disconnected',

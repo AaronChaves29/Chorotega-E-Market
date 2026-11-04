@@ -1,7 +1,6 @@
 import {
   Body,
   Controller,
-  ForbiddenException,
   Get,
   Post,
   Req,
@@ -13,6 +12,10 @@ import {
 import { ApiExcludeController } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AuthService } from '../auth/auth.service';
+import {
+  AuthRateLimitGuard,
+  LimitAuthOperation,
+} from '../auth/rate-limit/auth-rate-limit.guard';
 import { LoginDto } from '../auth/dto/login.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -52,7 +55,8 @@ export class AdminAuthController {
   }
 
   @Post('login')
-  @UseGuards(AdminCsrfGuard)
+  @LimitAuthOperation('adminLogin')
+  @UseGuards(AuthRateLimitGuard, AdminCsrfGuard)
   async login(
     @Body() body: Record<string, unknown>,
     @Req() request: Request,
@@ -68,13 +72,7 @@ export class AdminAuthController {
       return;
     }
     try {
-      const result = await this.auth.login(form.dto);
-      const actor = await this.sessions.actor({
-        csrf: view.csrf,
-        expiresAt: Date.now() + 1000,
-        token: result.token,
-      });
-      if (actor.rol !== 'ADMIN') throw new ForbiddenException();
+      const result = await this.auth.loginAdmin(form.dto);
       // Rotación al autenticar: el formulario anónimo no sirve en la nueva sesión.
       this.sessions.issue(response, result.token, result.expiraEnSegundos);
       response.redirect(303, '/admin/products');

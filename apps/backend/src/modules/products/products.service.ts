@@ -21,6 +21,7 @@ import { ProductResponseDto } from './dto/product-response.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductSearchQueryDto } from './dto/product-search-query.dto';
 import type { PaginationResult } from '../../common/pagination/pagination-result';
+import { ProductVersionConflictError } from './exceptions/product-version-conflict.error';
 
 @Injectable()
 export class ProductsService {
@@ -99,6 +100,14 @@ export class ProductsService {
     assertCatalogWriter(actor, ['ADMIN', 'EMPRENDEDOR']);
     this.validateId(id);
     await this.requireOwnedProduct(id, actor);
+    if (
+      !Number.isInteger(dto.version) ||
+      dto.version < 1 ||
+      dto.version > 2_147_483_647
+    )
+      throw new BadRequestException(
+        'La versión debe ser un entero positivo de 32 bits.',
+      );
     await this.validateRelations(dto, actor);
     const data: Partial<NewProductData> = {};
     if (dto.idTienda !== undefined) data.idTienda = dto.idTienda;
@@ -114,6 +123,7 @@ export class ProductsService {
         id,
         data,
         actor,
+        dto.version,
       );
       if (!product) throw new NotFoundException('Producto no encontrado.');
       return ProductMapper.toResponseDto(product);
@@ -181,6 +191,10 @@ export class ProductsService {
     error: unknown,
     operation: 'save' | 'delete',
   ): never {
+    if (error instanceof ProductVersionConflictError)
+      throw new ConflictException(
+        'El producto cambió desde su lectura. Consulte la versión vigente antes de volver a editar.',
+      );
     if (error instanceof QueryFailedError) {
       const driver: unknown = error.driverError;
       if (
