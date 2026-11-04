@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { preflight, deployRender as realDeployRender, health, verifyVercelDeployment,
-  assertCurrentMain, main, safeFailure, DeploymentError, command } from './production-deploy.mjs';
+  assertCurrentMain, main, safeFailure, DeploymentError, command, cli } from './production-deploy.mjs';
 
 const env = {
   DEPLOY_SHA: 'a'.repeat(40), RENDER_SERVICE_ID: 'srv-test',
@@ -94,26 +94,38 @@ test('Render no reintenta 401 y un timeout del hook queda ambiguo', async () => 
 const loginHtml = '<title>Chorotega</title><h2 id="login-title"></h2><input id="correo"><input id="clave">';
 function vercelDependencies({ stale = false, failCli = '', failHealth = false } = {}) {
   const commands = [];
+  const requests = [];
+  const state = { created: false, promoted: false };
   let reads = 0;
-  const url = 'https://immutable.example.vercel.app';
+  const url = 'https://immutable-example.vercel.app';
+  const record = { id: 'dpl_Automatic', ownerId: env.VERCEL_ORG_ID,
+    readyState: 'READY', target: 'production', projectId: env.VERCEL_PROJECT_ID,
+    url: new URL(url).hostname, meta: { githubCommitSha: env.DEPLOY_SHA, githubCommitRef: 'main' },
+    aliasAssigned: false, alias: [] };
   return {
-    commands,
+    commands, requests, state, record,
     readMain: async () => ++reads > 1 && stale ? 'b'.repeat(40) : env.DEPLOY_SHA,
     runCli: async (args) => {
       commands.push(args);
       if (args[0] === failCli) throw new DeploymentError('VERCEL_COMMAND_FAILED');
-      return args[0] === 'deploy' ? url : '';
+      if (args[0] === 'deploy') { state.created = true; return JSON.stringify({ deployment: { id: record.id } }); }
+      if (args[0] === 'promote') state.promoted = true;
+      return '';
     },
     fetchImpl: async (requestUrl) => {
-      if (String(requestUrl).startsWith('https://api.vercel.com/')) return response({
-        readyState: 'READY', target: 'production', projectId: env.VERCEL_PROJECT_ID,
-        url: new URL(url).hostname, meta: { githubCommitSha: env.DEPLOY_SHA, githubCommitRef: 'main' },
-        aliasAssigned: true,
-        alias: commands.some((args) => args[0] === 'promote') ? ['frontend.example.test'] : [],
-      });
+      const parsed = new URL(requestUrl); requests.push(String(requestUrl));
+      if (parsed.pathname.startsWith('/v9/projects/')) return response({ id: env.VERCEL_PROJECT_ID, accountId: env.VERCEL_ORG_ID });
+      if (parsed.hostname === 'api.render.com') return response([{ deploy: { status: 'live', commit: { id: env.DEPLOY_SHA } } }]);
+      if (parsed.pathname === '/v7/deployments') return response({ deployments: state.created ? [{ uid: record.id, meta: record.meta }] : [], pagination: { next: null } });
+      if (parsed.pathname.startsWith('/v13/deployments/')) return response({ ...record,
+        aliasAssigned: state.promoted ? true : record.aliasAssigned,
+        alias: state.promoted ? ['frontend.example.test'] : record.alias });
+      if (parsed.pathname.startsWith('/v4/aliases/')) return response({ alias: 'frontend.example.test', projectId: env.VERCEL_PROJECT_ID,
+        deploymentId: state.promoted ? record.id : 'dpl_Previous' });
+      if (String(requestUrl) === env.BACKEND_HEALTH_URL) return response({ status: 'connected' });
       return new Response(failHealth ? 'Error' : loginHtml, { headers: { 'content-type': 'text/html' } });
     },
-    healthAttempts: 1, wait,
+    healthAttempts: 1, vercelAttempts: 2, wait,
   };
 }
 
@@ -121,11 +133,13 @@ test('Vercel valida staging antes de promover y comprueba el dominio después', 
   const deps = vercelDependencies();
   await main('vercel-deploy', env, deps);
   assert(deps.commands[0].includes('--skip-domain'));
-  assert.deepEqual(deps.commands.map((args) => args[0]), ['deploy', 'inspect', 'promote']);
+  assert(deps.commands[0].includes('--json'));
+  assert(deps.commands[0].includes('--no-wait'));
+  assert.deepEqual(deps.commands.map((args) => args[0]), ['deploy', 'promote']);
 });
 
 test('Vercel no promueve si main cambió, staging falla o la CLI falla', async () => {
-  for (const config of [{ stale: true }, { failHealth: true }, { failCli: 'inspect' }]) {
+  for (const config of [{ stale: true }, { failHealth: true }, { failCli: 'deploy' }]) {
     const deps = vercelDependencies(config);
     await assert.rejects(main('vercel-deploy', env, deps));
     assert(!deps.commands.some((args) => args[0] === 'promote'));
@@ -137,7 +151,7 @@ test('despliegue parcial conserva Render sin rollback si Vercel falla', async ()
     response({ status: 'live', commit: { id: env.DEPLOY_SHA } }), response({ status: 'connected' })];
   await deployRender(env, { fetchImpl: async () => replies.shift(), wait });
   const deps = vercelDependencies({ failCli: 'deploy' });
-  await assert.rejects(main('vercel-deploy', env, deps), /VERCEL_COMMAND_FAILED/);
+  await assert.rejects(main('vercel-deploy', env, deps), /VERCEL_DEPLOY_AMBIGUOUS/);
   assert.equal(replies.length, 0);
   assert(!deps.commands.some((args) => ['rollback', 'promote'].includes(args[0])));
 });
@@ -444,4 +458,238 @@ test('postcheck fallido tras promoción no crea otro deployment ni hace rollback
     ? new Response('Error', { status: 503 }) : fetch(url, options);
   await assert.rejects(main('vercel-recover', f.config, f.deps), /POSTCHECK_FAILED/);
   assert.deepEqual(f.commands.map((args) => args[0]), ['promote']);
+});
+
+test('automático espera READY por API sin invocar inspect', async () => {
+  const f = vercelDependencies({ failCli: 'inspect' });
+  const fetch = f.fetchImpl; let reads = 0; const delays = [];
+  f.wait = async (ms) => delays.push(ms);
+  f.fetchImpl = async (url) => {
+    if (new URL(url).pathname.startsWith('/v13/deployments/') && ++reads === 1)
+      return response({ ...f.record, readyState: 'BUILDING', url: null });
+    return fetch(url);
+  };
+  await main('vercel-deploy', env, f);
+  assert(delays.includes(5000));
+  assert.deepEqual(f.commands.map((args) => args[0]), ['deploy', 'promote']);
+});
+
+test('automático rechaza SHA, rama, proyecto, organización, errores y URL incorrectos', async () => {
+  for (const change of [
+    { meta: { githubCommitSha: 'b'.repeat(40), githubCommitRef: 'main' } },
+    { meta: { githubCommitSha: env.DEPLOY_SHA, githubCommitRef: 'develop' } },
+    { projectId: 'prj-other' }, { ownerId: 'team-other' },
+    { readyState: 'ERROR' }, { readyState: 'CANCELED' }, { target: 'preview' },
+    { errorCode: 'synthetic-secret' }, { aliasError: 'synthetic-secret' },
+    { checksConclusion: 'failed' }, { url: 'private.test' }, { url: 'user:password@x.vercel.app' },
+  ]) {
+    const f = vercelDependencies(); Object.assign(f.record, change);
+    await assert.rejects(main('vercel-deploy', env, f), /VERCEL_RELEASE_INVALID/);
+    assert(!f.commands.some((args) => args[0] === 'promote'));
+  }
+});
+
+test('API 401/403 falla sin reintento ni creación y sin revelar respuestas privadas', async () => {
+  for (const status of [401, 403]) {
+    const f = vercelDependencies(); let calls = 0;
+    f.fetchImpl = async () => { calls++; return response({ error: 'synthetic-private-token' }, status); };
+    await assert.rejects(main('vercel-deploy', env, f), (error) => {
+      assert.equal(error.code, 'VERCEL_API_FAILED');
+      assert(!safeFailure('vercel-deploy', error).includes('synthetic-private-token')); return true;
+    });
+    assert.equal(calls, 1); assert.equal(f.commands.length, 0);
+  }
+});
+
+test('consultas Vercel reintentan red/503 acotadamente; JSON inválido falla cerrado', async () => {
+  const f = vercelDependencies(); const fetch = f.fetchImpl; let count = 0; const delays = [];
+  f.wait = async (ms) => delays.push(ms);
+  f.fetchImpl = async (url) => {
+    if (++count === 1) throw new Error('private-token https://private.test');
+    if (count === 2) return response({}, 503);
+    return fetch(url);
+  };
+  await main('vercel-deploy', env, f); assert.deepEqual(delays.slice(0, 2), [1000, 2000]);
+  for (const scenario of ['network', 'json']) {
+    const g = vercelDependencies(); let calls = 0;
+    g.fetchImpl = async () => { calls++; if (scenario === 'network') throw new Error('private'); return new Response('{bad', { status: 200 }); };
+    await assert.rejects(main('vercel-deploy', env, g), /VERCEL_API_FAILED/);
+    assert.equal(calls, scenario === 'network' ? 3 : 1); assert.equal(g.commands.length, 0);
+  }
+});
+
+test('espera READY agotada o señal vencida nunca permite promoción', async () => {
+  const f = vercelDependencies(); f.record.readyState = 'BUILDING';
+  await assert.rejects(main('vercel-deploy', env, f), /VERCEL_RELEASE_TIMEOUT/);
+  assert(!f.commands.some((args) => args[0] === 'promote'));
+  const g = vercelDependencies(); g.vercelSignal = AbortSignal.abort();
+  await assert.rejects(main('vercel-deploy', env, g), /VERCEL_RELEASE_TIMEOUT/);
+  assert.equal(g.commands.length, 0);
+});
+
+test('Render debe seguir live del SHA aprobado y ambos health deben pasar', async () => {
+  for (const scenario of ['render-sha', 'render-state', 'backend-health', 'staging-health', 'final-health']) {
+    const f = vercelDependencies(); const fetch = f.fetchImpl;
+    f.fetchImpl = async (url) => {
+      if (new URL(url).hostname === 'api.render.com') {
+        if (scenario === 'render-sha') return response([{ deploy: { status: 'live', commit: { id: 'b'.repeat(40) } } }]);
+        if (scenario === 'render-state') return response([{ deploy: { status: 'build_failed', commit: { id: env.DEPLOY_SHA } } }]);
+      }
+      if (scenario === 'backend-health' && String(url) === env.BACKEND_HEALTH_URL) return response({ status: 'disconnected' });
+      if (scenario === 'staging-health' && new URL(url).hostname === f.record.url) return new Response('Error', { status: 200 });
+      if (scenario === 'final-health' && String(url) === env.FRONTEND_HEALTH_URL) return new Response('Error', { status: 503 });
+      return fetch(url);
+    };
+    await assert.rejects(main('vercel-deploy', env, f));
+    assert.equal(f.commands.filter((a) => a[0] === 'promote').length, scenario === 'final-health' ? 1 : 0);
+  }
+});
+
+test('reintento del mismo SHA reutiliza deployment; ya promovido no vuelve a mutar', async () => {
+  const f = vercelDependencies();
+  await main('vercel-deploy', env, f);
+  await main('vercel-deploy', env, f);
+  assert.deepEqual(f.commands.map((args) => args[0]), ['deploy', 'promote']);
+  const g = vercelDependencies(); g.state.created = true;
+  await main('vercel-deploy', env, g);
+  assert.deepEqual(g.commands.map((args) => args[0]), ['promote']);
+});
+
+test('listado con duplicados o búsqueda incompleta nunca crea otro deployment', async () => {
+  for (const scenario of ['duplicates', 'pagination', 'invalid']) {
+    const f = vercelDependencies(); let reads = 0; const fetch = f.fetchImpl;
+    f.fetchImpl = async (url) => {
+      if (new URL(url).pathname.startsWith('/v9/projects/')) return fetch(url);
+      reads++;
+      if (scenario === 'invalid') return response({ deployments: [{}] });
+      return response({ deployments: [
+        { uid: 'dpl_One', meta: f.record.meta },
+        ...(scenario === 'duplicates' ? [{ uid: 'dpl_Two', meta: f.record.meta }] : []),
+      ], pagination: { next: scenario === 'pagination' ? reads : null } });
+    };
+    await assert.rejects(main('vercel-deploy', env, f), /VERCEL_DUPLICATES|VERCEL_API_FAILED/);
+    assert.equal(f.commands.length, 0);
+    assert(reads <= 5);
+  }
+});
+
+test('creación aceptada con CLI fallida o stdout inválido solo reconcilia por GET', async () => {
+  for (const scenario of ['cli', 'stdout']) {
+    const f = vercelDependencies(); const cli = f.runCli;
+    f.runCli = async (args) => {
+      if (args[0] !== 'deploy') return cli(args);
+      f.commands.push(args); f.state.created = true;
+      if (scenario === 'cli') throw Object.assign(new DeploymentError('VERCEL_COMMAND_FAILED'),
+        { command: 'vercel_deploy', reason: 'exit_nonzero', category: 'unknown', exitCode: 1 });
+      return 'not-a-valid-cli-result';
+    };
+    await main('vercel-deploy', env, f);
+    assert.deepEqual(f.commands.map((args) => args[0]), ['deploy', 'promote']);
+  }
+});
+
+test('creación ambigua sin candidato no se repite y permiso CLI denegado falla cerrado', async () => {
+  for (const category of ['unknown', 'permission']) {
+    const f = vercelDependencies();
+    f.runCli = async (args) => { f.commands.push(args); throw Object.assign(new DeploymentError('VERCEL_COMMAND_FAILED'),
+      { command: 'vercel_deploy', reason: 'exit_nonzero', category, exitCode: 1 }); };
+    await assert.rejects(main('vercel-deploy', env, f), category === 'permission' ? /VERCEL_COMMAND_FAILED/ : /VERCEL_DEPLOY_AMBIGUOUS/);
+    assert.deepEqual(f.commands.map((args) => args[0]), ['deploy']);
+  }
+});
+
+test('promoción fallida o ambigua no se repite; API confirmada permite terminar', async () => {
+  for (const scenario of ['failed', 'ambiguous', 'accepted']) {
+    const f = vercelDependencies(); const cli = f.runCli;
+    f.runCli = async (args) => {
+      if (args[0] !== 'promote') return cli(args);
+      f.commands.push(args); f.state.promoted = scenario === 'accepted';
+      throw Object.assign(new DeploymentError('VERCEL_COMMAND_FAILED'), { command: 'vercel_promote',
+        reason: scenario === 'failed' ? 'exit_nonzero' : 'timeout', category: scenario === 'failed' ? 'permission' : 'unknown', exitCode: 1 });
+    };
+    if (scenario === 'accepted') await main('vercel-deploy', env, f);
+    else await assert.rejects(main('vercel-deploy', env, f), scenario === 'failed' ? /VERCEL_COMMAND_FAILED/ : /VERCEL_PROMOTION_AMBIGUOUS/);
+    assert.equal(f.commands.filter((args) => args[0] === 'promote').length, 1);
+  }
+});
+
+test('alias a otro deployment impide éxito aunque READY y HTML sean correctos', async () => {
+  const f = vercelDependencies(); const fetch = f.fetchImpl;
+  f.fetchImpl = async (url) => new URL(url).pathname.startsWith('/v4/aliases/')
+    ? response({ alias: 'frontend.example.test', projectId: env.VERCEL_PROJECT_ID, deploymentId: 'dpl_Other' }) : fetch(url);
+  await assert.rejects(main('vercel-deploy', env, f), /POSTCHECK_FAILED/);
+  assert.equal(f.commands.filter((a) => a[0] === 'promote').length, 1);
+});
+
+test('CLI fija scope y usa token solo por entorno, sin entregar credenciales Render', async () => {
+  for (const subcommand of ['pull', 'build', 'deploy', 'inspect', 'promote']) {
+    let calls = 0;
+    await cli([subcommand], env, async (binary, args, childEnv, timeout, label) => {
+      calls++;
+      assert.equal(binary, 'vercel');
+      assert.deepEqual(args, [subcommand, '--scope', env.VERCEL_ORG_ID]);
+      assert(!args.includes('--token'));
+      assert.equal(childEnv.VERCEL_TOKEN, env.VERCEL_TOKEN);
+      assert.equal(childEnv.RENDER_API_KEY, undefined);
+      assert.equal(childEnv.RENDER_DEPLOY_HOOK_URL, undefined);
+      assert.equal(label, `vercel_${subcommand}`);
+      assert(timeout > 0); return '';
+    });
+    assert.equal(calls, 1);
+  }
+});
+
+test('propietario del proyecto se verifica incluso si deployment omite ownerId', async () => {
+  const f = vercelDependencies(); delete f.record.ownerId;
+  await main('vercel-deploy', env, f);
+  const g = vercelDependencies(); const fetch = g.fetchImpl;
+  g.fetchImpl = async (url) => new URL(url).pathname.startsWith('/v9/projects/')
+    ? response({ id: env.VERCEL_PROJECT_ID, accountId: 'team-other' }) : fetch(url);
+  await assert.rejects(main('vercel-deploy', env, g), /VERCEL_RELEASE_INVALID/);
+  assert.equal(g.commands.length, 0);
+});
+
+test('main o Render que cambian después de staging impiden promoción', async () => {
+  for (const scenario of ['main', 'render']) {
+    const f = vercelDependencies(); const fetch = f.fetchImpl; let stagingRead = false;
+    f.readMain = async () => scenario === 'main' && stagingRead ? 'b'.repeat(40) : env.DEPLOY_SHA;
+    f.fetchImpl = async (url) => {
+      if (new URL(url).hostname === f.record.url) stagingRead = true;
+      if (scenario === 'render' && stagingRead && new URL(url).hostname === 'api.render.com')
+        return response([{ deploy: { status: 'live', commit: { id: 'b'.repeat(40) } } }]);
+      return fetch(url);
+    };
+    await assert.rejects(main('vercel-deploy', env, f));
+    assert(!f.commands.some((args) => args[0] === 'promote'));
+  }
+});
+
+test('espera de propagación del alias es acotada y no reejecuta promote', async () => {
+  const f = vercelDependencies(); const fetch = f.fetchImpl; let aliases = 0;
+  f.fetchImpl = async (url) => {
+    if (new URL(url).pathname.startsWith('/v4/aliases/') && ++aliases === 1)
+      return response({ alias: 'frontend.example.test', projectId: env.VERCEL_PROJECT_ID, deploymentId: 'dpl_Previous' });
+    return fetch(url);
+  };
+  await main('vercel-deploy', env, f);
+  assert.equal(f.commands.filter((args) => args[0] === 'promote').length, 1);
+  assert(aliases >= 2);
+});
+
+test('URL estable no se acepta como URL inmutable del deployment', async () => {
+  const f = vercelDependencies();
+  await assert.rejects(main('vercel-deploy', { ...env, FRONTEND_HEALTH_URL: `https://${f.record.url}/login` }, f), /VERCEL_RELEASE_INVALID/);
+  assert(!f.commands.some((args) => args[0] === 'promote'));
+});
+
+test('alias que cambia después del health final impide declarar éxito', async () => {
+  const f = vercelDependencies(); const fetch = f.fetchImpl; let frontendChecked = false;
+  f.fetchImpl = async (url) => {
+    if (String(url) === env.FRONTEND_HEALTH_URL) frontendChecked = true;
+    if (frontendChecked && new URL(url).pathname.startsWith('/v4/aliases/'))
+      return response({ alias: 'frontend.example.test', projectId: env.VERCEL_PROJECT_ID, deploymentId: 'dpl_Other' });
+    return fetch(url);
+  };
+  await assert.rejects(main('vercel-deploy', env, f), /POSTCHECK_FAILED/);
+  assert.equal(f.commands.filter((args) => args[0] === 'promote').length, 1);
 });
