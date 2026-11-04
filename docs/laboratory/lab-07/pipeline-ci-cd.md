@@ -1,5 +1,10 @@
 # S1 — CI/CD y despliegue automático preparado
 
+Actualización tras PR #110: el workflow productivo ya está activo; el primer
+intento tuvo publicación parcial y se describe en «Diagnóstico y recuperación
+preparada tras el primer intento». Las referencias a false/desactivación abajo
+documentan la preparación histórica. Esta corrección no ejecuta publicaciones.
+
 Responsable: Sofía. Producción permanece bloqueada por `false` literal en el
 job `deploy`. No se ha invocado ningún hook, CLI autenticada ni despliegue.
 
@@ -154,6 +159,63 @@ ventana de despliegue Git al introducir por primera vez la configuración.
    ambos health satisfactorios. Registrar run/SHA/IDs sin tokens ni cuerpos privados.
 
 ## Riesgos y comprobaciones
+
+### Diagnóstico y recuperación preparada tras el primer intento
+
+El run [41872406367](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/41872406367)
+publicó Render del SHA `9e353f372c38cb03125074f7b528de5bcc45ab21`, pero terminó
+con VERCEL_COMMAND_FAILED. Vercel creó un deployment READY sin alias productivo;
+el error histórico no permite identificar cuál comando falló, porque su stderr
+y metadatos se descartaban. Esta corrección no demuestra la causa histórica.
+
+El ejecutor ahora conserva etiquetas fijas vercel_deploy/vercel_inspect/
+vercel_promote (también pull/build), exit code, señal normalizada y causa
+controlada: exit_nonzero, timeout, cancelled, spawn_failed u output_limit.
+Retiene como máximo 8 KiB de stderr solo para clasificar autenticación, permisos,
+recurso inexistente, argumentos, red o desconocido. Nunca imprime stdout/stderr
+fallidos, argumentos, tokens, URLs privadas ni objetos originales. La clasificación
+es orientativa, no prueba independiente de la causa del proveedor.
+
+Se prepara `node scripts/ci/production-deploy.mjs vercel-recover` como modo
+separado. **No se ejecutó una recuperación real ni está autorizada por este documento.**
+No se conecta desde el workflow normal ni requiere credenciales Render.
+
+Procedimiento futuro, exclusivamente tras revisión y autorización conjunta:
+
+1. Pausar nuevas publicaciones y revisar estado real de ambos proveedores.
+   Confirmar Render live/SHA/health y compatibilidad de backend; el GET health
+   de recuperación comprueba PostgreSQL, no certifica por sí mismo el SHA de Render.
+2. Usar una copia revisada del script corregido, Node compatible y CLI fijada.
+   Proporcionar por entorno seguro DEPLOY_SHA, VERCEL_TOKEN, VERCEL_ORG_ID,
+   VERCEL_PROJECT_ID, BACKEND_HEALTH_URL y FRONTEND_HEALTH_URL. No imprimirlos.
+3. Indicar RECOVERY_DEPLOYMENT como ID dpl_ o URL HTTPS inmutable *.vercel.app,
+   sin credenciales, puerto, query ni ruta. La API debe confirmar ID/URL,
+   organización propietaria, proyecto, SHA, main, READY, production y ausencia
+   de errores/alias productivo. La ausencia de identidad requerida falla cerrado.
+4. Sin autorización exacta, el modo solo consulta/valida y termina con error
+   RECOVERY_NOT_AUTHORIZED; no promueve. Comprueba backend health y /login
+   inmutable, vuelve a consultar identidad y vuelve a leer main.
+5. Solo al autorizar la operación en ese momento, establecer
+   RECOVERY_PROMOTION_AUTHORIZATION con el formato `promote:<SHA>:<deployment-ID>`.
+   Es una confirmación operacional, no un sustituto de permisos o revisiones.
+   Ejecutar el modo únicamente después de completar las precondiciones.
+6. El modo solo puede invocar promote sobre ese deployment existente. No llama
+   Render, pull, build, deploy, redeploy, rollback ni migraciones. Después exige
+   READY/identidad/alias productivo y frontend correctos.
+
+Si main avanzó respecto del SHA del deployment existente, la recuperación se
+rechaza; no relajar ese control para forzar una publicación antigua. Revisar el
+plan de release. Ante fallo o timeout de promote, inspeccionar alias/estado antes
+de cualquier reintento: la promoción puede haber sido aceptada. No reejecutar el
+job normal completo para recuperar este caso ni revertir migraciones confirmadas.
+
+Validación local de esta preparación: pruebas sintéticas de procesos y APIs,
+conservando las 17 pruebas previas y las 96 combinaciones. Los mensajes de éxito
+de proveedores dentro de node:test pertenecen a simulaciones. La CLI autenticada,
+Deployment Protection y la recuperación en infraestructura real siguen pendientes.
+Resultado ejecutado: 29 pruebas del mecanismo aprobadas y 9 del artefacto
+compilado aprobadas, cero fallidas/omitidas; lint/build backend, sintaxis JavaScript
+y git diff --check correctos. No se repitió Jest completo ni integración Docker.
 
 No hay transacción entre proveedores: Render puede quedar actualizado si Vercel
 falla. No se revierte automáticamente ni se deshacen migraciones. Usar cambios

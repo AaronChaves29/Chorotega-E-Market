@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { preflight, deployRender as realDeployRender, health, verifyVercelDeployment,
-  assertCurrentMain, main, safeFailure, DeploymentError } from './production-deploy.mjs';
+  assertCurrentMain, main, safeFailure, DeploymentError, command } from './production-deploy.mjs';
 
 const env = {
   DEPLOY_SHA: 'a'.repeat(40), RENDER_SERVICE_ID: 'srv-test',
@@ -253,4 +253,195 @@ test('Vercel exige READY, proyecto, SHA y asociación del dominio productivo', (
     { meta: { githubCommitSha: 'b'.repeat(40), githubCommitRef: 'main' } },
     { aliasAssigned: false }, { alias: [] }, { aliasError: { code: 'synthetic' } },
   ]) assert.throws(() => verifyVercelDeployment({ ...result, ...change }, url, env));
+});
+
+test('subprocesos CLI conservan comando/exit y clasifican stderr sin revelar secretos', async () => {
+  for (const label of ['vercel_deploy', 'vercel_inspect', 'vercel_promote']) {
+    await assert.rejects(command(process.execPath, ['-e',
+      "process.stdout.write('private-token'); process.stderr.write('Unauthorized private-token https://private.test/?key=private'); process.exitCode=7"],
+    process.env, 5000, label), (error) => {
+      assert.equal(error.command, label);
+      assert.equal(error.exitCode, 7);
+      assert.equal(error.reason, 'exit_nonzero');
+      assert.equal(error.category, 'authentication');
+      const text = safeFailure('vercel-deploy', error);
+      assert(text.includes(`comando=${label}`));
+      assert(!/private-token|private\.test|key=private/.test(`${text}${JSON.stringify(error)}`));
+      return true;
+    });
+  }
+});
+
+test('runner distingue timeout, cancelación, spawn_failed y exceso de stdout', async () => {
+  const controller = new AbortController(); controller.abort();
+  for (const [binary, args, timeout, options, expected] of [
+    [process.execPath, ['-e', 'setInterval(()=>{},1000)'], 50, {}, 'timeout'],
+    [process.execPath, ['-e', 'setInterval(()=>{},1000)'], 5000, { signal: controller.signal }, 'cancelled'],
+    ['chorotega-nonexistent-command-synthetic', [], 5000, {}, 'spawn_failed'],
+    [null, [], 5000, {}, 'spawn_failed'],
+    [process.execPath, ['-e', "process.stdout.write('x'.repeat(100000))"], 5000, { maxOutputBytes: 128 }, 'output_limit'],
+  ]) await assert.rejects(command(binary, args, process.env, timeout, 'vercel_inspect', options), (error) => {
+    assert.equal(error.reason, expected);
+    assert.equal(error.command, 'vercel_inspect');
+    assert(!safeFailure('vercel-deploy', error).includes('undefined'));
+    return true;
+  });
+});
+
+test('stderr está limitado y su clasificación solo devuelve un catálogo controlado', async () => {
+  for (const [stderr, category] of [
+    ['Forbidden synthetic-secret', 'permission'],
+    ['Deployment not found synthetic-secret', 'not_found'],
+    ['Unknown option synthetic-secret', 'invalid_argument'],
+    ['ECONNRESET synthetic-secret', 'network'],
+    ['x'.repeat(9000) + 'Unauthorized synthetic-secret', 'unknown'],
+  ]) await assert.rejects(command(process.execPath,
+    ['-e', `process.stderr.write(${JSON.stringify(stderr)});process.exitCode=1`],
+    process.env, 5000, 'vercel_inspect'), (error) => {
+      assert.equal(error.category, category);
+      assert(!safeFailure('vercel-deploy', error).includes('synthetic-secret'));
+      return true;
+    });
+});
+
+test('stdout exitoso permanece disponible y metadatos hostiles no llegan al diagnóstico', async () => {
+  assert.equal(await command(process.execPath, ['-e', "process.stdout.write('  safe-result  ');process.stderr.write('private-token')"],
+    process.env, 5000, 'vercel_inspect'), 'safe-result');
+  const hostile = Object.assign(new DeploymentError('VERCEL_COMMAND_FAILED'), {
+    command: 'vercel_inspect', reason: 'exit_nonzero', exitCode: 'private-token',
+    signal: 'private-token', category: 'private-token',
+  });
+  assert(!safeFailure('vercel-recover', hostile).includes('private-token'));
+});
+
+test('diagnóstico real en subproceso sale con error y solo imprime campos controlados', () => {
+  const moduleUrl = new URL('./production-deploy.mjs', import.meta.url).href;
+  const script = `import { command, safeFailure } from ${JSON.stringify(moduleUrl)};
+    try { await command(process.execPath, ['-e', "process.stderr.write('Forbidden synthetic-private-token');process.exitCode=9"], process.env, 5000, 'vercel_inspect'); }
+    catch (error) { console.error(safeFailure('vercel-deploy', error)); process.exitCode=1; }`;
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', script],
+    { encoding: 'utf8', timeout: 10000 });
+  assert.equal(child.status, 1);
+  assert.equal(child.stdout, '');
+  assert(child.stderr.includes('comando=vercel_inspect causa=exit_nonzero exit=9'));
+  assert(child.stderr.includes('clase=permission'));
+  assert(!child.stderr.includes('synthetic-private-token'));
+});
+
+function recoveryFixture() {
+  const config = { ...env, RECOVERY_DEPLOYMENT: 'dpl_Existing',
+    RECOVERY_PROMOTION_AUTHORIZATION: `promote:${env.DEPLOY_SHA}:dpl_Existing` };
+  delete config.RENDER_DEPLOY_HOOK_URL;
+  delete config.RENDER_API_KEY;
+  delete config.RENDER_SERVICE_ID;
+  const commands = [], requests = [];
+  let promoted = false;
+  const record = {
+    id: 'dpl_Existing', ownerId: env.VERCEL_ORG_ID, projectId: env.VERCEL_PROJECT_ID,
+    readyState: 'READY', target: 'production', url: 'immutable.vercel.app',
+    meta: { githubCommitSha: env.DEPLOY_SHA, githubCommitRef: 'main' },
+    alias: [], aliasAssigned: false, aliasError: null,
+  };
+  const deps = { healthAttempts: 1, wait, readMain: currentMain,
+    runCli: async (args) => {
+      commands.push(args);
+      assert.equal(args[0], 'promote', 'Recuperación nunca crea deployments ni ejecuta build/Render');
+      promoted = true; return '';
+    },
+    fetchImpl: async (url, options) => {
+      requests.push(String(url));
+      assert.equal(options.method, undefined, 'Solo consultas GET');
+      if (new URL(url).hostname === 'api.vercel.com') return response({ ...record,
+        alias: promoted ? ['frontend.example.test'] : record.alias,
+        aliasAssigned: promoted ? true : record.aliasAssigned });
+      if (String(url) === env.BACKEND_HEALTH_URL) return response({ status: 'connected' });
+      assert(['https://immutable.vercel.app/login', env.FRONTEND_HEALTH_URL].includes(String(url)));
+      return new Response(loginHtml, { headers: { 'content-type': 'text/html' } });
+    },
+  };
+  return { config, commands, requests, record, deps };
+}
+
+test('recuperación por ID o URL reutiliza READY y solo promueve tras validar todo', async () => {
+  for (const reference of ['dpl_Existing', 'https://immutable.vercel.app']) {
+    const f = recoveryFixture(); f.config.RECOVERY_DEPLOYMENT = reference;
+    await main('vercel-recover', f.config, f.deps);
+    assert.deepEqual(f.commands.map((args) => args[0]), ['promote']);
+    assert(f.requests.includes(env.BACKEND_HEALTH_URL));
+    assert(f.requests.includes('https://immutable.vercel.app/login'));
+    assert(f.requests.includes(env.FRONTEND_HEALTH_URL));
+  }
+});
+
+test('recuperación sin autorización exacta nunca promueve ni repite despliegues', async () => {
+  for (const authorization of [undefined, 'yes', `promote:${env.DEPLOY_SHA}:dpl_Other`]) {
+    const f = recoveryFixture(); f.config.RECOVERY_PROMOTION_AUTHORIZATION = authorization;
+    await assert.rejects(main('vercel-recover', f.config, f.deps), /RECOVERY_NOT_AUTHORIZED/);
+    assert.equal(f.commands.length, 0);
+  }
+});
+
+test('recuperación rechaza referencias arbitrarias y configuración incompleta antes de consultar', async () => {
+  for (const reference of ['https://evil.test', 'https://immutable.vercel.app/login',
+    'https://secret@immutable.vercel.app', 'https://immutable.vercel.app?token=private',
+    'http://immutable.vercel.app', 'dpl_bad/../id', 'https://immutable.vercel.app:8443']) {
+    const f = recoveryFixture(); f.config.RECOVERY_DEPLOYMENT = reference;
+    await assert.rejects(main('vercel-recover', f.config, f.deps));
+    assert.equal(f.requests.length, 0); assert.equal(f.commands.length, 0);
+  }
+  const f = recoveryFixture(); delete f.config.VERCEL_PROJECT_ID;
+  await assert.rejects(main('vercel-recover', f.config, f.deps), /RECOVERY_INVALID/);
+  assert.equal(f.requests.length, 0);
+});
+
+test('recuperación exige ID, organización, proyecto, SHA, main, READY y ausencia de errores', async () => {
+  for (const change of [
+    { id: 'dpl_Other' }, { ownerId: 'team-other' }, { ownerId: undefined },
+    { projectId: 'prj-other' }, { readyState: 'BUILDING' }, { target: 'preview' },
+    { meta: { githubCommitSha: 'b'.repeat(40), githubCommitRef: 'main' } },
+    { meta: { githubCommitSha: env.DEPLOY_SHA, githubCommitRef: 'develop' } },
+    { aliasError: 'private' }, { errorCode: 'private' }, { checksConclusion: 'failed' },
+    { url: 'evil.test' }, { alias: ['frontend.example.test'] },
+  ]) {
+    const f = recoveryFixture(); Object.assign(f.record, change);
+    await assert.rejects(main('vercel-recover', f.config, f.deps));
+    assert.equal(f.commands.length, 0);
+  }
+});
+
+test('recuperación falla cerrada si main cambia o health/backend/login no son válidos', async () => {
+  for (const scenario of ['stale', 'backend', 'login', 'api']) {
+    const f = recoveryFixture(); let reads = 0;
+    const fetch = f.deps.fetchImpl;
+    if (scenario === 'stale') f.deps.readMain = async () => ++reads > 1 ? 'b'.repeat(40) : env.DEPLOY_SHA;
+    else f.deps.fetchImpl = async (url, options) => {
+      if ((scenario === 'backend' && String(url) === env.BACKEND_HEALTH_URL) ||
+          (scenario === 'api' && new URL(url).hostname === 'api.vercel.com')) return response({}, 503);
+      if (scenario === 'login' && String(url).includes('/login')) return new Response('Error', { status: 200 });
+      return fetch(url, options);
+    };
+    await assert.rejects(main('vercel-recover', f.config, f.deps));
+    assert.equal(f.commands.length, 0);
+  }
+});
+
+test('recuperación revalida identidad antes de promover y no reintenta CLI fallida', async () => {
+  const f = recoveryFixture(); let apiReads = 0; const fetch = f.deps.fetchImpl;
+  f.deps.fetchImpl = async (url, options) => {
+    if (new URL(url).hostname === 'api.vercel.com' && ++apiReads === 2) f.record.ownerId = 'team-other';
+    return fetch(url, options);
+  };
+  await assert.rejects(main('vercel-recover', f.config, f.deps)); assert.equal(f.commands.length, 0);
+  const g = recoveryFixture(); let calls = 0;
+  g.deps.runCli = async (args) => { assert.equal(args[0], 'promote'); calls++; throw new DeploymentError('VERCEL_COMMAND_FAILED'); };
+  await assert.rejects(main('vercel-recover', g.config, g.deps), /VERCEL_COMMAND_FAILED/);
+  assert.equal(calls, 1);
+});
+
+test('postcheck fallido tras promoción no crea otro deployment ni hace rollback', async () => {
+  const f = recoveryFixture(); const fetch = f.deps.fetchImpl;
+  f.deps.fetchImpl = async (url, options) => String(url) === env.FRONTEND_HEALTH_URL
+    ? new Response('Error', { status: 503 }) : fetch(url, options);
+  await assert.rejects(main('vercel-recover', f.config, f.deps), /POSTCHECK_FAILED/);
+  assert.deepEqual(f.commands.map((args) => args[0]), ['promote']);
 });
