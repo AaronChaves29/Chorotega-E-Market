@@ -16,6 +16,62 @@ Las secciones siguientes conservan el procedimiento y resultados históricos de
 preparación. Las referencias a false, plantilla inactiva o ausencia de despliegues
 pertenecen a esas etapas; no revierten el estado actual descrito arriba.
 
+## Diagnóstico de pull: run 41923529171 (corrección local, sin publicar)
+
+Base de la rama `fix/lab-07-vercel-pull`: main
+`e47574f21f3157e26b0cf04351659d1240421569`.
+[Run productivo](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/41923529171):
+backend/frontend aprobaron; `vercel_pull` terminó con exit 1, clase unknown,
+antes de Render y de la promoción. **No fue un despliegue exitoso.** El registro
+sanitizado original no demuestra la causa exacta ni los permisos efectivos.
+
+Se inspeccionó el paquete oficial Vercel CLI 65.4.0 sin ejecutarlo autenticado:
+pull admite `--project` y el par `VERCEL_PROJECT_ID`/`VERCEL_ORG_ID` por entorno.
+El `--scope` global puede resolver usuario/equipos antes de ejecutar pull.
+Una restricción de token en esa resolución es una hipótesis, no una causa probada;
+también pueden fallar autenticación, permisos, IDs, argumentos o red.
+Referencias: [pull](https://vercel.com/docs/cli/pull) y
+[opciones globales](https://vercel.com/docs/cli/global-options).
+
+Cambio mínimo: pull recibe `--project VERCEL_PROJECT_ID`, mantiene el equipo y
+token por entorno y no recibe `--scope` global. Los demás comandos conservan
+su scope. Se mantiene la ejecución desde la raíz Git; no se crea ni versiona
+`.vercel/project.json`. Tras pull se exigen IDs coincidentes, rootDirectory
+`apps/frontend` y Node `24.x` antes de build. No se cambia workflow ni proveedores.
+
+El runner clasifica stderr y errores JSON en stdout (máximo 8 KiB por canal)
+en categorías controladas: autenticación, permisos, proyecto, scope, argumentos,
+red o desconocido. Solo registra categoría, etiqueta, exit, señal y causa;
+no imprime mensajes, tokens, argumentos, URLs ni respuestas originales.
+La clasificación orienta el diagnóstico; no certifica permisos ni su causa.
+
+Verificación pendiente de Aarón, sin compartir secretos:
+
+1. En Vercel confirmar que el token está vigente y tiene acceso al equipo,
+   proyecto y configuración production correctos. Comparar internamente los IDs
+   de GitHub con los del proyecto/equipo; no copiar valores a informes o chats.
+2. Confirmar rootDirectory `apps/frontend`, Node 24.x y acceso autorizado a staging.
+   Mantener Auto-Deploy Off en Render y el bloqueo Git main de Vercel.
+3. Solo con autorización, usar un checkout aislado y CLI 65.4.0 desde raíz Git,
+   con `VERCEL_TOKEN`, `VERCEL_ORG_ID` y `VERCEL_PROJECT_ID` por entorno:
+   `vercel pull --yes --environment=production --project "$VERCEL_PROJECT_ID"`
+   (sintaxis bash; en PowerShell usar `$env:VERCEL_PROJECT_ID`). No incluir token
+   en argumentos ni habilitar debug. Pull descarga configuración/variables
+   productivas: proteger ese directorio, no publicar sus archivos ni su contenido.
+4. Revisar únicamente IDs, rootDirectory y nodeVersion del enlace generado;
+   conservar solo el resultado sanitizado y el exit code. Si falla, revisar
+   permisos/configuración antes de reintentar; no ejecutar deploy ni promote.
+5. Acordar explícitamente cualquier prueba posterior de CI productivo: integrar
+   en main puede publicar. Esta corrección aún no está validada con credenciales
+   reales ni demuestra un despliegue automático completo en success.
+
+Validación local: 51 pruebas del mecanismo aprobadas (incluyen las 96
+combinaciones del workflow); los proveedores se simulan y los subprocesos de
+diagnóstico usan Node con datos sintéticos. No se ejecutó pull autenticado.
+También aprobaron lint y build de backend/frontend, 9 pruebas del artefacto
+compilado, sintaxis JavaScript/YAML y `git diff --check`. No se reejecutaron
+Jest con cobertura, integración Docker ni pruebas de navegador en esta revisión.
+
 ## Corrección local de promoción automática (sin publicar)
 
 Rama `fix/lab-07-vercel-auto-promotion`, base develop `74317e3`, posterior a #112.
@@ -33,7 +89,8 @@ Flujo preparado para futuras publicaciones autorizadas:
 
 1. CI mantiene push/main y ambos jobs exitosos, cobertura, concurrencia y timeout.
    Pull/build se ejecutan desde raíz Git con proyecto enlazado y Node 24.
-   La CLI usa scope explícito y VERCEL_TOKEN por entorno, nunca como argumento.
+   La CLI usa proyecto explícito en pull y scope en los demás comandos;
+   VERCEL_TOKEN se entrega por entorno, nunca como argumento.
 2. Consultar el proyecto autenticado: ID y accountId deben coincidir con los IDs
    configurados. Se vuelve a comprobar antes de promover y al finalizar.
 3. Buscar deployments del proyecto/production/SHA mediante GET /v7/deployments,

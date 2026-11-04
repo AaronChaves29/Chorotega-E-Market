@@ -20,6 +20,74 @@ const wait = async () => {};
 const currentMain = async () => env.DEPLOY_SHA;
 const deployRender = (config, options) => realDeployRender(config, { readMain: currentMain, ...options });
 
+test('pull enlaza el proyecto antes de build y rechaza contexto distinto sin publicar', async () => {
+  const project = { projectId: env.VERCEL_PROJECT_ID, orgId: env.VERCEL_ORG_ID,
+    settings: { rootDirectory: 'apps/frontend', nodeVersion: '24.x' } };
+  const calls = [];
+  await main('vercel-build', env, { runCli: async (args) => calls.push(args), readProject: () => project });
+  assert.deepEqual(calls, [['pull', '--yes', '--environment=production'], ['build', '--prod']]);
+  for (const [reason, mutate] of [
+    ['project_mismatch', (p) => { p.projectId = 'other'; }],
+    ['organization_mismatch', (p) => { p.orgId = 'other'; }],
+    ['root_directory_mismatch', (p) => { p.settings.rootDirectory = '.'; }],
+    ['node_version_mismatch', (p) => { p.settings.nodeVersion = '22.x'; }],
+    ['project_settings_unreadable', () => { throw new Error('synthetic-private-token'); }],
+  ]) {
+    const commands = [];
+    await assert.rejects(main('vercel-build', env, {
+      runCli: async (args) => commands.push(args),
+      readProject: () => { const p = structuredClone(project); mutate(p); return p; },
+    }), (error) => {
+      assert.equal(error.code, 'VERCEL_CONTEXT_INVALID');
+      assert.equal(error.reason, reason);
+      assert(!safeFailure('vercel-build', error).includes('synthetic-private-token'));
+      return true;
+    });
+    assert.deepEqual(commands, [['pull', '--yes', '--environment=production']]);
+  }
+});
+
+test('fallo de pull impide leer el enlace y ejecutar build', async () => {
+  const failure = new DeploymentError('VERCEL_COMMAND_FAILED');
+  await assert.rejects(main('vercel-build', env, {
+    runCli: async (args) => { assert.equal(args[0], 'pull'); throw failure; },
+    readProject: () => assert.fail('No debe leer contexto tras pull fallido'),
+  }), (error) => error === failure);
+});
+
+test('diagnosticos JSON de pull clasifican causas sin propagar mensajes privados', async () => {
+  for (const [reason, category] of [
+    ['scope_not_accessible', 'scope'], ['project_unauthorized', 'project'],
+    ['invalid_token', 'authentication'], ['forbidden', 'permission'],
+    ['invalid_argument', 'invalid_argument'], ['synthetic-private-token', 'unknown'],
+  ]) {
+    const payload = JSON.stringify({ status: 'error', reason, message: 'synthetic-private-token https://private.test/?key=secret' });
+    await assert.rejects(command(process.execPath,
+      ['-e', `process.stdout.write(${JSON.stringify(payload)});process.exitCode=1`],
+      process.env, 5000, 'vercel_pull'), (error) => {
+      assert.equal(error.category, category);
+      assert.equal(error.exitCode, 1);
+      assert(!JSON.stringify(error).includes('synthetic-private-token'));
+      assert(!safeFailure('vercel-build', error).includes('private.test'));
+      return true;
+    });
+  }
+});
+
+test('diagnosticos stderr distinguen scope, proyecto y red con salida limitada', async () => {
+  for (const [message, category] of [
+    ['You do not have access to the specified account', 'scope'],
+    ['Project not found prj-private', 'project'], ['fetch failed ENOTFOUND', 'network'],
+  ]) {
+    await assert.rejects(command(process.execPath,
+      ['-e', `process.stderr.write(${JSON.stringify(message + ' synthetic-private-token')});process.exitCode=1`],
+      process.env, 5000, 'vercel_pull'), (error) => error.category === category && !JSON.stringify(error).includes('synthetic-private-token'));
+  }
+  await assert.rejects(command(process.execPath,
+    ['-e', `process.stdout.write(' '.repeat(8192)+JSON.stringify({reason:'invalid_token'}));process.exitCode=1`],
+    process.env, 5000, 'vercel_pull'), (error) => error.category === 'unknown');
+});
+
 test('rechaza configuración ausente o hook de otro servicio antes de desplegar', () => {
   assert.throws(() => preflight({}));
   assert.throws(() => preflight({ ...env, RENDER_SERVICE_ID: 'srv-other' }));
@@ -621,15 +689,19 @@ test('alias a otro deployment impide éxito aunque READY y HTML sean correctos',
   assert.equal(f.commands.filter((a) => a[0] === 'promote').length, 1);
 });
 
-test('CLI fija scope y usa token solo por entorno, sin entregar credenciales Render', async () => {
+test('CLI fija proyecto para pull y scope para otros comandos, sin entregar credenciales Render', async () => {
   for (const subcommand of ['pull', 'build', 'deploy', 'inspect', 'promote']) {
     let calls = 0;
     await cli([subcommand], env, async (binary, args, childEnv, timeout, label) => {
       calls++;
       assert.equal(binary, 'vercel');
-      assert.deepEqual(args, [subcommand, '--scope', env.VERCEL_ORG_ID]);
+      assert.deepEqual(args, subcommand === 'pull'
+        ? [subcommand, '--project', env.VERCEL_PROJECT_ID]
+        : [subcommand, '--scope', env.VERCEL_ORG_ID]);
       assert(!args.includes('--token'));
       assert.equal(childEnv.VERCEL_TOKEN, env.VERCEL_TOKEN);
+      assert.equal(childEnv.VERCEL_ORG_ID, env.VERCEL_ORG_ID);
+      assert.equal(childEnv.VERCEL_PROJECT_ID, env.VERCEL_PROJECT_ID);
       assert.equal(childEnv.RENDER_API_KEY, undefined);
       assert.equal(childEnv.RENDER_DEPLOY_HOOK_URL, undefined);
       assert.equal(label, `vercel_${subcommand}`);
