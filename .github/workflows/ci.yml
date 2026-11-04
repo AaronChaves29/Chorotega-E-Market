@@ -141,12 +141,12 @@ jobs:
       - name: Compilar frontend
         run: npm run build
 
-  # Retirar false únicamente después de configurar Secrets y bloquear
-  # el auto-deploy Git de main en Vercel. No ejecutar desde PR.
+  # Producción solo tras CI exitoso en push a main; nunca desde PR.
+  # Mantener bloqueado el auto-deploy Git de main en los proveedores.
   deploy:
-    name: Deploy production (disabled)
+    name: Deploy production
     needs: [backend, frontend]
-    if: ${{ false && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.backend.result == 'success' && needs.frontend.result == 'success' }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.backend.result == 'success' && needs.frontend.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:
