@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { preflight, deployRender as realDeployRender, health, verifyVercelDeployment,
   assertCurrentMain, main, safeFailure, DeploymentError } from './production-deploy.mjs';
 
@@ -156,20 +157,43 @@ test('logs seguros omiten mensajes arbitrarios de proveedores', () => {
   assert(!`${child.stdout}${child.stderr}`.includes('key=synthetic'));
 });
 
-test('workflow mantiene false y excluye PR/develop/fallos/cancelaciones', () => {
-  const yaml = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
-  const condition = yaml.match(/if: \$\{\{ (false && github.event_name.*) \}\}/)?.[1];
-  assert(condition);
-  assert(yaml.includes('needs: [backend, frontend]'));
-  assert(yaml.includes('cancel-in-progress: false'));
-  const evaluate = Function('github', 'needs', `return ${condition.replace(/^false && /, '')}`);
-  for (const event_name of ['push', 'pull_request'])
-    for (const ref of ['refs/heads/main', 'refs/heads/develop', 'refs/heads/feat/test'])
-      for (const b of ['success', 'failure', 'skipped', 'cancelled'])
-        for (const f of ['success', 'failure', 'skipped', 'cancelled']) {
-          assert.equal(evaluate({ event_name, ref }, { backend: { result: b }, frontend: { result: f } }),
-            event_name === 'push' && ref === 'refs/heads/main' && b === 'success' && f === 'success');
-        }
+test('workflow activo excluye PR/develop/fallos/cancelaciones', () => {
+  // CI instala primero las dependencias del backend, incluido js-yaml.
+  const require = createRequire(new URL('../../apps/backend/package.json', import.meta.url));
+  const { load } = require('js-yaml');
+  const workflow = load(readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'));
+  const deploy = workflow?.jobs?.deploy;
+  assert(deploy, 'Debe existir jobs.deploy');
+  assert.deepEqual(deploy.needs, ['backend', 'frontend']);
+  assert.equal(deploy.concurrency?.['cancel-in-progress'], false);
+  assert.equal(typeof deploy.if, 'string');
+  const match = deploy.if.match(/^\s*\$\{\{\s*([\s\S]+?)\s*\}\}\s*$/);
+  assert(match, 'jobs.deploy.if debe ser una expresión completa');
+  const condition = match[1];
+  const validate = (expression) => {
+    const evaluate = Function('github', 'needs', `return (${expression})`);
+    let combinations = 0;
+    for (const event_name of ['push', 'pull_request'])
+      for (const ref of ['refs/heads/main', 'refs/heads/develop', 'refs/heads/feat/test'])
+        for (const b of ['success', 'failure', 'skipped', 'cancelled'])
+          for (const f of ['success', 'failure', 'skipped', 'cancelled']) {
+            assert.equal(evaluate({ event_name, ref }, { backend: { result: b }, frontend: { result: f } }),
+              event_name === 'push' && ref === 'refs/heads/main' && b === 'success' && f === 'success');
+            combinations++;
+          }
+    assert.equal(combinations, 96);
+  };
+  validate(condition);
+  // Mutaciones solo en memoria: omitir cualquiera de los controles debe fallar.
+  for (const control of [
+    "github.event_name == 'push'",
+    "github.ref == 'refs/heads/main'",
+    "needs.backend.result == 'success'",
+    "needs.frontend.result == 'success'",
+  ]) {
+    assert(condition.includes(control), `Falta control: ${control}`);
+    assert.throws(() => validate(condition.replace(control, 'true')));
+  }
 });
 
 test('plazo Render agotado antes del hook no produce solicitudes', async () => {
