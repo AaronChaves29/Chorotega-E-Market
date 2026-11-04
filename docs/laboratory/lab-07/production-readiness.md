@@ -12,8 +12,9 @@ y la [auditoría de seguridad](../../../AUDITORIA-SEGURIDAD.md).
 
 ## Estado y alcance de la evidencia
 
-Base de esta rama: `origin/develop` en `99af210`, merge del PR #103 de dependencias
-frontend. Incluye los PR #97 (logger/health), #99 (eventos), #100 (evidencias),
+Base de esta actualización: `origin/develop` en `32a9536`, merge del PR #104 de
+preparación productiva; incluye #103 de dependencias frontend.
+Incluye los PR #97 (logger/health), #99 (eventos), #100 (evidencias),
 #101 (transacciones), #102 (auditoría) y los bloques previos de seguridad/CI.
 
 | Requisito | Estado y límite |
@@ -25,13 +26,14 @@ frontend. Incluye los PR #97 (logger/health), #99 (eventos), #100 (evidencias),
 | Seguridad y dependencias | Aarón reporta cierre y ausencia de avisos de producción frontend/backend. Avisos de desarrollo y fallos intermitentes documentados; no se ejecutó una auditoría nueva aquí. |
 | Despliegue automático | Preparado, desactivado. Secrets, protección de main y proveedores requieren confirmación conjunta. |
 
-El [run 41757034933](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/41757034933)
-aprobó para `99af210a88c11a30668e651c14c2ce38a64a9689`: se consultaron los jobs
+El [run 41762431625](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/41762431625)
+aprobó para `32a9536aad8cd6488606cb7856baa83ce10582ab`: se consultaron los jobs
 y el SHA del checkout en el log backend. Build Backend y Build Frontend terminaron
 con éxito, incluidas migraciones temporales, Jest/cobertura, integración,
 artefacto, orquestación y navegador MVC. Deploy production quedó omitido.
 Esto valida CI de la base documental, no producción ni los ajustes de proveedores.
-El run anterior 41690125347 corresponde a `c17a354`; las cifras históricas de S3
+Los runs anteriores 41757034933 y 41690125347 corresponden a `99af210` y
+`c17a354`, respectivamente; las cifras históricas de S3
 se mantienen separadas por suite, sin sumarlas como pruebas únicas. Guardar el
 run del SHA final y repetir CI si cambia el contenido que se integrará.
 
@@ -42,9 +44,9 @@ del equipo no sustituye la comprobación del ajuste efectivo.
 
 | Responsable | Comprobación pendiente |
 | --- | --- |
-| Sofía | CI de la base 99af210 confirmado; comprobar el del nuevo commit documental y del resultado combinado del PR hacia main. Revisar fallos intermitentes sin ocultarlos ni desactivar checks. |
+| Sofía | CI de la base 32a9536 confirmado; comprobar el del nuevo commit documental y del resultado combinado del PR hacia main. Revisar fallos intermitentes sin ocultarlos ni desactivar checks. |
 | Aarón | Confirmar cierre de auditoría y aceptación documentada de riesgos residuales. |
-| Aarón | Respaldo recuperable, procedimiento de restauración, historial de migraciones, permisos y esquema real compatibles. No ejecutar migraciones desde esta preparación. |
+| Aarón | Respaldo, restauración y ensayo local reportados; confirmar vigencia del respaldo, historial/esquema productivo, permisos y recuperación antes de publicar. No ejecutar migraciones desde esta preparación. |
 | Ambos | Ventana coordinada: no avanzar main durante publicación; responsables disponibles y recuperación acordada. |
 | Ambos | Verificar Secrets, Variables, ruleset de main y ajustes efectivos de ambos proveedores. |
 | Sofía y Aarón | Ensayo aislado autorizado: fallo backend/frontend/cobertura impide deploy sin hooks productivos, sin bajar umbrales y sin tests fallidos en main. El false actual no demuestra esta condición por sí solo. |
@@ -87,6 +89,19 @@ la integración y acordar el mecanismo con Aarón. No cambiar aquí ningún pane
 
 ### Respaldo y migraciones: decisión de Aarón
 
+**Resultados reportados por Aarón, no verificados independientemente en esta
+ejecución:** Render está conectado a PostgreSQL en Supabase; hay tres migraciones
+aplicadas y una pendiente, la que añade `producto.version`. Creó un respaldo
+limitado al esquema `public`, no un respaldo completo de todos los esquemas,
+comprobó su integridad SHA-256, lo restauró localmente y probó la migración
+pendiente y su rollback sobre esa copia local. No aplicó la migración pendiente
+ni modificó producción durante esas comprobaciones.
+
+El ensayo sobre la copia no demuestra que un rollback productivo esté probado
+ni autoriza restauraciones o publicaciones. No se incorporan checksum completo,
+contenido del respaldo, credenciales ni URLs privadas. Aarón debe confirmar la
+vigencia del respaldo y del historial al momento de la publicación.
+
 El arranque productivo ya aplica las migraciones pendientes antes de HTTP.
 No añadir migraciones ni seeds desde Actions o Pre-Deploy. Confirmar el historial
 real, no asumir que solo está pendiente la migración de versión de producto.
@@ -95,6 +110,55 @@ bloqueo DDL. Revisar capacidad, permisos, límites de espera y compatibilidad co
 la aplicación anterior y los clientes PATCH. Aunque el cambio sea aditivo, no
 garantiza ausencia de impacto. El respaldo debe permitir recuperación real.
 Una migración confirmada puede persistir aunque después falle la aplicación.
+
+## Checklist breve de revisión conjunta
+
+Casillas sin marcar hasta confirmación conjunta con fecha y responsable. Los
+resultados reportados arriba son antecedentes, no una validación independiente
+de los paneles ni autorización para publicar.
+
+### A. GitHub
+
+- [ ] Secrets requeridos presentes, vigentes y con permisos correctos; revisar
+  solo nombres/alcance, sin mostrar valores. Variables health apuntan a destinos correctos.
+- [ ] Protección efectiva de main y checks Build Backend/Build Frontend obligatorios.
+- [ ] SHA de publicación identificado y CI correspondiente aprobado; CI de la
+  base `32a9536` ya comprobado, pendiente el de futuras integraciones/activación.
+
+### B. Render
+
+- [ ] Servicio/repositorio correctos, rama main, raíz apps/backend y Auto-Deploy Off.
+- [ ] Health Check Path `/api/database/health`, build/start según la tabla anterior
+  y Pre-Deploy vacío; no duplicar migraciones.
+- [ ] Variables de arranque, TLS y permisos confirmados por Aarón sin exponer valores.
+
+### C. Vercel
+
+- [ ] Proyecto correcto, Production Branch main, Node 24.x y rootDirectory apps/frontend.
+- [ ] Bloqueo efectivo de despliegue Git independiente de main antes de integrarlo;
+  Preview deseados conservados y dominio correcto.
+- [ ] Token/organización/proyecto y variables Production revisados; acceso autorizado
+  a staging compatible con Deployment Protection, sin desactivar protecciones automáticamente.
+
+### D. PostgreSQL
+
+- [ ] Aarón confirma respaldo vigente del esquema `public`, integridad y restauración local reportadas,
+  ubicación segura y procedimiento de recuperación acordado.
+- [ ] Aarón reconfirma tres migraciones aplicadas/una pendiente, permisos y esquema;
+  ensayo de migración/rollback limitado a la copia local, sin aplicación productiva.
+
+### E. Plan de activación
+
+- [ ] Aprobación conjunta de ventana y recuperación. Primero integrar develop a
+  main manteniendo false; después activar mediante PR separado y CI del nuevo SHA.
+- [ ] Ensayo aislado de bloqueo por fallo de CI y validación de CLI/staging completados
+  con autorización; sin hooks ni promociones productivas en el ensayo.
+
+### F. Evidencias finales, después de publicación autorizada
+
+- [ ] Guardar run y SHA, IDs/estados de despliegue, Render live y Vercel READY con dominio.
+- [ ] Health correcto, muestras de logs JSON sanitizadas y frontend comprobado;
+  no adjuntar respaldo, secretos, URLs firmadas ni datos personales.
 
 ## Dos fases separadas de integración y activación
 
@@ -184,11 +248,12 @@ respaldos, valores de Secrets, URLs firmadas ni logs completos privados.
 Guardar copia segura antes de que caduquen los artefactos (14 días en el workflow);
 la evidencia histórica de S3 caduca el 16 de noviembre de 2026.
 
-Pendientes de firma conjunta: CI del SHA final, auditoría aceptada, respaldo y
-migraciones, ajustes efectivos GitHub/Render/Vercel, ensayo aislado y decisión de
+Pendientes de firma conjunta: CI del SHA final de publicación, auditoría aceptada,
+reconfirmación del respaldo y migraciones reportados por Aarón, ajustes efectivos
+GitHub/Render/Vercel, ensayo aislado y decisión de
 activación/recuperación. La equivalencia académica del health NestJS frente a la
 ruta `/actuator/health` debe confirmarse con el profesor; no consta aprobación.
 
 Validación de esta preparación: revisión estática del workflow/script y
-`git diff --check`; solo se incorpora este documento. No se repitieron suites ni
+`git diff --check`; solo se actualiza este documento. No se repitieron suites ni
 se validó producción. El bloqueo literal sigue activo.
