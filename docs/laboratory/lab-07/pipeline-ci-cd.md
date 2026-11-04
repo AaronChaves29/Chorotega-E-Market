@@ -16,6 +16,99 @@ Las secciones siguientes conservan el procedimiento y resultados históricos de
 preparación. Las referencias a false, plantilla inactiva o ausencia de despliegues
 pertenecen a esas etapas; no revierten el estado actual descrito arriba.
 
+## Corrección local de promoción automática (sin publicar)
+
+Rama `fix/lab-07-vercel-auto-promotion`, base develop `74317e3`, posterior a #112.
+No se cambian workflow, Secrets, configuración Vercel, aplicación ni bases.
+El run 41872406367 sigue siendo failure; el stderr histórico no permite demostrar
+si falló deploy o inspect. La promoción manual reportada no corrige ese run.
+
+Problemas comprobados del flujo previo: inspect era un punto de fallo obligatorio;
+stdout se suponía una URL única; el camino automático no comprobaba organización
+ni consultaba directamente el alias; una reejecución creaba otro deployment.
+La CLI fijada 65.4.0 admite JSON, no-wait, skip-domain y token por entorno según
+su paquete oficial inspeccionado. No se ejecutó CLI autenticada para este cambio.
+
+Flujo preparado para futuras publicaciones autorizadas:
+
+1. CI mantiene push/main y ambos jobs exitosos, cobertura, concurrencia y timeout.
+   Pull/build se ejecutan desde raíz Git con proyecto enlazado y Node 24.
+   La CLI usa scope explícito y VERCEL_TOKEN por entorno, nunca como argumento.
+2. Consultar el proyecto autenticado: ID y accountId deben coincidir con los IDs
+   configurados. Se vuelve a comprobar antes de promover y al finalizar.
+3. Buscar deployments del proyecto/production/SHA mediante GET /v7/deployments,
+   comprobar metadata SHA/main y paginar como máximo cinco páginas de 100.
+   Dos candidatos o búsqueda incompleta fallan; no se elige uno arbitrariamente.
+4. Si no existe, confirmar Render live/SHA/health y main; emitir **una sola vez**
+   deploy --prebuilt --prod --skip-domain --yes --no-wait --json. Obtener el ID
+   del JSON (plano o deployment.id), sin mezclar stderr. No depender de inspect.
+   Si la respuesta es ambigua, solo consultas GET buscan el candidato, hasta tres
+   veces; no se repite deploy. Permisos/autenticación/argumentos conocidos fallan
+   de inmediato. Se conserva el diagnóstico seguro si la CLI terminó con error.
+5. Consultar GET /v13/deployments/{id} hasta READY. Rechazar otra identidad,
+   SHA/rama/proyecto/target, estados de fallo, errores y URL no inmutable. Cuando
+   la respuesta omite ownerId, el proyecto autenticado acredita la organización;
+   un ownerId explícito contradictorio siempre falla.
+6. Comprobar de nuevo Render mediante su último deployment (live y commit.id
+   exacto) y GET health connected. Validar /login inmutable con HTTP 200, HTML y
+   las marcas del formulario; un 200 genérico o página protegida no basta.
+7. Revalidar identidad, backend, proyecto y main inmediatamente antes de una
+   única promoción del ID verificado. No promover Preview ni crear otro build.
+   Un error conocido de permisos falla. Ante resultado ambiguo, solo se consulta
+   la API: nunca se repite automáticamente la promoción.
+8. Exigir READY, aliasAssigned y alias esperado; además GET /v4/aliases/{host}
+   debe confirmar projectId y deploymentId exactos, sin redirect. Esperar la
+   propagación acotadamente; comprobar dominio estable, backend y main al final,
+   y volver a verificar deployment/alias antes de declarar éxito.
+9. Si el mismo SHA ya está promovido, repetir las comprobaciones pero no mutar.
+   La recuperación manual vercel-recover sigue separada, sin conexión al workflow
+   y con su autorización explícita; no se ejecutó en esta preparación.
+
+Consultas Vercel: hasta tres intentos ante red/408/429/5xx transitorios enumerados,
+backoff de 1/2 segundos; 401/403, otros errores definitivos y JSON inválido fallan.
+READY y propagación: hasta 60 consultas por etapa, pausa de 5 segundos y presupuesto
+compartido de API de 8 minutos; cada petición tiene límite de 15 segundos. Se
+comprueba el presupuesto antes de mutaciones. CLI conserva límites de 3 minutos
+para deploy y 2 para promote; health conserva seis intentos acotados. El job
+mantiene 45 minutos. Cancelar el runner no revierte operaciones remotas.
+
+Límites: la búsqueda/listado tiene consistencia eventual; una respuesta ambigua
+sin candidato exige inspección humana antes de reejecutar. Concurrency no bloquea
+operadores externos ni elimina la carrera después de leer main. No hay transacción
+entre proveedores ni rollback automático de migraciones. Los diagnósticos son
+catálogos controlados, no mensajes originales; no se exponen cuerpos API o tokens.
+
+Integración futura: revisar este diff y crear PR a develop cuando se autorice;
+esperar CI completo con deploy omitido. Preparar después un PR separado a main,
+sin integrarlo hasta acordar ventana, respaldo vigente, permisos de lectura de
+proyecto/listado/detalle/alias y Render, permiso de promoción y acceso a staging.
+Un merge a main disparará el flujo productivo: no usarlo como prueba exploratoria.
+
+Validación real futura autorizada: registrar run y SHA; confirmar Render live,
+deployment Vercel del mismo SHA y alias por API, health, logs sanitizados y dominio
+actualizado. Success requiere todas las verificaciones; una promoción manual no
+acredita automatización completa. Si falla, pausar publicaciones, inspeccionar
+estados/SHA y no reejecutar ciegamente hooks, deploy o promote. No revertir
+migraciones confirmadas automáticamente.
+
+Validación local de esta corrección: 47 pruebas del mecanismo aprobadas (incluyen
+las 29 previas y las 96 combinaciones), 533 Jest en 43 archivos y 9 pruebas del
+artefacto; cero fallidas/omitidas. Cobertura de negocio conservada: 97,50 %
+statements, 84,63 % branches, 92 % functions y 97,74 % lines, sobre el alcance
+seleccionado de pedidos/entregas. Lint/build backend y frontend, sintaxis JS/YAML
+y git diff --check correctos. El primer build frontend usó instalación antigua
+16.2.12; se sincronizó con npm ci desde lockfile y se repitieron lint/build con
+Next 16.4.5. Manifiestos/lockfile no cambiaron. No se ejecutaron integración Docker,
+CLI productiva, recuperación, hooks ni migraciones reales. Las respuestas API y
+promociones en pruebas son simuladas; no acreditan un deploy real en success.
+
+Fuentes oficiales contrastadas:
+
+- [List deployments](https://vercel.com/docs/rest-api/deployments/list-deployments).
+- [Deployment por ID/URL](https://vercel.com/docs/rest-api/deployments/get-a-deployment-by-id-or-url).
+- [Alias por dominio](https://vercel.com/docs/rest-api/aliases/get-an-alias).
+- [CLI deploy](https://vercel.com/docs/cli/deploy) y [promote](https://vercel.com/docs/cli/promote).
+
 ## CI conservado
 
 Backend y frontend instalan desde lockfile, ejecutan lint sin autofix y compilan.
