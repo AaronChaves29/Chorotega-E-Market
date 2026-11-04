@@ -1,5 +1,12 @@
 # Laboratorio 7 — Preparación de producción
 
+> Documento histórico de preparación y checklist. Tras #110 se ejecutó el primer
+> intento productivo, con fallo en Vercel y promoción manual posterior reportada
+> por el equipo. El estado de entrega, evidencia CI y pendientes actuales se
+> consolidan en [testing-evidence.md](testing-evidence.md#cierre-de-entrega--4-de-noviembre-de-2026).
+> Las casillas sin marcar no son comprobaciones nuevas ni invalidan los resultados
+> posteriores reportados. No se ejecutaron operaciones productivas en este cierre.
+
 Responsable: Sofía; revisión conjunta con Aarón. Fecha: 3 de noviembre de 2026.
 Este documento es un procedimiento para una ejecución futura autorizada, no una
 constancia de publicación. Producción permanece bloqueada mediante `false`.
