@@ -1,12 +1,20 @@
-# S1 — CI/CD y despliegue automático preparado
+# S1 — CI/CD, incidencia productiva y recuperación
 
 Actualización tras PR #110: el workflow productivo ya está activo; el primer
 intento tuvo publicación parcial y se describe en «Diagnóstico y recuperación
 preparada tras el primer intento». Las referencias a false/desactivación abajo
 documentan la preparación histórica. Esta corrección no ejecuta publicaciones.
 
-Responsable: Sofía. Producción permanece bloqueada por `false` literal en el
-job `deploy`. No se ha invocado ningún hook, CLI autenticada ni despliegue.
+Responsable: Sofía. Cierre: el run 41872406367 terminó en failure. Render se
+publicó automáticamente y Vercel creó un READY; la promoción manual posterior
+fue reportada por el equipo. **No existe un run completo de deploy automático
+en success.** #111 está solo en develop, con CI aprobado; no se ejecutó una
+recuperación mediante ese script. Evidencias y límites en el
+[cierre de S3](testing-evidence.md#cierre-de-entrega--4-de-noviembre-de-2026).
+
+Las secciones siguientes conservan el procedimiento y resultados históricos de
+preparación. Las referencias a false, plantilla inactiva o ausencia de despliegues
+pertenecen a esas etapas; no revierten el estado actual descrito arriba.
 
 ## CI conservado
 
