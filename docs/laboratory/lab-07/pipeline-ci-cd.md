@@ -45,7 +45,23 @@ red o desconocido. Solo registra categoría, etiqueta, exit, señal y causa;
 no imprime mensajes, tokens, argumentos, URLs ni respuestas originales.
 La clasificación orienta el diagnóstico; no certifica permisos ni su causa.
 
-Verificación pendiente de Aarón, sin compartir secretos:
+### Evidencia autenticada de pull y retiro del diagnóstico
+
+[Run 41936219967](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/41936219967)
+en develop, tras PR #115: GitHub API confirmó success para backend, frontend y
+Vercel pull check (temporal), incluidos pull/validación de contexto y limpieza.
+Deploy production fue skipped. El contexto proyecto/equipo por entorno y
+proyecto explícito funcionó para pull con CLI 65.4.0. **No verificó Deploy ni
+Promote, ni demuestra un run productivo completo exitoso.** No se atribuye una
+causa definitiva al fallo histórico solo por este resultado.
+
+Se retiran el job y los dos scripts temporales; se conserva
+[la evidencia del diagnóstico](vercel-pull-check.md). La corrección definitiva
+mantiene proyecto explícito en pull, sin scope global, y las validaciones de
+identidad, raíz y Node. El commit original fb58d07 se conserva.
+
+Lista histórica preparada antes de la prueba (pull ya comprobado; los permisos
+de publicación y la autorización de despliegue siguen pendientes):
 
 1. En Vercel confirmar que el token está vigente y tiene acceso al equipo,
    proyecto y configuración production correctos. Comparar internamente los IDs
@@ -62,8 +78,8 @@ Verificación pendiente de Aarón, sin compartir secretos:
    conservar solo el resultado sanitizado y el exit code. Si falla, revisar
    permisos/configuración antes de reintentar; no ejecutar deploy ni promote.
 5. Acordar explícitamente cualquier prueba posterior de CI productivo: integrar
-   en main puede publicar. Esta corrección aún no está validada con credenciales
-   reales ni demuestra un despliegue automático completo en success.
+   en main puede publicar. El acceso para pull quedó comprobado en el run
+   anterior; los permisos de deploy/promote y el flujo productivo completo no.
 
 Validación local: 51 pruebas del mecanismo aprobadas (incluyen las 96
 combinaciones del workflow); los proveedores se simulan y los subprocesos de
