@@ -1,5 +1,10 @@
 # S2 — Logger JSON y health seguro
 
+> Las validaciones siguientes corresponden a sus etapas de implementación.
+> El cierre posterior a la publicación, los HTTP reportados y la evidencia aún
+> pendiente de logs productivos están en [S3](testing-evidence.md#cierre-de-entrega--4-de-noviembre-de-2026).
+> No se afirman nuevos eventos observados en Render por esta actualización documental.
+
 Estado: base JSON/health implementada; S2.3 añade los tres eventos descritos abajo.
 No se ejecutó ningún despliegue ni se modificaron proveedores o Secrets.
 
