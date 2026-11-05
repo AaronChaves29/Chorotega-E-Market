@@ -1,4 +1,4 @@
-name: Vercel staged validation (disabled)
+name: Vercel staged validation (manual approval required)
 
 on:
   workflow_dispatch:
@@ -13,10 +13,10 @@ permissions:
   contents: read
 
 jobs:
-  # Preparación inerte. Activar solo mediante otra autorización y revisión.
+  # Ejecución manual autorizada; requiere revisión y aprobación del Environment.
   vercel_staged_check:
-    name: Vercel staged check (disabled)
-    if: ${{ false && github.repository == 'AaronChaves29/Chorotega-E-Market' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop' && inputs.authorization == '[authorize-vercel-staged:c338feb55f61bba51da4de7ef63ab455460d87e1]' }}
+    name: Vercel staged check (manual approval required)
+    if: ${{ github.repository == 'AaronChaves29/Chorotega-E-Market' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop' && inputs.authorization == '[authorize-vercel-staged:c338feb55f61bba51da4de7ef63ab455460d87e1]' }}
     environment:
       name: vercel-staged-approval
     runs-on: ubuntu-latest
@@ -35,8 +35,8 @@ jobs:
       STAGED_PREVIOUS_SHA: "9e353f372c38cb03125074f7b528de5bcc45ab21"
       STAGED_BACKUP_VERIFIED: "true"
       STAGED_BACKUP_EVIDENCE: "https://github.com/AaronChaves29/Chorotega-E-Market/pull/122#issuecomment-6651467159"
-      STAGED_APPROVAL_REFERENCE: ""
-      STAGED_AUTHORIZATION: ""
+      STAGED_APPROVAL_REFERENCE: "https://github.com/AaronChaves29/Chorotega-E-Market/pull/124#issuecomment-6651751698"
+      STAGED_AUTHORIZATION: "stage:c338feb55f61bba51da4de7ef63ab455460d87e1:0707586496678d2b089a5b861564f82b65eebc13:dpl_EjxFbBNH25mYAQ5oNxx2QCZT5pPP:https://github.com/AaronChaves29/Chorotega-E-Market/pull/122#issuecomment-6651467159"
       FRONTEND_HEALTH_URL: ${{ vars.FRONTEND_HEALTH_URL }}
       VERCEL_TELEMETRY_DISABLED: "1"
       STAGED_CONFIRMATION: ${{ inputs.authorization }}

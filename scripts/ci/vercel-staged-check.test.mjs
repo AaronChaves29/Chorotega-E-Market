@@ -384,11 +384,13 @@ test('staged: diagnóstico solo contiene códigos permitidos, nunca secretos ori
   assert(stagedFailure(new DeploymentError('STAGED_NOT_AUTHORIZED')).includes('STAGED_NOT_AUTHORIZED'));
 });
 
-test('staged: workflow manual inerte, checkout doble fijado, autorización adicional y ninguna ruta PR/main', () => {
+test('staged: workflow solo manual autorizado, checkout doble fijado y ninguna ruta PR/main', () => {
   const require = createRequire(new URL('../../apps/backend/package.json', import.meta.url));
   const { load } = require('js-yaml');
   const workflow = load(readFileSync(new URL('../../.github/workflows/vercel-staged-check.yml', import.meta.url), 'utf8'));
   const job = workflow.jobs.vercel_staged_check;
+  assert.equal(workflow.name, 'Vercel staged validation (manual approval required)');
+  assert.equal(job.name, 'Vercel staged check (manual approval required)');
   assert.equal(job.needs, undefined); assert.deepEqual(job.permissions, { contents: 'read', actions: 'read' });
   assert.deepEqual(Object.keys(workflow.on), ['workflow_dispatch']);
   assert.equal(workflow.on.workflow_dispatch.inputs.authorization.required, true);
@@ -398,7 +400,8 @@ test('staged: workflow manual inerte, checkout doble fijado, autorización adici
   assert.equal(job.env.STAGED_PREVIOUS_DEPLOYMENT_ID, 'dpl_EjxFbBNH25mYAQ5oNxx2QCZT5pPP');
   assert.equal(job.env.STAGED_PREVIOUS_SHA, '9e353f372c38cb03125074f7b528de5bcc45ab21');
   assert.equal(job.env.STAGED_BACKUP_EVIDENCE, 'https://github.com/AaronChaves29/Chorotega-E-Market/pull/122#issuecomment-6651467159');
-  assert.equal(job.env.STAGED_AUTHORIZATION, ''); assert.equal(job.env.STAGED_APPROVAL_REFERENCE, '');
+  assert.equal(job.env.STAGED_APPROVAL_REFERENCE, 'https://github.com/AaronChaves29/Chorotega-E-Market/pull/124#issuecomment-6651751698');
+  assert.equal(job.env.STAGED_AUTHORIZATION, 'stage:c338feb55f61bba51da4de7ef63ab455460d87e1:0707586496678d2b089a5b861564f82b65eebc13:dpl_EjxFbBNH25mYAQ5oNxx2QCZT5pPP:https://github.com/AaronChaves29/Chorotega-E-Market/pull/122#issuecomment-6651467159');
   assert.equal(job.env.STAGED_BACKUP_VERIFIED, 'true');
   const pinGate = job.steps[0].run;
   for (const sha of ['develop', 'refs/heads/develop', 'a'.repeat(39), '0'.repeat(40), 'f'.repeat(40)]) {
@@ -407,15 +410,14 @@ test('staged: workflow manual inerte, checkout doble fijado, autorización adici
     assert.equal(result.status, sha === 'f'.repeat(40) ? 0 : 1);
   }
   assert.deepEqual(job.environment, { name: 'vercel-staged-approval' });
-  const condition = job.if.match(/^\$\{\{\s*(.*?)\s*\}\}$/)[1]; assert(condition.startsWith('false && '));
+  const condition = job.if.match(/^\$\{\{\s*(.*?)\s*\}\}$/)[1]; assert(!condition.includes('false &&'));
   const evaluate = (expression) => Function('github', 'inputs', `return (${expression})`);
   for (const repository of ['AaronChaves29/Chorotega-E-Market', 'other/fork'])
     for (const event_name of ['push', 'pull_request', 'workflow_dispatch'])
       for (const ref of ['refs/heads/main', 'refs/heads/develop', 'refs/heads/test/work'])
-        for (const marker of ['', AUTHORIZATION_MARKER]) {
+        for (const marker of ['', 'incorrect', `${AUTHORIZATION_MARKER} `, AUTHORIZATION_MARKER]) {
           const github = { repository, event_name, ref }; const inputs = { authorization: marker };
-          assert.equal(evaluate(condition)(github, inputs), false);
-          assert.equal(evaluate(condition.slice('false && '.length))(github, inputs),
+          assert.equal(evaluate(condition)(github, inputs),
             repository === 'AaronChaves29/Chorotega-E-Market' && event_name === 'workflow_dispatch' && ref === 'refs/heads/develop' && marker === AUTHORIZATION_MARKER);
         }
   const checkouts = job.steps.filter((s) => s.uses?.startsWith('actions/checkout@'));
@@ -430,25 +432,54 @@ test('staged: workflow manual inerte, checkout doble fijado, autorización adici
   assert(!Object.values(job.env).some((x) => String(x).includes('secrets.')));
 });
 
-test('staged: baseline de preactivación no autoriza consultas ni creación sin aprobación específica', async () => {
+function configuredFixture() {
   const require = createRequire(new URL('../../apps/backend/package.json', import.meta.url));
   const { load } = require('js-yaml');
   const workflow = load(readFileSync(new URL('../../.github/workflows/vercel-staged-check.yml', import.meta.url), 'utf8'));
   const job = workflow.jobs.vercel_staged_check;
-  const keys = ['STAGED_VALIDATOR_SHA', 'STAGED_PREVIOUS_DEPLOYMENT_ID', 'STAGED_PREVIOUS_SHA',
+  const f = fixture();
+  const keys = ['DEPLOY_SHA', 'STAGED_VALIDATOR_SHA', 'STAGED_PREVIOUS_DEPLOYMENT_ID', 'STAGED_PREVIOUS_SHA',
     'STAGED_BACKUP_VERIFIED', 'STAGED_BACKUP_EVIDENCE', 'STAGED_APPROVAL_REFERENCE', 'STAGED_AUTHORIZATION'];
-  for (const scenario of ['neither', 'approval-only', 'authorization-only']) {
+  for (const key of keys) f.env[key] = job.env[key];
+  f.previous.id = f.env.STAGED_PREVIOUS_DEPLOYMENT_ID;
+  f.previous.meta.githubCommitSha = f.env.STAGED_PREVIOUS_SHA;
+  return { ...f, job };
+}
+
+test('staged: configuración fijada admite autorización y guard sin consultar proveedores', () => {
+  const f = configuredFixture();
+  assert.doesNotThrow(() => authorizeStaged(f.env));
+  const guard = spawnSync('bash', ['-e', '-c', f.job.steps[0].run], { env: f.job.env, encoding: 'utf8' });
+  assert.equal(guard.status, 0);
+  assert.deepEqual(f.requests, []); assert.deepEqual(f.commands, []);
+});
+
+test('staged: autorización incompleta o incoherente bloquea antes de consultas o creación', async () => {
+  for (const change of [{ STAGED_APPROVAL_REFERENCE: '', STAGED_AUTHORIZATION: '' },
+    { STAGED_APPROVAL_REFERENCE: '' }, { STAGED_AUTHORIZATION: '' }, { STAGED_BACKUP_VERIFIED: 'false' },
+    { STAGED_APPROVAL_REFERENCE: 'https://github.com/other/repo/pull/124#issuecomment-6651751698' },
+    { STAGED_APPROVAL_REFERENCE: 'https://github.com/AaronChaves29/Chorotega-E-Market/pull/124?utm_source=untrusted#issuecomment-6651751698' },
+    { STAGED_BACKUP_EVIDENCE: 'https://github.com/AaronChaves29/Chorotega-E-Market/pull/122#issuecomment-1' },
+    { STAGED_VALIDATOR_SHA: 'a'.repeat(40) }, { STAGED_PREVIOUS_DEPLOYMENT_ID: 'dpl_Other' },
+    { STAGED_AUTHORIZATION: `${configuredFixture().env.STAGED_AUTHORIZATION}:extra` }]) {
     for (const mode of ['preflight', 'stage']) {
-      const f = fixture();
-      for (const key of keys) f.env[key] = job.env[key];
-      if (scenario === 'approval-only') f.env.STAGED_APPROVAL_REFERENCE = 'https://github.com/AaronChaves29/Chorotega-E-Market/pull/1#issuecomment-2';
-      if (scenario === 'authorization-only') f.env.STAGED_AUTHORIZATION = `stage:${TARGET_SHA}:${f.env.STAGED_VALIDATOR_SHA}:${f.env.STAGED_PREVIOUS_DEPLOYMENT_ID}:${f.env.STAGED_BACKUP_EVIDENCE}`;
+      const f = configuredFixture(); Object.assign(f.env, change);
       await assert.rejects(stagedCheck(mode, f.env, f.deps), /STAGED_NOT_AUTHORIZED/);
       assert.deepEqual(f.requests, []); assert.deepEqual(f.commands, []);
     }
   }
-  const guard = spawnSync('bash', ['-e', '-c', job.steps[0].run], { env: job.env, encoding: 'utf8' });
+  const f = configuredFixture();
+  const guard = spawnSync('bash', ['-e', '-c', f.job.steps[0].run], { env: { ...f.job.env, STAGED_AUTHORIZATION: '' }, encoding: 'utf8' });
   assert.equal(guard.status, 1, 'El guard previo al checkout rechaza la autorización vacía');
+});
+
+test('staged: configuración fijada crea una vez con mocks y recupera por GET sin cambiar alias', async () => {
+  const f = configuredFixture();
+  assert.equal(await stagedCheck('stage', f.env, f.deps), f.record.id);
+  assert.equal(await stagedCheck('stage', f.env, f.deps), f.record.id);
+  assert.deepEqual(f.commands.map((args) => args[0]), ['pull', 'build', 'deploy']);
+  assert.equal(f.state.aliasChanged, false);
+  assert(f.requests.some((url) => new URL(url).pathname.endsWith(f.env.STAGED_PREVIOUS_DEPLOYMENT_ID)));
 });
 
 test('staged: gate de CI exige run y ambos jobs del SHA correcto, con respuestas simuladas', () => {

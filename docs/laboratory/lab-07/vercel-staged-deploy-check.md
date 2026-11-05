@@ -1,4 +1,4 @@
-# Ensayo aislado de creación staged — preparación bloqueada
+# Ensayo staged de Vercel — activación manual propuesta
 
 Preparación inicial del 4 de noviembre de 2026 desde develop
 `b3fbd457ab5ea9f0b518804f6ab0b1d4b37db081`. **No se ejecutó el ensayo autenticado,
@@ -12,7 +12,11 @@ pertenece al contexto reportado: la preparación inicial no repitió esas consul
 ni puede asumir que ese estado seguirá vigente. Las lecturas de preactivación
 posteriores se distinguen abajo.
 
-## Autorización: estado real y puertas cerradas
+Este PR propone habilitar únicamente la ejecución manual autorizada del ensayo.
+No lo ejecuta ni autoriza un merge automático. En develop, antes de integrar
+este cambio, el job sigue bloqueado mediante `false &&`.
+
+## Autorización y ejecución manual controlada
 
 En la preparación inicial del PR #122, la consulta de solo lectura a GitHub
 `/repos/AaronChaves29/Chorotega-E-Market/environments` devolvió **cero Environments**.
@@ -28,9 +32,9 @@ Esta revisión confirmó mediante GET a la API de GitHub:
 
 El PR #123 asoció el job `vercel_staged_check` a ese Environment mediante
 `environment.name: vercel-staged-approval`. No crea ni modifica el Environment,
-sus reglas ni Secrets. **No se ejecutó una aprobación real ni el ensayo.** La
-asociación se incorpora manteniendo el bloqueo literal `false &&`, los datos
-de autorización pendientes y todas las verificaciones existentes.
+sus reglas ni Secrets. **No se ejecutó una aprobación real ni el ensayo.** Esa
+asociación se integró manteniendo `false &&`; la preactivación de #124 también
+conservó ese bloqueo y dejó vacíos los campos de autorización específica.
 
 El PR #122 quedó integrado en `266c56386abb77f701d3ccfc091d43870115788d`.
 Se verificaron los runs aprobados del
@@ -40,20 +44,20 @@ Ninguno acredita una aprobación del Environment ni un despliegue staged.
 
 GitHub exige que la definición de `workflow_dispatch` exista en la rama por
 defecto para recibir ese evento. Se consultó la API del repositorio y su rama
-por defecto es **develop**, por lo que un workflow manual independiente estará
-disponible después de integrarlo allí. Antes de esa integración no se asume que
-esté registrado. Referencias oficiales:
+por defecto es **develop**. El workflow manual está integrado allí desde #122;
+la modificación propuesta todavía requiere revisión e integración. Referencias oficiales:
 [eventos](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch)
 y [revisores de Environments](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments).
 
 El workflow independiente `.github/workflows/vercel-staged-check.yml` contiene
-el job `vercel_staged_check`, bloqueado por **`false &&`**. Requiere además
-repositorio autorizado, evento manual sobre develop y la frase exacta
+el job `vercel_staged_check`. Este PR retira **únicamente `false &&`** de su
+condición y conserva repositorio autorizado, evento manual sobre develop y la frase exacta
 `[authorize-vercel-staged:c338feb55f61bba51da4de7ef63ab455460d87e1]` en el input
 `authorization`. No se dispara por push ni PR. Crear o integrar este PR no ejecuta
-el ensayo, y una ejecución manual seguirá omitida mientras permanezca `false`.
-La preactivación completa el validador y el baseline técnico descritos abajo,
-pero `STAGED_APPROVAL_REFERENCE` y `STAGED_AUTHORIZATION` permanecen vacíos.
+el ensayo. El workflow y el job se nombran `manual approval required` para indicar
+que todavía requieren intervención del operador y aprobación del Environment.
+El validador y el baseline técnico se conservan; se completan únicamente
+`STAGED_APPROVAL_REFERENCE` y `STAGED_AUTHORIZATION` con los valores autorizados.
 El script falla antes de consultar proveedores si la autorización está incompleta.
 Antes del checkout se exige un SHA hexadecimal completo y distinto de ceros;
 no se acepta accidentalmente una rama móvil como referencia del validador.
@@ -76,8 +80,40 @@ continúa siendo HEAD de main.
 | `STAGED_PREVIOUS_SHA`           | `9e353f372c38cb03125074f7b528de5bcc45ab21`                                                                      |
 | `STAGED_BACKUP_EVIDENCE`        | [Comentario del respaldo](https://github.com/AaronChaves29/Chorotega-E-Market/pull/122#issuecomment-6651467159) |
 | `STAGED_BACKUP_VERIFIED`        | `"true"`                                                                                                        |
-| `STAGED_APPROVAL_REFERENCE`     | Vacío: falta autorización específica                                                                            |
-| `STAGED_AUTHORIZATION`          | Vacío: falta autorización específica                                                                            |
+| `STAGED_APPROVAL_REFERENCE`     | [Autorización específica](https://github.com/AaronChaves29/Chorotega-E-Market/pull/124#issuecomment-6651751698) |
+| `STAGED_AUTHORIZATION`          | Concatenación exacta indicada debajo                                                                            |
+
+```text
+stage:c338feb55f61bba51da4de7ef63ab455460d87e1:0707586496678d2b089a5b861564f82b65eebc13:dpl_EjxFbBNH25mYAQ5oNxx2QCZT5pPP:https://github.com/AaronChaves29/Chorotega-E-Market/pull/122#issuecomment-6651467159
+```
+
+### Revalidación previa al PR de activación
+
+Las lecturas del 5 de noviembre de 2026 confirmaron develop en
+`472eb1bc142e28f2d0d5ae20fd5d7513773ee26b`, commit de integración de #124, y main
+en el SHA objetivo indicado. El [CI posterior a #124](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/41982929174)
+y el CI del validador finalizaron Success: Backend y Frontend aprobados y
+Deploy production omitido. El validador fijado es ancestro de develop.
+
+Vercel confirmó nuevamente el alias principal y el deployment anterior READY,
+proyecto, rama main, target Production y SHA anterior. La búsqueda autenticada
+por proyecto/equipo, SHA objetivo y target Production devolvió cero deployments.
+Render continuaba LIVE en el SHA objetivo. El Environment conservaba revisor
+`SofiaSJ09`, prevención de autoaprobación, bypass administrativo deshabilitado y
+únicamente develop como rama autorizada. No se aprobó ni se omitió esa protección.
+
+Se leyó el [comentario de autorización del responsable](https://github.com/AaronChaves29/Chorotega-E-Market/pull/124#issuecomment-6651751698),
+publicado por `AaronChaves29` en este repositorio. Autoriza preparar la activación
+y una única prueba staged para el SHA objetivo, condicionada a revisar y aprobar
+el PR correspondiente y obtener la aprobación del Environment. Exige conservar
+el deployment principal, revalidar CI/main/Render/alias, no repetir una creación
+ambigua y no ejecutar Render, migraciones, Promote, Rollback ni Redeploy.
+No autoriza publicar en el dominio principal ni integrar cambios a main.
+La URL fijada no contiene parámetros `utm_source` ni otros query strings.
+
+La evidencia del respaldo sigue disponible; se conservó la atestación documentada,
+sin conectar a PostgreSQL, copiar el archivo ni repetir la restauración. Estas
+lecturas no equivalen a ejecutar el workflow ni acreditan el permiso real de Deploy.
 
 Las consultas autenticadas de solo lectura confirmaron que el alias
 `chorotega-e-market-frontend.vercel.app` apunta al deployment anterior exacto,
@@ -101,17 +137,19 @@ El respaldo no autoriza un deployment. Antes de una futura ejecución se debe
 confirmar que siga disponible y suficientemente reciente para la ventana elegida.
 
 El baseline es una lectura puntual y puede cambiar. El preflight deberá repetir
-las comprobaciones de main, Render y alias; también siguen pendientes la búsqueda
-de candidatos del SHA, las comprobaciones runtime y la aprobación efectiva del
+las comprobaciones de main, Render y alias y la búsqueda de candidatos del SHA.
+Siguen pendientes las comprobaciones runtime y la aprobación efectiva del
 Environment. No se ejecutó preflight ni stage autenticado ni se comprobó el permiso
-real de Deploy. La activación requiere otra autorización expresa.
+real de Deploy. La ejecución continúa condicionada a la revisión del PR y
+la aprobación del Environment; no se realiza desde esta preparación.
 
-### Acción futura que podría activar la mutación
+### Procedimiento futuro de ejecución, fuera de este cambio
 
-Todo lo siguiente necesita **otra autorización expresa**; no se realizó aquí:
+No se ejecutó ninguno de estos pasos operativos:
 
-1. Revisar e integrar esta preactivación en develop manteniendo `false`.
-   El validador ya está fijado al SHA revisado con CI aprobado. Si cambia la lógica
+1. Revisar el PR Draft, sus tres archivos y el CI antes de autorizar su integración
+   en develop. No hacer merge automáticamente. El validador ya está fijado al SHA
+   revisado con CI aprobado. Si cambia la lógica
    de validación, revisar y aprobar otro SHA completo y su CI antes de actualizarlo;
    no usar una rama o input libre.
 2. Revalidar por API que `vercel-staged-approval` conserve revisor requerido,
@@ -126,17 +164,15 @@ Todo lo siguiente necesita **otra autorización expresa**; no se realizó aquí:
    de la referencia y la atestación, **no la existencia/integridad del respaldo**.
 4. Revalidar en modo lectura el deployment principal anterior y su SHA completos,
    ya fijados en el baseline. Si cambian, detener el plan y revisar los valores.
-   Registrar la aprobación en `STAGED_APPROVAL_REFERENCE`, otro comentario
-   específico. Las referencias admitidas son URLs de comentarios GitHub de este
-   repositorio, sin credenciales ni query strings.
-5. Preparar otro PR de activación que complete la aprobación específica y
-   `STAGED_AUTHORIZATION` con la concatenación exacta
-   `stage:<SHA-fuente>:<SHA-validador>:<ID-anterior>:<referencia-del-respaldo>`.
-   Solo después de aprobar la ventana, quitar `false &&` de este job. Conservar
-   todos los demás guards. Integrar ese PR no dispara el ensayo. La acción que
-   podría crear el deployment será una ejecución manual posterior del workflow,
-   seleccionando exclusivamente develop e introduciendo la frase exacta indicada.
-   Esa ejecución también necesita autorización expresa; no se realiza desde este PR.
+   Conservar la aprobación específica ya registrada en `STAGED_APPROVAL_REFERENCE`
+   y comprobar que siga vigente para esa prueba. Las referencias admitidas son
+   URLs de comentarios GitHub de este repositorio, sin credenciales ni query strings.
+5. Una vez integrado el PR y autorizada expresamente la ventana de ejecución,
+   el operador podrá solicitar `workflow_dispatch` exclusivamente sobre develop
+   con la frase exacta indicada. El Environment deberá ser aprobado por su revisora
+   requerida, sin autoaprobación ni bypass. La aprobación escrita no ejecuta ni
+   sustituye ese paso. Solo esa ejecución manual posterior podría crear el staged;
+   integrar el PR no dispara el ensayo. No ejecutar ni aprobar desde esta revisión.
 6. No avanzar main ni publicar desde otros operadores durante la ventana. Si
    main ya no es `c338feb55f61bba51da4de7ef63ab455460d87e1`, detener el plan y
    revisar otro ensayo, sin modificar automáticamente el SHA objetivo.
@@ -223,7 +259,8 @@ La nueva regresión falla contra el script anterior y aprueba con la corrección
 También se prueban alias incorrectos, campos requeridos ausentes, identidad
 incompatible y contradicciones del deployment anidado. No cambian la búsqueda
 de duplicados, la recuperación exclusivamente por GET ni la prohibición de
-Promote; el workflow sigue bloqueado mediante `false &&` y conserva el SHA objetivo.
+Promote. Durante #122 el workflow permaneció bloqueado mediante `false &&`;
+este PR propone retirar solo ese bloqueo y conserva el SHA objetivo.
 
 ## Evidencia, riesgos y retirada
 
@@ -256,14 +293,16 @@ controles en otro código. El Environment configurado y asociado añade la puert
 de revisión humana. Sus reglas deben revalidarse antes de activar y obtenerse
 la aprobación en la ejecución autorizada; esa aprobación real sigue pendiente.
 
-Validación local realizada con Node 24.21.0: **94/94 pruebas aprobadas**, sin
-fallidas ni omitidas (62 permanentes y 32 del ensayo). Incluye las 96 combinaciones
+Validación local realizada con Node 24.21.0: **96/96 pruebas aprobadas**, sin
+fallidas ni omitidas (62 permanentes y 34 del ensayo). Incluye las 96 combinaciones
 del job productivo, guards del workflow manual, gate de CI con respuestas
 simuladas y pruebas de identidad, reconciliación, READY, duplicados y alias.
 Los proveedores de las pruebas son mocks; los subprocesos ejecutan Node y Bash
-con datos de prueba, sin acceder a proveedores. La regresión de preactivación
-rechaza preflight y stage sin ambos campos de autorización, antes de cualquier
-consulta o comando. `node --check` de cuatro scripts y JavaScript embebido, ESLint,
+con datos de prueba, sin acceder a proveedores. Las regresiones comprueban la
+condición manual en 72 combinaciones, valores exactos del workflow, rechazo de
+autorización incompleta o incoherente antes de consultas, y creación única y
+recuperación por GET con la configuración autorizada y proveedores simulados.
+`node --check` de cuatro scripts y JavaScript embebido, ESLint,
 YAML, enlaces locales y `git diff --check` aprobaron. El workflow normal de CI
 permanece byte a byte idéntico a develop y los helpers permanentes solo añaden
 seis exports, sin cambios de comportamiento.
