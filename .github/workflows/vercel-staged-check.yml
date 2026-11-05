@@ -29,12 +29,12 @@ jobs:
       cancel-in-progress: false
     env:
       DEPLOY_SHA: c338feb55f61bba51da4de7ef63ab455460d87e1
-      # Debe sustituirse por el SHA revisado de los validadores, nunca una rama.
-      STAGED_VALIDATOR_SHA: "0000000000000000000000000000000000000000"
-      STAGED_PREVIOUS_DEPLOYMENT_ID: ""
-      STAGED_PREVIOUS_SHA: ""
-      STAGED_BACKUP_VERIFIED: "false"
-      STAGED_BACKUP_EVIDENCE: ""
+      # Validador revisado en develop con CI aprobado; nunca una rama móvil.
+      STAGED_VALIDATOR_SHA: "0707586496678d2b089a5b861564f82b65eebc13"
+      STAGED_PREVIOUS_DEPLOYMENT_ID: "dpl_EjxFbBNH25mYAQ5oNxx2QCZT5pPP"
+      STAGED_PREVIOUS_SHA: "9e353f372c38cb03125074f7b528de5bcc45ab21"
+      STAGED_BACKUP_VERIFIED: "true"
+      STAGED_BACKUP_EVIDENCE: "https://github.com/AaronChaves29/Chorotega-E-Market/pull/122#issuecomment-6651467159"
       STAGED_APPROVAL_REFERENCE: ""
       STAGED_AUTHORIZATION: ""
       FRONTEND_HEALTH_URL: ${{ vars.FRONTEND_HEALTH_URL }}
