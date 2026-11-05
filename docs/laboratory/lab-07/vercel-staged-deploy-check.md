@@ -34,6 +34,8 @@ el ensayo, y una ejecución manual seguirá omitida mientras permanezca `false`.
 El SHA del validador está en ceros; datos de aprobación, baseline y respaldo
 están vacíos y el respaldo figura como no verificado. El script falla antes de
 consultar proveedores si la autorización está incompleta.
+Antes del checkout se exige un SHA hexadecimal completo y distinto de ceros;
+no se acepta accidentalmente una rama móvil como referencia del validador.
 
 ### Acción futura que podría activar la mutación
 

@@ -41,6 +41,7 @@ jobs:
     steps:
       - name: Rechazar activación incompleta antes de descargar código o Secrets
         run: |
+          [[ "$STAGED_VALIDATOR_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$STAGED_VALIDATOR_SHA" != "0000000000000000000000000000000000000000"
           test "$STAGED_BACKUP_VERIFIED" = "true"
           test -n "$STAGED_AUTHORIZATION"

@@ -329,6 +329,12 @@ test('staged: workflow manual inerte, checkout doble fijado, autorización adici
   assert.deepEqual(job.concurrency, { group: 'chorotega-production', 'cancel-in-progress': false });
   assert.equal(job.env.STAGED_VALIDATOR_SHA, '0'.repeat(40));
   assert.equal(job.env.STAGED_AUTHORIZATION, ''); assert.equal(job.env.STAGED_BACKUP_VERIFIED, 'false');
+  const pinGate = job.steps[0].run;
+  for (const sha of ['develop', 'refs/heads/develop', 'a'.repeat(39), '0'.repeat(40), 'f'.repeat(40)]) {
+    const result = spawnSync('bash', ['-e', '-c', pinGate], { env: { STAGED_VALIDATOR_SHA: sha,
+      STAGED_BACKUP_VERIFIED: 'true', STAGED_AUTHORIZATION: 'synthetic-confirmation' }, encoding: 'utf8' });
+    assert.equal(result.status, sha === 'f'.repeat(40) ? 0 : 1);
+  }
   assert.equal(job.environment, undefined, 'No fingir un Environment protegido que no existe');
   const condition = job.if.match(/^\$\{\{\s*(.*?)\s*\}\}$/)[1]; assert(condition.startsWith('false && '));
   const evaluate = (expression) => Function('github', 'inputs', `return (${expression})`);
