@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import './vercel-staged-check.test.mjs';
 import { preflight, deployRender as realDeployRender, health, verifyVercelDeployment,
   assertCurrentMain, main, safeFailure, DeploymentError, command, cli, commandCategory,
   assertPrebuiltOutput, deploymentReference } from './production-deploy.mjs';
