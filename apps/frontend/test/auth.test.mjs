@@ -1,0 +1,195 @@
+import { test, after } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { createRequire } from "node:module";
+import ts from "typescript";
+const __dirname = import.meta.dirname;
+const root = resolve(__dirname, "..");
+const originalFetch = global.fetch;
+const previousApi = process.env.API_URL;
+process.env.API_URL = "http://127.0.0.1:3999/api/v1";
+let session = "test-token";
+function load(file) {
+  const filename = resolve(root, file);
+  const localRequire = createRequire(filename);
+  const exports = {};
+  const code = ts.transpileModule(readFileSync(filename, "utf8"), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText;
+  const requireModule = (id) => {
+    if (id === "server-only") return {};
+    if (id === "next/headers")
+      return {
+        cookies: async () => ({
+          get: () => (session ? { value: session } : undefined),
+        }),
+      };
+    if (id === "next/navigation")
+      return {
+        redirect: (url) => {
+          throw new Error(`redirect:${url}`);
+        },
+      };
+    if (id.startsWith("@/")) return load(`${id.slice(2)}.ts`);
+    if (id.startsWith(".")) return load(resolve(dirname(filename), `${id}.ts`));
+    return localRequire(id);
+  };
+  new Function("require", "exports", "module", code)(requireModule, exports, {
+    exports,
+  });
+  return exports;
+}
+after(() => {
+  global.fetch = originalFetch;
+  if (previousApi === undefined) delete process.env.API_URL;
+  else process.env.API_URL = previousApi;
+});
+
+const profile = {
+  idUsuario: 1,
+  nombre: "Ana",
+  apellido: "Prueba",
+  correo: "ana@example.test",
+  rol: "CLIENTE",
+};
+test("perfil usa Bearer servidor/no-store y solo devuelve campos necesarios", async () => {
+  session = "test-token";
+  global.fetch = async (url, options) => {
+    assert.equal(url, "http://127.0.0.1:3999/api/v1/auth/me");
+    assert.equal(options.headers.get("Authorization"), "Bearer test-token");
+    assert.equal(options.cache, "no-store");
+    return Response.json({
+      ...profile,
+      claveHash: "never-forward",
+      authId: "never-forward",
+      telefono: "123",
+    });
+  };
+  assert.deepEqual(await load("lib/current-user.ts").getCurrentUser(), {
+    status: "authenticated",
+    user: profile,
+  });
+});
+test("cookie ausente no consulta API y sesión inválida redirige a limpieza permitida", async () => {
+  session = undefined;
+  global.fetch = () => {
+    throw new Error("No debe consultar");
+  };
+  const current = load("lib/current-user.ts");
+  assert.deepEqual(await current.getCurrentUser(), {
+    status: "unauthenticated",
+  });
+  await assert.rejects(
+    current.requireCurrentUser(),
+    /redirect:\/api\/auth\/session/,
+  );
+});
+test("401 limpia cookie desde route handler", async () => {
+  session = "invalid";
+  global.fetch = async () => Response.json({}, { status: 401 });
+  const response = await load("app/api/auth/me/route.ts").GET();
+  assert.equal(response.status, 401);
+  assert.match(response.headers.get("set-cookie"), /chorotega_session=;/);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+});
+test("500, timeout y datos inválidos no borran sesión ni muestran identidad", async () => {
+  session = "valid";
+  for (const fetcher of [
+    async () => Response.json({}, { status: 500 }),
+    async () => {
+      throw new DOMException("timeout", "TimeoutError");
+    },
+    async () => Response.json({ ...profile, rol: "UNKNOWN" }),
+  ]) {
+    global.fetch = fetcher;
+    const response = await load("app/api/auth/me/route.ts").GET();
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get("set-cookie"), null);
+    assert.equal((await response.json()).nombre, undefined);
+  }
+});
+test("registro intermediario rechaza campos privilegiados antes de consultar backend", async () => {
+  global.fetch = () => {
+    throw new Error("No debe consultar");
+  };
+  const { POST } = load("app/api/auth/register/route.ts");
+  for (const field of ["rol", "estado", "authId", "idUsuario"]) {
+    const response = await POST(
+      new Request("http://localhost/api/auth/register", {
+        method: "POST",
+        body: JSON.stringify({
+          nombre: "Ana",
+          apellido: "Prueba",
+          correo: "ana@example.test",
+          clave: "test-password",
+          [field]: "ADMIN",
+        }),
+      }),
+    );
+    assert.equal(response.status, 400);
+  }
+});
+test("destinos por rol y enlace MVC usan origen backend sin prefijo REST", () => {
+  const { accountDestination } = load("types/auth.ts");
+  assert.equal(accountDestination("CLIENTE"), "/pedidos");
+  for (const role of ["ADMIN", "EMPRENDEDOR", "REPARTIDOR"])
+    assert.equal(accountDestination(role), "/cuenta");
+  assert.equal(
+    load("lib/server-api.ts").getAdminLoginUrl(),
+    "http://127.0.0.1:3999/admin/login",
+  );
+});
+
+test("login conserva contrato, cookie HttpOnly y nunca devuelve el JWT al navegador", async () => {
+  global.fetch = async () =>
+    Response.json({
+      token: "server-only-token",
+      tipo: "Bearer",
+      expiraEnSegundos: 3600,
+    });
+  const response = await load("app/api/auth/login/route.ts").POST(
+    new Request("http://localhost/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ correo: "ana@example.test", clave: "password" }),
+    }),
+  );
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("set-cookie"), /HttpOnly/);
+  assert.match(response.headers.get("set-cookie"), /SameSite=lax/);
+  assert.match(response.headers.get("set-cookie"), /Path=\//);
+  assert.equal((await response.json()).token, undefined);
+});
+test("login maneja 401, 429 y fallo de conexión sin crear una sesión", async () => {
+  for (const status of [401, 429, 500]) {
+    global.fetch = async () => Response.json({}, { status });
+    const response = await load("app/api/auth/login/route.ts").POST(
+      new Request("http://localhost/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ correo: "ana@example.test", clave: "password" }),
+      }),
+    );
+    assert.equal(response.status, status);
+    assert.equal(response.headers.get("set-cookie"), null);
+  }
+  global.fetch = async () => {
+    throw new TypeError("offline");
+  };
+  const response = await load("app/api/auth/login/route.ts").POST(
+    new Request("http://localhost/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ correo: "ana@example.test", clave: "password" }),
+    }),
+  );
+  assert.equal(response.status, 502);
+});
+test("logout elimina la cookie con el mismo path", async () => {
+  const response = await load("app/api/auth/logout/route.ts").POST();
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("set-cookie"), /chorotega_session=;/);
+  assert.match(response.headers.get("set-cookie"), /Max-Age=0/);
+  assert.match(response.headers.get("set-cookie"), /Path=\//);
+});

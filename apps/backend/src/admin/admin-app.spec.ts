@@ -121,7 +121,7 @@ describe('AppModule completo: resolución y contratos sin conexiones externas', 
           Object.keys(path).filter((key) => methods.includes(key)).length,
         0,
       ),
-    ).toBe(36);
+    ).toBe(37);
     expect(
       Object.keys(document.paths).some((path) => path.includes('/admin')),
     ).toBe(false);

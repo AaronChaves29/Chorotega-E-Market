@@ -54,6 +54,7 @@ function add(
 }
 add('post', 'auth/login', [201, 400, 401, 429, 500]);
 add('post', 'auth/register', [201, 400, 409, 429, 500]);
+add('get', 'auth/me', [200, 401, 500], true);
 for (const resource of ['stores', 'categories', 'products']) {
   add('get', resource, [200, 400, 500]);
   add('get', resource + '/{id}', [200, 400, 404, 500]);
@@ -264,7 +265,7 @@ describe('OpenAPI HTTP: contrato generado de las 36 operaciones', () => {
     expect(actual.sort()).toEqual(
       expected.map((x) => `${x.method} ${x.path}`).sort(),
     );
-    expect(actual).toHaveLength(36);
+    expect(actual).toHaveLength(37);
     expect(document.paths).not.toHaveProperty('/api/v1/api/v1/couriers');
     expect(document.paths).not.toHaveProperty('/api/v1/api/v1/neighborhoods');
     expect(document.paths['/api/v1/users'].post).toBeUndefined();
@@ -710,7 +711,7 @@ describe('OpenAPI HTTP: contrato generado de las 36 operaciones', () => {
         expect(response.headers.location).toEqual(expect.any(String));
       executed.push(name);
     }
-    expect(executed).toHaveLength(45);
+    expect(executed).toHaveLength(46);
     expect(
       await orders.findOneByOrFail({ idPedido: prepared.idPedido }),
     ).toMatchObject({ estado: 'ENTREGADO' });

@@ -54,6 +54,18 @@ export class AuthService {
     return this.issueCredentials(await this.authenticateCredentials(dto));
   }
 
+  async profile(idUsuario: number): Promise<UserResponseDto> {
+    const user = await this.usersRepository.findProfileById(idUsuario);
+    if (
+      !user ||
+      user.estado !== 'ACTIVO' ||
+      !['ADMIN', 'CLIENTE', 'EMPRENDEDOR', 'REPARTIDOR'].includes(user.rol)
+    ) {
+      throw new UnauthorizedException('Token inválido o expirado.');
+    }
+    return UserMapper.toResponseDto(user);
+  }
+
   async loginAdmin(dto: LoginDto): Promise<LoginResponseDto> {
     const user = await this.authenticateCredentials(dto);
     if (user.rol !== 'ADMIN') throw new ForbiddenException();
@@ -61,7 +73,9 @@ export class AuthService {
   }
 
   private async authenticateCredentials(dto: LoginDto): Promise<User> {
-    const user = await this.usersRepository.findByEmail(dto.correo);
+    const user = await this.usersRepository.findByEmail(
+      dto.correo.trim().toLowerCase(),
+    );
 
     if (!user || !user.claveHash) {
       new JsonLogger().security('login_failed');

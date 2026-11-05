@@ -93,7 +93,7 @@ describe('Autenticación: registro de clientes HTTP con PostgreSQL', () => {
 
     const login = await request(server())
       .post('/api/v1/auth/login')
-      .send({ correo: 'ana@example.test', clave: password })
+      .send({ correo: '  ANA@Example.Test ', clave: password })
       .expect(201);
     expect(login.body).toMatchObject({
       token: expect.any(String) as string,
@@ -120,6 +120,27 @@ describe('Autenticación: registro de clientes HTTP con PostgreSQL', () => {
     expect(await context!.database.dataSource.getRepository(User).count()).toBe(
       1,
     );
+  });
+
+  it('admite cuentas anteriores con correo en mayúsculas y evita registrar su equivalente', async () => {
+    const input = registration({ correo: 'ANTERIOR@EXAMPLE.TEST' });
+    await context!.database.dataSource.getRepository(User).save({
+      authId: randomUUID(),
+      nombre: input.nombre,
+      apellido: input.apellido,
+      correo: input.correo,
+      claveHash: await bcrypt.hash(password, 4),
+      rol: 'CLIENTE',
+      estado: 'ACTIVO',
+    });
+    await request(server())
+      .post('/api/v1/auth/login')
+      .send({ correo: ' anterior@example.test ', clave: password })
+      .expect(201);
+    await request(server())
+      .post(path)
+      .send(registration({ correo: 'anterior@example.test' }))
+      .expect(409);
   });
 
   it('rechaza una carrera de registros con el mismo correo', async () => {
@@ -150,6 +171,8 @@ describe('Autenticación: registro de clientes HTTP con PostgreSQL', () => {
     { clave: 'a'.repeat(73) },
     { clave: 'á'.repeat(37) },
     { rol: 'ADMIN' },
+    { estado: 'ACTIVO' },
+    { idUsuario: 999 },
     { authId: '00000000-0000-4000-8000-000000000001' },
     { extra: true },
   ])(

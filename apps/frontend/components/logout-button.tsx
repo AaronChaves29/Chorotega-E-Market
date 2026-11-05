@@ -1,10 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export default function LogoutButton() {
-  const router = useRouter();
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
 
@@ -21,8 +19,8 @@ export default function LogoutButton() {
         throw new Error("No se pudo cerrar sesión.");
       }
 
-      router.replace("/login");
-      router.refresh();
+      // Navegación completa: descarta el router cache y los datos de esta cuenta.
+      window.location.replace("/login");
     } catch {
       setError("No se pudo cerrar sesión. Intentá nuevamente.");
       setCargando(false);
@@ -35,11 +33,15 @@ export default function LogoutButton() {
         type="button"
         onClick={handleLogout}
         disabled={cargando}
-        className="rounded-lg bg-red-700 px-4 py-2 text-white disabled:opacity-50"
+        className="account-logout"
       >
         {cargando ? "Saliendo..." : "Cerrar sesión"}
       </button>
-      {error && <p role="alert" className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-2 text-sm text-red-600">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

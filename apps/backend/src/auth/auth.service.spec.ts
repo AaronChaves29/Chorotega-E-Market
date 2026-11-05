@@ -174,6 +174,18 @@ describe('AuthService', () => {
     });
   });
 
+  it('normaliza el correo sin transformar la contraseña', async () => {
+    findByEmailMock.mockResolvedValue(user);
+    compareMock.mockResolvedValue(true);
+    signAsyncMock.mockResolvedValue('jwt-de-prueba');
+    await service.login({
+      correo: '  REPARTIDOR@Chorotega.Test ',
+      clave: ' clave intacta ',
+    });
+    expect(findByEmailMock).toHaveBeenCalledWith(user.correo);
+    expect(compareMock).toHaveBeenCalledWith(' clave intacta ', user.claveHash);
+  });
+
   it('debe retornar 401 cuando el usuario no existe', async () => {
     findByEmailMock.mockResolvedValue(null);
 

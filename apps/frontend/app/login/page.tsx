@@ -2,11 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const router = useRouter();
-
   const [correo, setCorreo] = useState("");
   const [clave, setClave] = useState("");
   const [mostrarClave, setMostrarClave] = useState(false);
@@ -34,13 +31,10 @@ export default function LoginPage() {
       }
 
       setClave("");
-      router.replace("/pedidos");
-      router.refresh();
+      window.location.replace("/");
     } catch (error) {
       setMensaje(
-        error instanceof Error
-          ? error.message
-          : "Ocurrió un error inesperado.",
+        error instanceof Error ? error.message : "Ocurrió un error inesperado.",
       );
     } finally {
       setCargando(false);
@@ -55,12 +49,18 @@ export default function LoginPage() {
             <span className="login-brand-mark" aria-hidden="true">
               <span />
             </span>
-            <span>Chorotega <strong>E-Market</strong></span>
+            <span>
+              Chorotega <strong>E-Market</strong>
+            </span>
           </div>
 
           <div className="login-intro">
             <p className="login-eyebrow">IDENTIDAD QUE NOS UNE</p>
-            <h1>Lo nuestro,<br />cerca de vos.</h1>
+            <h1>
+              Lo nuestro,
+              <br />
+              cerca de vos.
+            </h1>
             <p className="login-story-copy">
               Descubrí el talento, los sabores y las historias de quienes hacen
               grande nuestra tierra.
@@ -76,15 +76,23 @@ export default function LoginPage() {
             <span className="login-artwork-vase-pattern" />
             <span className="login-artwork-leaf login-artwork-leaf-one" />
             <span className="login-artwork-leaf login-artwork-leaf-two" />
-            <span className="login-artwork-caption">HECHO CON ORGULLO LOCAL</span>
+            <span className="login-artwork-caption">
+              HECHO CON ORGULLO LOCAL
+            </span>
           </div>
 
           <p className="login-story-footer">
             Un mercado con raíces guanacastecas.
           </p>
         </div>
-        <span className="login-story-orbit login-story-orbit-one" aria-hidden="true" />
-        <span className="login-story-orbit login-story-orbit-two" aria-hidden="true" />
+        <span
+          className="login-story-orbit login-story-orbit-one"
+          aria-hidden="true"
+        />
+        <span
+          className="login-story-orbit login-story-orbit-two"
+          aria-hidden="true"
+        />
       </section>
 
       <section className="login-form-panel" aria-labelledby="login-title">

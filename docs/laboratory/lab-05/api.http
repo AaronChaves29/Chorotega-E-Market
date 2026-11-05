@@ -73,6 +73,12 @@ Content-Type: application/json
   "clave": "{{clientPassword}}"
 }
 
+### Auth — perfil propio
+# @name currentProfile
+# expected-status: 200
+GET {{baseUrl}}/api/v1/auth/me
+Authorization: Bearer {{clientToken}}
+
 ### Auth — login Courier
 # @name loginCourier
 # expected-status: 201
