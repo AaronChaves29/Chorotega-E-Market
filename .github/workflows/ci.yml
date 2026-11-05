@@ -146,6 +146,66 @@ jobs:
       - name: Compilar frontend
         run: npm run build
 
+  # Temporal: validar únicamente el código revisado de #119, sin desplegar.
+  vercel_prebuilt_check:
+    name: Vercel prebuilt check (temporary)
+    needs: [backend, frontend]
+    if: ${{ github.repository == 'AaronChaves29/Chorotega-E-Market' && github.event_name == 'push' && github.ref == 'refs/heads/develop' && needs.backend.result == 'success' && needs.frontend.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      REVIEWED_DEVELOP_SHA: 01f60d677c85e18b0ba667c76cbef69dc0e1e4ce
+      VERCEL_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Obtener exclusivamente el commit revisado
+        uses: actions/checkout@v6
+        with:
+          ref: 01f60d677c85e18b0ba667c76cbef69dc0e1e4ce
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Confirmar que el commit revisado pertenece a develop
+        run: git merge-base --is-ancestor "$REVIEWED_DEVELOP_SHA" "$GITHUB_SHA"
+      - name: Configurar Node.js para Vercel
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Instalar CLI oficial fijada sin salida privada
+        timeout-minutes: 5
+        run: npm install --global vercel@65.4.0 > /dev/null 2>&1
+      - name: Pull, build y comprobación prebuilt sin despliegue
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          import { command, assertPrebuiltOutput, safeFailure, DeploymentError } from './scripts/ci/production-deploy.mjs';
+          try {
+            const env = process.env;
+            if (['VERCEL_TOKEN', 'VERCEL_ORG_ID', 'VERCEL_PROJECT_ID'].some((key) => !env[key]?.trim())) {
+              throw new DeploymentError('VERCEL_CONTEXT_INVALID');
+            }
+            await command('vercel', ['pull', '--yes', '--environment=production', `--project=${env.VERCEL_PROJECT_ID}`], env, 120000, 'vercel_pull');
+            const project = JSON.parse(readFileSync('.vercel/project.json', 'utf8'));
+            if (project?.projectId !== env.VERCEL_PROJECT_ID || project.orgId !== env.VERCEL_ORG_ID ||
+                project.settings?.rootDirectory !== 'apps/frontend' || project.settings?.nodeVersion !== '24.x') {
+              throw new DeploymentError('VERCEL_CONTEXT_INVALID');
+            }
+            await command('vercel', ['build', '--prod'], env, 360000, 'vercel_build');
+            assertPrebuiltOutput();
+            console.log('Prebuilt Vercel: OK');
+          } catch (error) {
+            console.error(safeFailure('vercel-build', error));
+            process.exitCode = 1;
+          }
+          NODE
+      - name: Eliminar configuración y artefactos privados
+        if: ${{ always() }}
+        run: rm -rf -- .vercel apps/frontend/.vercel
+
   # Producción solo tras CI exitoso en push a main; nunca desde PR.
   # Mantener bloqueado el auto-deploy Git de main en los proveedores.
   deploy:
