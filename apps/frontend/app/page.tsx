@@ -1,5 +1,10 @@
 import { redirect } from "next/navigation";
+import { requireCurrentUser } from "@/lib/current-user";
+import { accountDestination } from "@/types/auth";
+import ProfileUnavailable from "@/components/profile-unavailable";
 
-export default function HomePage() {
-  redirect("/login");
+export default async function HomePage() {
+  const result = await requireCurrentUser();
+  if (result.status === "unavailable") return <ProfileUnavailable />;
+  redirect(accountDestination(result.user.rol));
 }

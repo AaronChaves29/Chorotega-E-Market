@@ -1,6 +1,23 @@
-import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { ApiProblemResponses } from '../common/http/openapi-contract';
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import type { Request } from 'express';
+import type { AuthenticatedUser } from './interfaces/authenticated-user.interface';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import {
   AuthRateLimitGuard,
   LimitAuthOperation,
@@ -13,7 +30,6 @@ import { UserResponseDto } from '../modules/users/dtos/user-response.dto';
 
 @ApiTags('auth')
 @Controller('auth')
-@UseGuards(AuthRateLimitGuard)
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
@@ -27,6 +43,7 @@ export class AuthController {
   })
   @ApiProblemResponses([400, 401, 429, 500])
   @Post('login')
+  @UseGuards(AuthRateLimitGuard)
   @LimitAuthOperation('login')
   login(@Body() dto: LoginDto): Promise<LoginResponseDto> {
     return this.authService.login(dto);
@@ -46,8 +63,26 @@ export class AuthController {
   })
   @ApiProblemResponses([400, 409, 429, 500])
   @Post('register')
+  @UseGuards(AuthRateLimitGuard)
   @LimitAuthOperation('register')
   register(@Body() dto: RegisterDto): Promise<UserResponseDto> {
     return this.authService.register(dto);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'Consultar perfil propio',
+    description:
+      'Cuenta activa autenticada; identidad y rol vigentes en PostgreSQL.',
+  })
+  @ApiResponse({ status: 200, type: UserResponseDto })
+  @ApiProblemResponses([401, 500])
+  @Header('Cache-Control', 'no-store')
+  me(
+    @Req() request: Request & { user: AuthenticatedUser },
+  ): Promise<UserResponseDto> {
+    return this.authService.profile(request.user.idUsuario);
   }
 }
