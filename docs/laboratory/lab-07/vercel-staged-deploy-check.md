@@ -36,6 +36,8 @@ están vacíos y el respaldo figura como no verificado. El script falla antes de
 consultar proveedores si la autorización está incompleta.
 Antes del checkout se exige un SHA hexadecimal completo y distinto de ceros;
 no se acepta accidentalmente una rama móvil como referencia del validador.
+El guard usa salidas explícitas ante fallo, sin depender del comportamiento de
+`errexit` para expresiones `[[ … ]]` en distintas versiones de Bash.
 
 ### Acción futura que podría activar la mutación
 
