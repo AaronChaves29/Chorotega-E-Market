@@ -282,64 +282,6 @@ test('workflow activo excluye PR/develop/fallos/cancelaciones', () => {
   }
 });
 
-test('prueba prebuilt temporal solo permite push/develop del repositorio autorizado tras ambos builds', () => {
-  const require = createRequire(new URL('../../apps/backend/package.json', import.meta.url));
-  const { load } = require('js-yaml');
-  const workflow = load(readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'));
-  const job = workflow.jobs.vercel_prebuilt_check;
-  assert.deepEqual(job.needs, ['backend', 'frontend']);
-  assert.deepEqual(job.permissions, { contents: 'read' });
-  const condition = job.if.match(/^\$\{\{\s*(.*?)\s*\}\}$/)?.[1];
-  assert(condition);
-  const evaluate = Function('github', 'needs', `return (${condition})`);
-  for (const repository of ['AaronChaves29/Chorotega-E-Market', 'other/fork'])
-    for (const event_name of ['push', 'pull_request', 'workflow_dispatch'])
-      for (const ref of ['refs/heads/main', 'refs/heads/develop', 'refs/heads/fix/test'])
-        for (const backend of ['success', 'failure', 'skipped', 'cancelled'])
-          for (const frontend of ['success', 'failure', 'skipped', 'cancelled'])
-            assert.equal(evaluate({ repository, event_name, ref }, { backend: { result: backend }, frontend: { result: frontend } }),
-              repository === 'AaronChaves29/Chorotega-E-Market' && event_name === 'push' && ref === 'refs/heads/develop' && backend === 'success' && frontend === 'success');
-});
-
-test('prueba temporal fija el SHA revisado y no expone Secrets a instalación o checkout', () => {
-  const require = createRequire(new URL('../../apps/backend/package.json', import.meta.url));
-  const { load } = require('js-yaml');
-  const job = load(readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8')).jobs.vercel_prebuilt_check;
-  const checkout = job.steps.find((step) => step.uses?.startsWith('actions/checkout@'));
-  assert.equal(checkout.with.ref, '01f60d677c85e18b0ba667c76cbef69dc0e1e4ce');
-  assert.equal(checkout.with.ref, job.env.REVIEWED_DEVELOP_SHA);
-  assert.equal(checkout.with['persist-credentials'], false);
-  assert.equal(checkout.with['fetch-depth'], 0);
-  assert(job.steps.some((step) => step.run?.includes('git merge-base --is-ancestor')));
-  assert(!Object.values(job.env).some((value) => String(value).includes('secrets.')));
-  const credentialSteps = job.steps.filter((step) => Object.values(step.env ?? {}).some((value) => String(value).includes('secrets.')));
-  assert.equal(credentialSteps.length, 1);
-  assert.deepEqual(Object.keys(credentialSteps[0].env).sort(), ['VERCEL_ORG_ID', 'VERCEL_PROJECT_ID', 'VERCEL_TOKEN']);
-  const cleanup = job.steps.at(-1);
-  assert.equal(cleanup.if, '${{ always() }}');
-  assert.equal(cleanup.run, 'rm -rf -- .vercel apps/frontend/.vercel');
-});
-
-test('prueba temporal contiene únicamente pull/build/assert, sintaxis válida y diagnóstico seguro', () => {
-  const require = createRequire(new URL('../../apps/backend/package.json', import.meta.url));
-  const { load } = require('js-yaml');
-  const job = load(readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8')).jobs.vercel_prebuilt_check;
-  const step = job.steps.find((item) => item.run?.includes('assertPrebuiltOutput();'));
-  const script = step.run.match(/<<'NODE'\n([\s\S]*?)\nNODE\s*$/)?.[1];
-  assert(script);
-  assert(script.includes("['pull', '--yes', '--environment=production', `--project=${env.VERCEL_PROJECT_ID}`]"));
-  assert(script.includes("['build', '--prod']"));
-  assert.equal((script.match(/await command\(/g) ?? []).length, 2);
-  assert(!/\['(?:deploy|promote|redeploy|rollback)'/.test(script));
-  assert(script.includes('project?.projectId !== env.VERCEL_PROJECT_ID'));
-  assert(script.includes('project.orgId !== env.VERCEL_ORG_ID'));
-  assert(script.includes("console.log('Prebuilt Vercel: OK')"));
-  assert(script.includes("console.error(safeFailure('vercel-build', error))"));
-  assert(!/--token|console\.(?:log|error)\((?:env|project|error)\)/.test(script));
-  const syntax = spawnSync(process.execPath, ['--input-type=module', '--check'], { input: script, encoding: 'utf8' });
-  assert.equal(syntax.status, 0, syntax.stderr);
-});
-
 test('plazo Render agotado antes del hook no produce solicitudes', async () => {
   let calls = 0;
   await assert.rejects(deployRender(env, { signal: AbortSignal.abort(),
