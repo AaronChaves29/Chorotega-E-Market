@@ -91,6 +91,11 @@ jobs:
       - name: Ejecutar pruebas de integración con Testcontainers
         run: npm run test:integration -- --json --outputFile=coverage/jest-integration-results.json
 
+      - name: Verificar binario Chrome y diagnosticos del launcher
+        run: |
+          node test/support/chrome-browser.cjs --check
+          node --test test/support/chrome-browser.test.cjs
+
       - name: Verificar formularios MVC en Chrome con PostgreSQL temporal
         run: npm run test:browser
 
