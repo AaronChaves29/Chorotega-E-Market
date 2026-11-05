@@ -1,6 +1,6 @@
 # Ensayo aislado de creación staged — preparación bloqueada
 
-Preparación del 4 de noviembre de 2026 desde develop
+Preparación inicial del 4 de noviembre de 2026 desde develop
 `b3fbd457ab5ea9f0b518804f6ab0b1d4b37db081`. **No se ejecutó el ensayo autenticado,
 no se creó ningún deployment y este PR no autoriza una publicación.**
 
@@ -8,8 +8,9 @@ La [evidencia del prebuilt](vercel-prebuilt-check.md), run
 [41956036648](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/41956036648),
 demuestra pull/build/assert satisfactorios del código revisado de #119. No demuestra
 deploy ni promote. La consulta previa de ausencia de deployment para `c338feb`
-pertenece al contexto reportado: esta preparación no repitió consultas a Vercel
-o Render ni puede asumir que ese estado seguirá vigente.
+pertenece al contexto reportado: la preparación inicial no repitió esas consultas
+ni puede asumir que ese estado seguirá vigente. Las lecturas de preactivación
+posteriores se distinguen abajo.
 
 ## Autorización: estado real y puertas cerradas
 
@@ -25,11 +26,11 @@ Esta revisión confirmó mediante GET a la API de GitHub:
 - `can_admins_bypass: false`.
 - Política de ramas personalizada con una única regla: `develop`, tipo `branch`.
 
-Este cambio asocia el job `vercel_staged_check` a ese Environment mediante
+El PR #123 asoció el job `vercel_staged_check` a ese Environment mediante
 `environment.name: vercel-staged-approval`. No crea ni modifica el Environment,
 sus reglas ni Secrets. **No se ejecutó una aprobación real ni el ensayo.** La
 asociación se incorpora manteniendo el bloqueo literal `false &&`, los datos
-pendientes y todas las verificaciones de autorización existentes.
+de autorización pendientes y todas las verificaciones existentes.
 
 El PR #122 quedó integrado en `266c56386abb77f701d3ccfc091d43870115788d`.
 Se verificaron los runs aprobados del
@@ -51,40 +52,84 @@ repositorio autorizado, evento manual sobre develop y la frase exacta
 `[authorize-vercel-staged:c338feb55f61bba51da4de7ef63ab455460d87e1]` en el input
 `authorization`. No se dispara por push ni PR. Crear o integrar este PR no ejecuta
 el ensayo, y una ejecución manual seguirá omitida mientras permanezca `false`.
-El SHA del validador está en ceros; datos de aprobación, baseline y respaldo
-están vacíos y el respaldo figura como no verificado. El script falla antes de
-consultar proveedores si la autorización está incompleta.
+La preactivación completa el validador y el baseline técnico descritos abajo,
+pero `STAGED_APPROVAL_REFERENCE` y `STAGED_AUTHORIZATION` permanecen vacíos.
+El script falla antes de consultar proveedores si la autorización está incompleta.
 Antes del checkout se exige un SHA hexadecimal completo y distinto de ceros;
 no se acepta accidentalmente una rama móvil como referencia del validador.
 El guard usa salidas explícitas ante fallo, sin depender del comportamiento de
 `errexit` para expresiones `[[ … ]]` en distintas versiones de Bash.
 
+### Baseline técnico de preactivación — 5 de noviembre de 2026
+
+Se consultaron las referencias remotas y el
+[CI push/develop del validador](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/41977428692):
+Build Backend y Build Frontend aprobaron; Deploy production quedó omitido.
+El validador es HEAD de develop al preparar este cambio y el SHA objetivo
+continúa siendo HEAD de main.
+
+| Variable                        | Valor fijado                                                                                                    |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `STAGED_VALIDATOR_SHA`          | `0707586496678d2b089a5b861564f82b65eebc13`                                                                      |
+| `DEPLOY_SHA`                    | `c338feb55f61bba51da4de7ef63ab455460d87e1`                                                                      |
+| `STAGED_PREVIOUS_DEPLOYMENT_ID` | `dpl_EjxFbBNH25mYAQ5oNxx2QCZT5pPP`                                                                              |
+| `STAGED_PREVIOUS_SHA`           | `9e353f372c38cb03125074f7b528de5bcc45ab21`                                                                      |
+| `STAGED_BACKUP_EVIDENCE`        | [Comentario del respaldo](https://github.com/AaronChaves29/Chorotega-E-Market/pull/122#issuecomment-6651467159) |
+| `STAGED_BACKUP_VERIFIED`        | `"true"`                                                                                                        |
+| `STAGED_APPROVAL_REFERENCE`     | Vacío: falta autorización específica                                                                            |
+| `STAGED_AUTHORIZATION`          | Vacío: falta autorización específica                                                                            |
+
+Las consultas autenticadas de solo lectura confirmaron que el alias
+`chorotega-e-market-frontend.vercel.app` apunta al deployment anterior exacto,
+sin redirección y en el proyecto `prj_CQzkdYWJ5ZADA1glPpRz9Ak2kOpx`. El proyecto
+pertenece al equipo `team_sqLO7uNfDqUIdILp5Hmdep5n`; el detalle del deployment
+confirma ese proyecto, READY, target Production, rama main y el SHA anterior.
+Su proyección `alias: []` no invalida la asignación comprobada por la API de alias.
+Render confirmó el servicio del repositorio, rama main, con último deployment
+`dep-dbltdu6c6qcc73f9c2n0` LIVE en el SHA objetivo. Se revalidaron por GET las
+reglas del Environment descritas arriba. Estas lecturas no ejecutaron despliegues.
+
+Se leyó el comentario del respaldo publicado por el responsable. Documenta un
+Custom Dump generado el 4 de noviembre, lectura con `pg_restore --list`, huella
+SHA-256 generada y restauración aislada en PostgreSQL 18 con `--exit-on-error`,
+diez tablas y registros comprobados. Por esa evidencia y la confirmación del
+responsable se registra `STAGED_BACKUP_VERIFIED="true"` como **atestación**.
+Este cambio no accedió al archivo local, no cotejó su huella ni repitió la
+restauración. La evidencia cubre el esquema public, no una recuperación integral
+de los servicios internos de Supabase; no publica datos ni el archivo del respaldo.
+El respaldo no autoriza un deployment. Antes de una futura ejecución se debe
+confirmar que siga disponible y suficientemente reciente para la ventana elegida.
+
+El baseline es una lectura puntual y puede cambiar. El preflight deberá repetir
+las comprobaciones de main, Render y alias; también siguen pendientes la búsqueda
+de candidatos del SHA, las comprobaciones runtime y la aprobación efectiva del
+Environment. No se ejecutó preflight ni stage autenticado ni se comprobó el permiso
+real de Deploy. La activación requiere otra autorización expresa.
+
 ### Acción futura que podría activar la mutación
 
 Todo lo siguiente necesita **otra autorización expresa**; no se realizó aquí:
 
-1. Revisar e integrar el código de este ensayo en develop manteniendo `false`.
-   Obtener su SHA completo y comprobar los checks. Fijarlo como
-   `STAGED_VALIDATOR_SHA`; no usar una rama o input libre.
+1. Revisar e integrar esta preactivación en develop manteniendo `false`.
+   El validador ya está fijado al SHA revisado con CI aprobado. Si cambia la lógica
+   de validación, revisar y aprobar otro SHA completo y su CI antes de actualizarlo;
+   no usar una rama o input libre.
 2. Revalidar por API que `vercel-staged-approval` conserve revisor requerido,
    prevención de autoaprobación, bypass administrativo deshabilitado y únicamente
    la rama develop autorizada. Mantener su asociación al job. Una futura ejecución
    autorizada deberá obtener la aprobación del Environment; la frase manual no
    sustituye ese control. La configuración comprobada no demuestra que esa
    aprobación ya haya ocurrido.
-3. El responsable verifica un respaldo actualizado y recuperable de PostgreSQL
-   fuera del runner. Registrar la evidencia sin secretos en un comentario de
-   issue/PR del repositorio. No se buscan archivos de la Mac desde Actions.
-   `STAGED_BACKUP_EVIDENCE` apunta a ese comentario y `STAGED_BACKUP_VERIFIED`
-   pasa a true únicamente tras esa comprobación. El script valida el formato
+3. El respaldo recuperable y su evidencia ya están registrados. El responsable
+   debe revalidar su disponibilidad y vigencia fuera del runner antes de ejecutar.
+   No se buscan archivos de la Mac desde Actions. El script valida el formato
    de la referencia y la atestación, **no la existencia/integridad del respaldo**.
-4. Revisar en modo lectura el ID completo del deployment principal anterior,
-   su SHA completo y estado; configurar `STAGED_PREVIOUS_DEPLOYMENT_ID` y
-   `STAGED_PREVIOUS_SHA`. El prefijo reportado `9e353f3` no basta para activar.
+4. Revalidar en modo lectura el deployment principal anterior y su SHA completos,
+   ya fijados en el baseline. Si cambian, detener el plan y revisar los valores.
    Registrar la aprobación en `STAGED_APPROVAL_REFERENCE`, otro comentario
    específico. Las referencias admitidas son URLs de comentarios GitHub de este
    repositorio, sin credenciales ni query strings.
-5. Preparar otro PR de activación que configure lo anterior y
+5. Preparar otro PR de activación que complete la aprobación específica y
    `STAGED_AUTHORIZATION` con la concatenación exacta
    `stage:<SHA-fuente>:<SHA-validador>:<ID-anterior>:<referencia-del-respaldo>`.
    Solo después de aprobar la ventana, quitar `false &&` de este job. Conservar
@@ -160,7 +205,8 @@ permisos, eventos, concurrencia y configuración permanecen intactos.
 La consulta autenticada reportada durante la revisión confirmó el alias anterior,
 pero el detalle del deployment devolvió `alias: []` sin `aliasAssigned`. Exigir
 esos dos campos en el detalle producía un falso negativo `STAGED_INVALID_BASELINE`.
-Esta revisión no repitió consultas autenticadas a los proveedores.
+La corrección de #122 no repitió consultas autenticadas a los proveedores;
+las lecturas posteriores de preactivación están registradas en su apartado.
 
 La asignación se comprueba con `GET /v4/aliases/{dominio}?teamId=…`: nombre exacto,
 proyecto e ID anterior configurados, sin redirección. Si aparece el objeto
@@ -210,15 +256,18 @@ controles en otro código. El Environment configurado y asociado añade la puert
 de revisión humana. Sus reglas deben revalidarse antes de activar y obtenerse
 la aprobación en la ejecución autorizada; esa aprobación real sigue pendiente.
 
-Validación local realizada con Node 24.21.0: **93/93 pruebas aprobadas**, sin
-fallidas ni omitidas (62 permanentes y 31 del ensayo). Incluye las 96 combinaciones
+Validación local realizada con Node 24.21.0: **94/94 pruebas aprobadas**, sin
+fallidas ni omitidas (62 permanentes y 32 del ensayo). Incluye las 96 combinaciones
 del job productivo, guards del workflow manual, gate de CI con respuestas
 simuladas y pruebas de identidad, reconciliación, READY, duplicados y alias.
-Todos los proveedores son mocks; los subprocesos ejecutan únicamente Node con
-datos sintéticos. `node --check` de cuatro scripts y JavaScript embebido, ESLint,
+Los proveedores de las pruebas son mocks; los subprocesos ejecutan Node y Bash
+con datos de prueba, sin acceder a proveedores. La regresión de preactivación
+rechaza preflight y stage sin ambos campos de autorización, antes de cualquier
+consulta o comando. `node --check` de cuatro scripts y JavaScript embebido, ESLint,
 YAML, enlaces locales y `git diff --check` aprobaron. El workflow normal de CI
 permanece byte a byte idéntico a develop y los helpers permanentes solo añaden
 seis exports, sin cambios de comportamiento.
 
 Un resultado local o un PR verde no demuestra un staged real exitoso. No se
-ha ejecutado workflow_dispatch ni ningún comando Vercel autenticado en esta revisión.
+ha ejecutado workflow_dispatch ni CLI Vercel autenticada en esta revisión;
+las únicas operaciones autenticadas con proveedores fueron consultas de lectura.
