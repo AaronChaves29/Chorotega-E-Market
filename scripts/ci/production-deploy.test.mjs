@@ -244,7 +244,7 @@ test('logs seguros omiten mensajes arbitrarios de proveedores', () => {
   assert(!`${child.stdout}${child.stderr}`.includes('key=synthetic'));
 });
 
-test('workflow activo excluye PR/develop/fallos/cancelaciones', () => {
+test('workflow bloqueado impide despliegues y conserva controles de evento, rama y CI', () => {
   // CI instala primero las dependencias del backend, incluido js-yaml.
   const require = createRequire(new URL('../../apps/backend/package.json', import.meta.url));
   const { load } = require('js-yaml');
@@ -257,7 +257,8 @@ test('workflow activo excluye PR/develop/fallos/cancelaciones', () => {
   const match = deploy.if.match(/^\s*\$\{\{\s*([\s\S]+?)\s*\}\}\s*$/);
   assert(match, 'jobs.deploy.if debe ser una expresión completa');
   const condition = match[1];
-  const validate = (expression) => {
+  assert(condition.startsWith('false && '), 'El despliegue automático debe permanecer bloqueado');
+  const validate = (expression, blocked = false) => {
     const evaluate = Function('github', 'needs', `return (${expression})`);
     let combinations = 0;
     for (const event_name of ['push', 'pull_request'])
@@ -265,12 +266,14 @@ test('workflow activo excluye PR/develop/fallos/cancelaciones', () => {
         for (const b of ['success', 'failure', 'skipped', 'cancelled'])
           for (const f of ['success', 'failure', 'skipped', 'cancelled']) {
             assert.equal(evaluate({ event_name, ref }, { backend: { result: b }, frontend: { result: f } }),
-              event_name === 'push' && ref === 'refs/heads/main' && b === 'success' && f === 'success');
+              !blocked && event_name === 'push' && ref === 'refs/heads/main' && b === 'success' && f === 'success');
             combinations++;
           }
     assert.equal(combinations, 96);
   };
-  validate(condition);
+  validate(condition, true);
+  const guarded = condition.slice('false && '.length);
+  validate(guarded);
   // Mutaciones solo en memoria: omitir cualquiera de los controles debe fallar.
   for (const control of [
     "github.event_name == 'push'",
@@ -279,7 +282,7 @@ test('workflow activo excluye PR/develop/fallos/cancelaciones', () => {
     "needs.frontend.result == 'success'",
   ]) {
     assert(condition.includes(control), `Falta control: ${control}`);
-    assert.throws(() => validate(condition.replace(control, 'true')));
+    assert.throws(() => validate(guarded.replace(control, 'true')));
   }
 });
 
