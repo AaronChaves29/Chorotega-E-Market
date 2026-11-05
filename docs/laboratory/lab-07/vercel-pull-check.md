@@ -1,5 +1,35 @@
 # Prueba temporal aislada de Vercel pull
 
+## Cierre: prueba autenticada aprobada y mecanismo retirado
+
+[Run 41936219967](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/41936219967),
+en develop tras PR #115: el job temporal, Build Backend y Build Frontend
+terminaron en success; Deploy production fue skipped. Los estados de los jobs
+y de sus pasos se comprobaron mediante GitHub API durante este cierre.
+Pull funcionó con CLI 65.4.0, proyecto explícito y equipo/token por entorno,
+sin scope global. Su paso también validó proyecto, organización, raíz
+apps/frontend y Node 24.x; la limpieza terminó correctamente.
+
+Esto verifica el acceso necesario para pull en esa ejecución, **no** permisos de
+Deploy/Promote ni un despliegue automático completo. Tampoco demuestra por sí
+solo la causa exacta del fallo histórico 41923529171.
+
+Se retiraron el job temporal y los scripts vercel-pull-check.mjs y su test.
+Este documento se conserva como evidencia. La corrección definitiva permanece
+en production-deploy.mjs y el commit original fb58d07 se conserva en el historial.
+Los pasos siguientes describen la preparación histórica, no tareas pendientes
+ni un mecanismo que siga presente. No repetir la prueba ni activar producción
+sin autorización.
+
+Validación local del cierre: 51 pruebas del mecanismo (incluidas las 96
+combinaciones del workflow), 9 pruebas del artefacto compilado, lint y build de
+backend/frontend, sintaxis JavaScript/YAML y git diff --check aprobados. Los
+jobs backend/frontend/deploy, sus condiciones y permisos se compararon con
+origin/develop sin diferencias; solo se retira el diagnóstico temporal.
+No se reejecutaron aquí Jest con cobertura, integración Docker ni navegador.
+
+## Preparación histórica (mecanismo ya retirado)
+
 Preparada en `test/lab-07-vercel-pull-ci`, desde develop `9341a71`.
 La corrección `fb58d07` permanece independiente en `fix/lab-07-vercel-pull`;
 esta prueba no la integra ni cambia el despliegue productivo.

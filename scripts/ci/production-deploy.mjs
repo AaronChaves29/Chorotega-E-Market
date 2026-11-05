@@ -17,14 +17,32 @@ export class DeploymentError extends Error {
 
 const commandLabels = new Set(['vercel_pull', 'vercel_build', 'vercel_deploy', 'vercel_inspect', 'vercel_promote', 'git_main']);
 const commandCauses = new Set(['exit_nonzero', 'timeout', 'cancelled', 'spawn_failed', 'output_limit']);
-const commandCategories = new Set(['authentication', 'permission', 'not_found', 'invalid_argument', 'network', 'unknown']);
+const commandCategories = new Set(['authentication', 'permission', 'project', 'scope', 'not_found', 'invalid_argument', 'network', 'unknown']);
+const contextReasons = new Set(['project_mismatch', 'organization_mismatch', 'root_directory_mismatch', 'node_version_mismatch', 'project_settings_unreadable']);
 const signals = new Set(['SIGTERM', 'SIGKILL', 'SIGINT', 'SIGABRT', 'SIGSEGV']);
 
-function stderrCategory(stderr) {
+function commandCategory(stderr, stdout) {
+  // Non-interactive CLI errors can be JSON on stdout. Inspect only controlled
+  // reason/code values; never return messages, arguments, hints or next commands.
+  let payload;
+  try { payload = JSON.parse(stdout); } catch { /* Plain output is not a structured diagnostic. */ }
+  const reasons = [payload?.reason, payload?.code, payload?.error?.code];
+  const categories = {
+    scope_not_accessible: 'scope', scope_not_found: 'scope', missing_scope: 'scope', team_not_found: 'scope',
+    project_not_found: 'project', project_unauthorized: 'project', not_linked: 'project', link_required: 'project',
+    invalid_token: 'authentication', missing_token: 'authentication', not_authenticated: 'authentication', authentication_required: 'authentication',
+    forbidden: 'permission', permission_denied: 'permission', not_authorized: 'permission',
+    invalid_argument: 'invalid_argument', invalid_option: 'invalid_argument',
+  };
+  for (const reason of reasons) {
+    if (typeof reason === 'string' && Object.hasOwn(categories, reason.toLowerCase())) return categories[reason.toLowerCase()];
+  }
+  if (/scope[-_ ]not[-_ ](?:accessible|existent)|specified scope does not exist|do not have access to the specified account|cannot set your Personal Account as the scope|not able to load teams/i.test(stderr)) return 'scope';
+  if (/project[_ ]unauthorized|project not found|could not (?:retrieve|load) project settings|isn[’']t linked to a project|project was either deleted/i.test(stderr)) return 'project';
   if (/unauthorized|invalid token|authentication required|not authenticated/i.test(stderr)) return 'authentication';
   if (/forbidden|permission denied|not authorized|access denied/i.test(stderr)) return 'permission';
   if (/deployment not found|could not find.*deployment/i.test(stderr)) return 'not_found';
-  if (/unknown (option|argument)|invalid (option|argument|timeout)/i.test(stderr)) return 'invalid_argument';
+  if (/unknown (option|argument)|invalid (option|argument|timeout)|can't use --project with VERCEL_PROJECT_ID/i.test(stderr)) return 'invalid_argument';
   if (/ECONNRESET|ENOTFOUND|ETIMEDOUT|fetch failed|network error/i.test(stderr)) return 'network';
   return 'unknown';
 }
@@ -37,10 +55,11 @@ export function safeFailure(mode, error) {
       'POSTCHECK_FAILED', 'RENDER_SHA_MISMATCH', 'RECOVERY_NOT_AUTHORIZED',
       'RECOVERY_INVALID', 'VERCEL_API_FAILED', 'VERCEL_RELEASE_INVALID',
       'VERCEL_RELEASE_TIMEOUT', 'VERCEL_DUPLICATES', 'VERCEL_DEPLOY_AMBIGUOUS',
-      'VERCEL_PROMOTION_AMBIGUOUS', 'BACKEND_RELEASE_MISMATCH'].includes(error.code) ? error.code : 'DEPLOYMENT_FAILED';
+      'VERCEL_PROMOTION_AMBIGUOUS', 'BACKEND_RELEASE_MISMATCH', 'VERCEL_CONTEXT_INVALID'].includes(error.code) ? error.code : 'DEPLOYMENT_FAILED';
   const details = code === 'VERCEL_COMMAND_FAILED' && commandLabels.has(error.command) && commandCauses.has(error.reason)
-    ? ` comando=${error.command} causa=${error.reason} exit=${Number.isInteger(error.exitCode) && error.exitCode >= 0 && error.exitCode <= 255 ? error.exitCode : 'unknown'} señal=${signals.has(error.signal) ? error.signal : 'none'} clase=${commandCategories.has(error.category) ? error.category : 'unknown'}` : '';
-  return `Etapa=${mode === 'vercel-deploy' ? 'vercel-deploy (Render puede estar actualizado)' : mode === 'vercel-recover' ? 'vercel-recover' : 'despliegue'} resultado=${code}${details}. Revisar paneles antes de reintentar.`;
+    ? ` comando=${error.command} causa=${error.reason} exit=${Number.isInteger(error.exitCode) && error.exitCode >= 0 && error.exitCode <= 255 ? error.exitCode : 'unknown'} señal=${signals.has(error.signal) ? error.signal : 'none'} clase=${commandCategories.has(error.category) ? error.category : 'unknown'}`
+    : code === 'VERCEL_CONTEXT_INVALID' && contextReasons.has(error.reason) ? ` causa=${error.reason}` : '';
+  return `Etapa=${mode === 'vercel-deploy' ? 'vercel-deploy (Render puede estar actualizado)' : mode === 'vercel-recover' ? 'vercel-recover' : mode === 'vercel-build' ? 'vercel-build' : 'despliegue'} resultado=${code}${details}. Revisar paneles antes de reintentar.`;
 }
 
 // Exported to test the real process runner with synthetic Node subprocesses.
@@ -58,7 +77,7 @@ export function command(binary, args, env, timeout, label = 'vercel_deploy', {
       }));
       return;
     }
-    let stdout = '', stderr = '', stderrBytes = 0, bytes = 0, reason, force;
+    let stdout = '', stdoutDiagnostic = '', stdoutDiagnosticBytes = 0, stderr = '', stderrBytes = 0, bytes = 0, reason, force;
     function stop(cause) {
       reason ??= cause;
       function kill(signal) {
@@ -72,6 +91,9 @@ export function command(binary, args, env, timeout, label = 'vercel_deploy', {
     signal.addEventListener('abort', abort, { once: true });
     if (signal.aborted) abort();
     child.stdout.on('data', (chunk) => {
+      const retained = chunk.subarray(0, Math.max(0, 8192 - stdoutDiagnosticBytes));
+      stdoutDiagnosticBytes += retained.length;
+      stdoutDiagnostic += retained.toString('utf8');
       bytes += chunk.length;
       if (bytes > maxOutputBytes) stop('output_limit');
       else stdout += chunk;
@@ -87,7 +109,7 @@ export function command(binary, args, env, timeout, label = 'vercel_deploy', {
         command: label, reason: cause,
         exitCode: Number.isInteger(code) && code >= 0 && code <= 255 ? code : null,
         signal: signals.has(childSignal) ? childSignal : null,
-        category: stderrCategory(stderr),
+        category: commandCategory(stderr, stdoutDiagnostic),
       });
     }
     function cleanup() {
@@ -221,7 +243,10 @@ export async function cli(args, env, execute = command) {
   // 6 min build; 3 min deploy; 2 min otros comandos. Sin reintento de mutaciones.
   const minutes = args[0] === 'build' ? 6 : args[0] === 'deploy' ? 3 : 2;
   // CLI 65.4.0 supports VERCEL_TOKEN directly; keep it out of process arguments.
-  return execute('vercel', [...args, '--scope', env.VERCEL_ORG_ID], childEnv, minutes * 60000, `vercel_${args[0]}`);
+  // pull supports explicit project IDs in 65.4.0 and skipOwnerLookup. Avoid the
+  // global --scope path (user/team discovery) for pull; pin team via ORG_ID env.
+  const contextArgs = args[0] === 'pull' ? ['--project', env.VERCEL_PROJECT_ID] : ['--scope', env.VERCEL_ORG_ID];
+  return execute('vercel', [...args, ...contextArgs], childEnv, minutes * 60000, `vercel_${args[0]}`);
 }
 
 function vercelEndpoint(path, env) {
@@ -343,7 +368,7 @@ async function aliasPointsTo(id, env, options) {
 
 function ambiguousCommand(error) {
   return error instanceof DeploymentError && error.code === 'VERCEL_COMMAND_FAILED' &&
-    !['authentication', 'permission', 'invalid_argument', 'not_found'].includes(error.category) &&
+    !['authentication', 'permission', 'project', 'scope', 'invalid_argument', 'not_found'].includes(error.category) &&
     !['cancelled', 'spawn_failed', 'output_limit'].includes(error.reason) && !cancellation.signal.aborted;
 }
 
@@ -517,11 +542,15 @@ export async function main(mode, env = process.env, dependencies = {}) {
   if (mode === 'render') return deployRender(env);
   if (mode === 'vercel-build') {
     await runCli(['pull', '--yes', '--environment=production'], env);
-    const project = JSON.parse(readFileSync('.vercel/project.json', 'utf8'));
-    if (project.projectId !== env.VERCEL_PROJECT_ID || project.orgId !== env.VERCEL_ORG_ID ||
-        project.settings?.rootDirectory?.replace(/\/$/, '') !== 'apps/frontend' ||
-        project.settings?.nodeVersion !== '24.x')
-      throw new Error('Proyecto Vercel, Root Directory o Node no coinciden con lo esperado.');
+    let project;
+    const contextError = (reason) => Object.assign(new DeploymentError('VERCEL_CONTEXT_INVALID'), { reason });
+    try { project = dependencies.readProject ? await dependencies.readProject() : JSON.parse(readFileSync('.vercel/project.json', 'utf8')); }
+    catch { throw contextError('project_settings_unreadable'); }
+    if (project?.projectId !== env.VERCEL_PROJECT_ID) throw contextError('project_mismatch');
+    if (project.orgId !== env.VERCEL_ORG_ID) throw contextError('organization_mismatch');
+    if (typeof project.settings?.rootDirectory !== 'string' || project.settings.rootDirectory.replace(/\/$/, '') !== 'apps/frontend')
+      throw contextError('root_directory_mismatch');
+    if (project.settings?.nodeVersion !== '24.x') throw contextError('node_version_mismatch');
     await runCli(['build', '--prod'], env);
     console.log('Build Vercel production preparado.');
     return;

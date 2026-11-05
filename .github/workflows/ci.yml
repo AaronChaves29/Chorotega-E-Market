@@ -17,35 +17,6 @@ permissions:
   contents: read
 
 jobs:
-  vercel-pull-check:
-    name: Vercel pull check (temporal)
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
-    permissions:
-      contents: read
-    runs-on: ubuntu-latest
-    timeout-minutes: 8
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-      - name: Instalar CLI oficial sin credenciales
-        timeout-minutes: 5
-        run: npm install --global vercel@65.4.0
-      - name: Comprobar pull y contexto sin publicar
-        timeout-minutes: 3
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          VERCEL_TELEMETRY_DISABLED: "1"
-        run: node scripts/ci/vercel-pull-check.mjs
-      - name: Eliminar configuracion descargada del runner
-        if: ${{ always() }}
-        run: node -e "require('node:fs').rmSync('.vercel', { recursive:true, force:true })"
-
   backend:
     name: Build Backend
     runs-on: ubuntu-latest
