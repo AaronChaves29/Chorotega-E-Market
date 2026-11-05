@@ -17,6 +17,8 @@ jobs:
   vercel_staged_check:
     name: Vercel staged check (disabled)
     if: ${{ false && github.repository == 'AaronChaves29/Chorotega-E-Market' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop' && inputs.authorization == '[authorize-vercel-staged:c338feb55f61bba51da4de7ef63ab455460d87e1]' }}
+    environment:
+      name: vercel-staged-approval
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
