@@ -151,7 +151,7 @@ jobs:
   deploy:
     name: Deploy production
     needs: [backend, frontend]
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.backend.result == 'success' && needs.frontend.result == 'success' }}
+    if: ${{ false && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.backend.result == 'success' && needs.frontend.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:
