@@ -84,10 +84,13 @@ async function baseline(env, options, deps) {
   const host = new URL(env.FRONTEND_HEALTH_URL).hostname;
   const alias = await vercelRead(vercelEndpoint(`/v4/aliases/${encodeURIComponent(host)}`, env), env, options);
   if (alias?.alias !== host || alias.projectId !== env.VERCEL_PROJECT_ID ||
-      alias.deploymentId !== env.STAGED_PREVIOUS_DEPLOYMENT_ID || alias.redirect) fail('STAGED_ALIAS_CHANGED');
+      alias.deploymentId !== env.STAGED_PREVIOUS_DEPLOYMENT_ID || alias.redirect ||
+      (alias.deployment !== undefined && alias.deployment?.id !== alias.deploymentId)) fail('STAGED_ALIAS_CHANGED');
   const previous = await releaseById(env.STAGED_PREVIOUS_DEPLOYMENT_ID, { ...env, DEPLOY_SHA: env.STAGED_PREVIOUS_SHA }, options);
-  if (previous.readyState !== 'READY' || previous.aliasAssigned !== true || !previous.alias?.includes(host))
-    fail('STAGED_INVALID_BASELINE');
+  // The alias endpoint establishes the current assignment. Deployment details may
+  // omit aliasAssigned and return alias: [] even for the assigned deployment.
+  if (previous.readyState !== 'READY') fail('STAGED_INVALID_BASELINE');
+  if (alias.deployment?.url !== undefined && alias.deployment.url !== previous.url) fail('STAGED_ALIAS_CHANGED');
 }
 
 export async function preflightStaged(env, deps = {}, options = optionsFor(deps)) {

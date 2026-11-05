@@ -135,6 +135,30 @@ Los helpers de lectura e identidad del mecanismo permanente se exportan para
 reutilizarlos; su implementación no cambia. `Deploy production`, sus dependencias,
 permisos, eventos, concurrencia y configuración permanecen intactos.
 
+### Corrección del baseline en el PR #122
+
+La consulta autenticada reportada durante la revisión confirmó el alias anterior,
+pero el detalle del deployment devolvió `alias: []` sin `aliasAssigned`. Exigir
+esos dos campos en el detalle producía un falso negativo `STAGED_INVALID_BASELINE`.
+Esta revisión no repitió consultas autenticadas a los proveedores.
+
+La asignación se comprueba con `GET /v4/aliases/{dominio}?teamId=…`: nombre exacto,
+proyecto e ID anterior configurados, sin redirección. Si aparece el objeto
+opcional `deployment`, su ID debe coincidir; si incluye URL, debe coincidir con
+el detalle verificado. Respuestas incompletas o contradictorias fallan cerradas.
+No se exige que el detalle incluya `aliasAssigned` ni que `alias` enumere el
+dominio. Se conservan la comprobación del equipo propietario del proyecto y la
+lectura independiente del deployment por ID, con proyecto, propietario cuando
+está presente, SHA anterior exacto, rama main, target Production y estado READY.
+
+Referencia: [API oficial de alias](https://vercel.com/docs/rest-api/aliases/get-an-alias)
+y [contrato del SDK oficial](https://github.com/vercel/sdk/blob/main/docs/models/getaliasresponsebody.md).
+La nueva regresión falla contra el script anterior y aprueba con la corrección.
+También se prueban alias incorrectos, campos requeridos ausentes, identidad
+incompatible y contradicciones del deployment anidado. No cambian la búsqueda
+de duplicados, la recuperación exclusivamente por GET ni la prohibición de
+Promote; el workflow sigue bloqueado mediante `false &&` y conserva el SHA objetivo.
+
 ## Evidencia, riesgos y retirada
 
 El grupo `chorotega-production` serializa este ensayo con el job productivo de
@@ -165,8 +189,8 @@ propuesto; no impiden que un actor con permisos para cambiar workflows omita
 controles en otro código. Resolver la protección de Secrets/Environment y revisión
 es una condición previa de activación, no una garantía proporcionada por este PR.
 
-Validación local realizada con Node 24.21.0: **88/88 pruebas aprobadas**, sin
-fallidas ni omitidas (62 permanentes y 26 del ensayo). Incluye las 96 combinaciones
+Validación local realizada con Node 24.21.0: **93/93 pruebas aprobadas**, sin
+fallidas ni omitidas (62 permanentes y 31 del ensayo). Incluye las 96 combinaciones
 del job productivo, guards del workflow manual, gate de CI con respuestas
 simuladas y pruebas de identidad, reconciliación, READY, duplicados y alias.
 Todos los proveedores son mocks; los subprocesos ejecutan únicamente Node con

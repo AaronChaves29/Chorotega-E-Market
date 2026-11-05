@@ -27,7 +27,8 @@ function fixture() {
     meta: { githubCommitSha: TARGET_SHA, githubCommitRef: 'main' } };
   const previous = { ...record, id: env.STAGED_PREVIOUS_DEPLOYMENT_ID,
     meta: { githubCommitSha: env.STAGED_PREVIOUS_SHA, githubCommitRef: 'main' },
-    url: 'immutable-previous.vercel.app', aliasAssigned: true, alias: ['frontend.example.test'] };
+    url: 'immutable-previous.vercel.app', alias: [] };
+  delete previous.aliasAssigned;
   const project = { id: env.VERCEL_PROJECT_ID, accountId: env.VERCEL_ORG_ID, rootDirectory: 'apps/frontend', nodeVersion: '24.x' };
   const state = { created: false, aliasChanged: false };
   const commands = [], requests = [];
@@ -94,6 +95,71 @@ test('staged: fuente, validador y cambios tracked se comprueban sin mezclar SHAs
 test('staged: preflight hace solo GET y no ejecuta build ni creación', async () => {
   const f = fixture(); await stagedCheck('preflight', f.env, f.deps);
   assert.equal(f.commands.length, 0); assert(f.requests.some((url) => url.startsWith('https://api.render.com/')));
+});
+
+test('staged: alias API válido admite detalle real sin aliasAssigned y con alias vacío', async () => {
+  const f = fixture();
+  assert.equal(Object.hasOwn(f.previous, 'aliasAssigned'), false);
+  assert.deepEqual(f.previous.alias, []);
+  f.state.created = true;
+  assert.equal(await stagedCheck('stage', f.env, f.deps), f.record.id);
+  assert(f.requests.filter((url) => new URL(url).pathname.startsWith('/v4/aliases/')).length >= 3);
+  assert.deepEqual(f.commands, [], 'Recupera el candidato existente sin build ni deploy');
+});
+
+test('staged: proyecciones opcionales de alias no sustituyen la asignación de la API', async () => {
+  for (const projection of [{}, { alias: [], aliasAssigned: false },
+    { alias: ['frontend.example.test'], aliasAssigned: true }]) {
+    const f = fixture(); delete f.previous.alias; Object.assign(f.previous, projection);
+    const fetch = f.deps.fetchImpl;
+    f.deps.fetchImpl = async (url, options) => new URL(url).pathname.startsWith('/v4/aliases/')
+      ? response({ alias: 'frontend.example.test', projectId: f.env.VERCEL_PROJECT_ID,
+        deploymentId: f.previous.id, deployment: { id: f.previous.id, url: f.previous.url } }) : fetch(url, options);
+    await stagedCheck('preflight', f.env, f.deps);
+    assert.deepEqual(f.commands, []);
+  }
+});
+
+test('staged: alias incorrecto o incompleto falla aunque el detalle declare el dominio', async () => {
+  for (const invalid of [null, {}, { alias: 'other.example.test' }, { alias: null },
+    { alias: undefined }, { projectId: 'prj_Other' }, { projectId: null }, { projectId: undefined },
+    { deploymentId: 'dpl_Other' }, { deploymentId: null }, { deploymentId: undefined },
+    { redirect: 'other.example.test' }]) {
+    const f = fixture(); f.previous.aliasAssigned = true; f.previous.alias = ['frontend.example.test'];
+    const fetch = f.deps.fetchImpl;
+    f.deps.fetchImpl = async (url, options) => new URL(url).pathname.startsWith('/v4/aliases/')
+      ? response(invalid === null || Object.keys(invalid).length === 0 ? invalid : {
+        alias: 'frontend.example.test', projectId: f.env.VERCEL_PROJECT_ID,
+        deploymentId: f.previous.id, ...invalid }) : fetch(url, options);
+    await assert.rejects(stagedCheck('stage', f.env, f.deps), /STAGED_ALIAS_CHANGED/);
+    assert.deepEqual(f.commands, []);
+  }
+});
+
+test('staged: deployment anidado del alias no puede contradecir la identidad comprobada', async () => {
+  for (const deployment of [null, {}, { id: 'dpl_Other' },
+    { id: 'dpl_Previous', url: 'other.vercel.app' }]) {
+    const f = fixture(); const fetch = f.deps.fetchImpl;
+    f.deps.fetchImpl = async (url, options) => new URL(url).pathname.startsWith('/v4/aliases/')
+      ? response({ alias: 'frontend.example.test', projectId: f.env.VERCEL_PROJECT_ID,
+        deploymentId: f.previous.id, deployment }) : fetch(url, options);
+    await assert.rejects(stagedCheck('stage', f.env, f.deps), /STAGED_ALIAS_CHANGED/);
+    assert.deepEqual(f.commands, []);
+  }
+});
+
+test('staged: alias válido no omite identidad independiente ni READY del deployment anterior', async () => {
+  for (const change of [{ id: 'dpl_Other' }, { id: undefined }, { ownerId: 'team_Other' },
+    { projectId: 'prj_Other' }, { projectId: undefined }, { target: 'preview' }, { target: undefined },
+    { meta: { githubCommitSha: TARGET_SHA, githubCommitRef: 'main' } },
+    { meta: { githubCommitSha: fixture().env.STAGED_PREVIOUS_SHA, githubCommitRef: 'develop' } },
+    { meta: undefined }, { readyState: 'BUILDING' }, { readyState: undefined }, { url: undefined }]) {
+    const f = fixture(); const fetch = f.deps.fetchImpl;
+    f.deps.fetchImpl = async (url, options) => new URL(url).pathname === `/v13/deployments/${f.env.STAGED_PREVIOUS_DEPLOYMENT_ID}`
+      ? response({ ...f.previous, ...change }) : fetch(url, options);
+    await assert.rejects(stagedCheck('stage', f.env, f.deps), /VERCEL_RELEASE_INVALID|STAGED_INVALID_BASELINE/);
+    assert.deepEqual(f.commands, []);
+  }
 });
 
 test('staged: CLI recibe contexto main de la fuente y no credenciales Render o aprobación', async () => {
