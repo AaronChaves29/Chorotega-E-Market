@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 const cancellation = new AbortController();
@@ -17,26 +17,38 @@ export class DeploymentError extends Error {
 
 const commandLabels = new Set(['vercel_pull', 'vercel_build', 'vercel_deploy', 'vercel_inspect', 'vercel_promote', 'git_main']);
 const commandCauses = new Set(['exit_nonzero', 'timeout', 'cancelled', 'spawn_failed', 'output_limit']);
-const commandCategories = new Set(['authentication', 'permission', 'project', 'scope', 'not_found', 'invalid_argument', 'network', 'unknown']);
+const commandCategories = new Set(['authentication', 'permission', 'project', 'scope', 'not_found', 'invalid_argument', 'network', 'prebuilt_not_found', 'missing_archive', 'deploy_failed', 'upload_failed', 'unknown']);
 const contextReasons = new Set(['project_mismatch', 'organization_mismatch', 'root_directory_mismatch', 'node_version_mismatch', 'project_settings_unreadable']);
 const signals = new Set(['SIGTERM', 'SIGKILL', 'SIGINT', 'SIGABRT', 'SIGSEGV']);
 
-function commandCategory(stderr, stdout) {
+export function commandCategory(stderr, stdout) {
   // Non-interactive CLI errors can be JSON on stdout. Inspect only controlled
   // reason/code values; never return messages, arguments, hints or next commands.
-  let payload;
-  try { payload = JSON.parse(stdout); } catch { /* Plain output is not a structured diagnostic. */ }
-  const reasons = [payload?.reason, payload?.code, payload?.error?.code];
   const categories = {
     scope_not_accessible: 'scope', scope_not_found: 'scope', missing_scope: 'scope', team_not_found: 'scope',
     project_not_found: 'project', project_unauthorized: 'project', not_linked: 'project', link_required: 'project',
-    invalid_token: 'authentication', missing_token: 'authentication', not_authenticated: 'authentication', authentication_required: 'authentication',
-    forbidden: 'permission', permission_denied: 'permission', not_authorized: 'permission',
-    invalid_argument: 'invalid_argument', invalid_option: 'invalid_argument',
+    invalid_token: 'authentication', missing_token: 'authentication', not_authenticated: 'authentication', authentication_required: 'authentication', token_expired: 'authentication', invalid_credentials: 'authentication', unauthorized: 'authentication',
+    forbidden: 'permission', permission_denied: 'permission', not_authorized: 'permission', not_domain_owner: 'permission',
+    invalid_argument: 'invalid_argument', invalid_arguments: 'invalid_argument', invalid_option: 'invalid_argument',
+    prebuilt_not_found: 'prebuilt_not_found', missing_archive: 'missing_archive',
+    deploy_failed: 'deploy_failed', upload_failed: 'upload_failed',
+    deployment_not_found: 'not_found',
+    econnreset: 'network', enotfound: 'network', etimedout: 'network', network_error: 'network', fetch_failed: 'network',
   };
-  for (const reason of reasons) {
-    if (typeof reason === 'string' && Object.hasOwn(categories, reason.toLowerCase())) return categories[reason.toLowerCase()];
+  // Some CLI modes write JSON to stderr or emit one JSON object per line.
+  // Inspect bounded buffers only and return literal allowlisted categories.
+  for (const channel of [stdout, stderr]) {
+    const bounded = channel.slice(0, 8192);
+    for (const candidate of [bounded, ...bounded.split('\n')]) {
+      let payload;
+      try { payload = JSON.parse(candidate); } catch { continue; }
+      for (const reason of [payload?.reason, payload?.code, payload?.error?.reason, payload?.error?.code]) {
+        if (typeof reason === 'string' && Object.hasOwn(categories, reason.toLowerCase())) return categories[reason.toLowerCase()];
+      }
+    }
   }
+  stderr = stderr.slice(0, 8192);
+  if (/no prebuilt output found/i.test(stderr)) return 'prebuilt_not_found';
   if (/scope[-_ ]not[-_ ](?:accessible|existent)|specified scope does not exist|do not have access to the specified account|cannot set your Personal Account as the scope|not able to load teams/i.test(stderr)) return 'scope';
   if (/project[_ ]unauthorized|project not found|could not (?:retrieve|load) project settings|isn[’']t linked to a project|project was either deleted/i.test(stderr)) return 'project';
   if (/unauthorized|invalid token|authentication required|not authenticated/i.test(stderr)) return 'authentication';
@@ -55,7 +67,7 @@ export function safeFailure(mode, error) {
       'POSTCHECK_FAILED', 'RENDER_SHA_MISMATCH', 'RECOVERY_NOT_AUTHORIZED',
       'RECOVERY_INVALID', 'VERCEL_API_FAILED', 'VERCEL_RELEASE_INVALID',
       'VERCEL_RELEASE_TIMEOUT', 'VERCEL_DUPLICATES', 'VERCEL_DEPLOY_AMBIGUOUS',
-      'VERCEL_PROMOTION_AMBIGUOUS', 'BACKEND_RELEASE_MISMATCH', 'VERCEL_CONTEXT_INVALID'].includes(error.code) ? error.code : 'DEPLOYMENT_FAILED';
+      'VERCEL_PROMOTION_AMBIGUOUS', 'BACKEND_RELEASE_MISMATCH', 'VERCEL_CONTEXT_INVALID', 'VERCEL_PREBUILT_INVALID'].includes(error.code) ? error.code : 'DEPLOYMENT_FAILED';
   const details = code === 'VERCEL_COMMAND_FAILED' && commandLabels.has(error.command) && commandCauses.has(error.reason)
     ? ` comando=${error.command} causa=${error.reason} exit=${Number.isInteger(error.exitCode) && error.exitCode >= 0 && error.exitCode <= 255 ? error.exitCode : 'unknown'} señal=${signals.has(error.signal) ? error.signal : 'none'} clase=${commandCategories.has(error.category) ? error.category : 'unknown'}`
     : code === 'VERCEL_CONTEXT_INVALID' && contextReasons.has(error.reason) ? ` causa=${error.reason}` : '';
@@ -243,20 +255,41 @@ export async function cli(args, env, execute = command) {
   // 6 min build; 3 min deploy; 2 min otros comandos. Sin reintento de mutaciones.
   const minutes = args[0] === 'build' ? 6 : args[0] === 'deploy' ? 3 : 2;
   // CLI 65.4.0 supports VERCEL_TOKEN directly; keep it out of process arguments.
-  // pull supports explicit project IDs in 65.4.0 and skipOwnerLookup. Avoid the
-  // global --scope path (user/team discovery) for pull; pin team via ORG_ID env.
-  const contextArgs = args[0] === 'pull' ? ['--project', env.VERCEL_PROJECT_ID] : ['--scope', env.VERCEL_ORG_ID];
+  // pull/deploy support explicit project IDs in 65.4.0. Avoid the global
+  // --scope discovery path for those commands; pin team via ORG_ID env.
+  const contextArgs = ['pull', 'deploy'].includes(args[0]) ? ['--project', env.VERCEL_PROJECT_ID] : ['--scope', env.VERCEL_ORG_ID];
   return execute('vercel', [...args, ...contextArgs], childEnv, minutes * 60000, `vercel_${args[0]}`);
 }
 
-function vercelEndpoint(path, env) {
+export function assertPrebuiltOutput({ readPrebuilt = () => {
+  // This workflow uses pull's per-project link at the Git root, not a repo link.
+  // CLI 65.4.0 resolves output at cwd/.vercel/output in this mode, even when
+  // project.settings.rootDirectory is apps/frontend. Never guess another path.
+  if (existsSync('.vercel/repo.json')) throw new Error();
+  return {
+    config: JSON.parse(readFileSync('.vercel/output/config.json', 'utf8')),
+    builds: JSON.parse(readFileSync('.vercel/output/builds.json', 'utf8')),
+  };
+} } = {}) {
+  try {
+    const { config, builds } = readPrebuilt();
+    if (config?.version !== 3 || builds?.target !== 'production' || builds.error ||
+        (builds.builds !== undefined && (!Array.isArray(builds.builds) ||
+          builds.builds.some((build) => !build || typeof build !== 'object' || 'error' in build)))) throw new Error();
+  } catch {
+    // Do not attach the original parse/IO error: build files can contain secrets.
+    throw new DeploymentError('VERCEL_PREBUILT_INVALID');
+  }
+}
+
+export function vercelEndpoint(path, env) {
   const url = new URL(path, 'https://api.vercel.com');
   if (env.VERCEL_ORG_ID.startsWith('team_')) url.searchParams.set('teamId', env.VERCEL_ORG_ID);
   return url;
 }
 
 // Only GETs retry. A malformed reply, auth/permission error or other 4xx fails closed.
-async function vercelRead(url, env, { fetchImpl, wait, signal }) {
+export async function vercelRead(url, env, { fetchImpl, wait, signal }) {
   for (let retry = 0; retry < 3; retry++) {
     if (signal.aborted || cancellation.signal.aborted) throw new DeploymentError('VERCEL_RELEASE_TIMEOUT');
     try {
@@ -276,7 +309,7 @@ async function vercelRead(url, env, { fetchImpl, wait, signal }) {
   throw new DeploymentError(signal.aborted ? 'VERCEL_RELEASE_TIMEOUT' : 'VERCEL_API_FAILED');
 }
 
-function releaseIdentity(result, env, expectedId) {
+export function releaseIdentity(result, env, expectedId) {
   const owner = result?.ownerId ?? result?.teamId ?? result?.team?.id;
   if (!result || !/^dpl_[a-zA-Z0-9]+$/.test(result.id) ||
       (expectedId && result.id !== expectedId) ||
@@ -304,12 +337,12 @@ async function projectScope(env, options) {
     throw new DeploymentError('VERCEL_RELEASE_INVALID');
 }
 
-async function releaseById(id, env, options) {
+export async function releaseById(id, env, options) {
   const data = await vercelRead(vercelEndpoint(`/v13/deployments/${encodeURIComponent(id)}`, env), env, options);
   return releaseIdentity(data, env, id);
 }
 
-async function existingRelease(env, options) {
+export async function existingRelease(env, options) {
   // The documented SHA filter narrows results. Validate metadata again locally.
   // Never create if the bounded search is incomplete or multiple releases match.
   const url = vercelEndpoint('/v7/deployments', env);
@@ -340,7 +373,7 @@ async function existingRelease(env, options) {
   throw new DeploymentError('VERCEL_API_FAILED');
 }
 
-async function readyRelease(id, env, options) {
+export async function readyRelease(id, env, options) {
   for (let attempt = 0; attempt < options.attempts; attempt++) {
     const result = await releaseById(id, env, options);
     if (result.readyState === 'READY') return result;
@@ -368,8 +401,24 @@ async function aliasPointsTo(id, env, options) {
 
 function ambiguousCommand(error) {
   return error instanceof DeploymentError && error.code === 'VERCEL_COMMAND_FAILED' &&
-    !['authentication', 'permission', 'project', 'scope', 'invalid_argument', 'not_found'].includes(error.category) &&
+    !['authentication', 'permission', 'project', 'scope', 'invalid_argument', 'not_found', 'prebuilt_not_found'].includes(error.category) &&
     !['cancelled', 'spawn_failed', 'output_limit'].includes(error.reason) && !cancellation.signal.aborted;
+}
+
+export function deploymentReference(output) {
+  let parsed;
+  try { parsed = JSON.parse(output); } catch { /* Legacy CLI stdout can be a URL. */ }
+  if (parsed?.status === 'error') return null;
+  const id = parsed?.deployment?.id ?? parsed?.id;
+  if (typeof id === 'string' && /^dpl_[a-zA-Z0-9]+$/.test(id)) return { id };
+  const candidate = parsed?.deployment?.url ?? parsed?.url ?? (typeof parsed === 'string' ? parsed : output);
+  if (typeof candidate !== 'string') return null;
+  try {
+    const url = httpsUrl(candidate.startsWith('https://') ? candidate : `https://${candidate}`);
+    if (/^[a-zA-Z0-9-]+\.vercel\.app$/.test(url.hostname) && !url.port && url.pathname === '/' && !url.search)
+      return { host: url.hostname };
+  } catch { /* Untrusted stdout is never a fetch target or a diagnostic. */ }
+  return null;
 }
 
 export async function automaticVercel(env, dependencies = {}) {
@@ -396,10 +445,14 @@ export async function automaticVercel(env, dependencies = {}) {
     try {
       const output = await runCli(['deploy', '--prebuilt', '--prod', '--skip-domain', '--yes', '--no-wait', '--json',
         '--meta', `githubCommitSha=${env.DEPLOY_SHA}`, '--meta', 'githubCommitRef=main'], env);
-      let parsed;
-      try { parsed = JSON.parse(output); } catch { /* Reconcile only by authenticated GET; never repeat deploy. */ }
-      const candidate = parsed?.deployment?.id ?? parsed?.id;
-      if (/^dpl_[a-zA-Z0-9]+$/.test(candidate) && parsed?.status !== 'error') id = candidate;
+      const reference = deploymentReference(output);
+      if (reference?.id) id = reference.id;
+      else if (reference?.host) {
+        // The URL is only an API lookup key, never authority to promote/fetch it.
+        const result = releaseIdentity(await vercelRead(vercelEndpoint(`/v13/deployments/${encodeURIComponent(reference.host)}`, env), env, options), env);
+        if (result.url !== reference.host) throw new DeploymentError('VERCEL_RELEASE_INVALID');
+        id = result.id;
+      }
     } catch (error) {
       if (!ambiguousCommand(error)) throw error;
       console.error(safeFailure('vercel-deploy', error));
@@ -412,6 +465,9 @@ export async function automaticVercel(env, dependencies = {}) {
       }
       if (!id) throw new DeploymentError('VERCEL_DEPLOY_AMBIGUOUS');
     }
+    // Even a valid CLI ID must not hide a concurrent candidate for this SHA.
+    const listed = await existingRelease(env, options);
+    if (listed && listed !== id) throw new DeploymentError('VERCEL_DUPLICATES');
   }
   let release = await readyRelease(id, env, options);
   const immutable = new URL(`https://${release.url}`);
@@ -534,12 +590,13 @@ export function verifyVercelDeployment(result, url, env, promoted = true) {
 
 export async function main(mode, env = process.env, dependencies = {}) {
   const runCli = dependencies.runCli ?? cli;
-  const fetchImpl = dependencies.fetchImpl ?? fetch;
-  const options = { fetchImpl, wait: dependencies.wait ?? pause, attempts: dependencies.healthAttempts ?? 6 };
   if (mode === 'vercel-recover') return recoverVercel(env, dependencies);
   preflight(env);
   if (mode === 'preflight') return;
-  if (mode === 'render') return deployRender(env);
+  if (mode === 'render') {
+    assertPrebuiltOutput(dependencies);
+    return deployRender(env, dependencies);
+  }
   if (mode === 'vercel-build') {
     await runCli(['pull', '--yes', '--environment=production'], env);
     let project;
@@ -552,6 +609,7 @@ export async function main(mode, env = process.env, dependencies = {}) {
       throw contextError('root_directory_mismatch');
     if (project.settings?.nodeVersion !== '24.x') throw contextError('node_version_mismatch');
     await runCli(['build', '--prod'], env);
+    assertPrebuiltOutput(dependencies);
     console.log('Build Vercel production preparado.');
     return;
   }

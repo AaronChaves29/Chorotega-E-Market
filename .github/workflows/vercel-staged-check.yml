@@ -1,0 +1,126 @@
+name: Vercel staged validation (manual approval required)
+
+on:
+  workflow_dispatch:
+    inputs:
+      authorization:
+        description: Frase exacta del ensayo; no autoriza por sí sola la ejecución
+        type: string
+        required: true
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  # Ejecución manual autorizada; requiere revisión y aprobación del Environment.
+  vercel_staged_check:
+    name: Vercel staged check (manual approval required)
+    if: ${{ github.repository == 'AaronChaves29/Chorotega-E-Market' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop' && inputs.authorization == '[authorize-vercel-staged:c338feb55f61bba51da4de7ef63ab455460d87e1]' }}
+    environment:
+      name: vercel-staged-approval
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: read
+    concurrency:
+      group: chorotega-production
+      cancel-in-progress: false
+    env:
+      DEPLOY_SHA: c338feb55f61bba51da4de7ef63ab455460d87e1
+      # Validador revisado en develop con CI aprobado; nunca una rama móvil.
+      STAGED_VALIDATOR_SHA: "0707586496678d2b089a5b861564f82b65eebc13"
+      STAGED_PREVIOUS_DEPLOYMENT_ID: "dpl_EjxFbBNH25mYAQ5oNxx2QCZT5pPP"
+      STAGED_PREVIOUS_SHA: "9e353f372c38cb03125074f7b528de5bcc45ab21"
+      STAGED_BACKUP_VERIFIED: "true"
+      STAGED_BACKUP_EVIDENCE: "https://github.com/AaronChaves29/Chorotega-E-Market/pull/122#issuecomment-6651467159"
+      STAGED_APPROVAL_REFERENCE: "https://github.com/AaronChaves29/Chorotega-E-Market/pull/124#issuecomment-6651751698"
+      STAGED_AUTHORIZATION: "stage:c338feb55f61bba51da4de7ef63ab455460d87e1:0707586496678d2b089a5b861564f82b65eebc13:dpl_EjxFbBNH25mYAQ5oNxx2QCZT5pPP:https://github.com/AaronChaves29/Chorotega-E-Market/pull/122#issuecomment-6651467159"
+      FRONTEND_HEALTH_URL: ${{ vars.FRONTEND_HEALTH_URL }}
+      VERCEL_TELEMETRY_DISABLED: "1"
+      STAGED_CONFIRMATION: ${{ inputs.authorization }}
+    steps:
+      - name: Rechazar activación incompleta antes de descargar código o Secrets
+        run: |
+          [[ "$STAGED_VALIDATOR_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          test "$STAGED_VALIDATOR_SHA" != "0000000000000000000000000000000000000000" || exit 1
+          test "$STAGED_BACKUP_VERIFIED" = "true" || exit 1
+          test -n "$STAGED_AUTHORIZATION" || exit 1
+      - name: Obtener validadores revisados por SHA
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.STAGED_VALIDATOR_SHA }}
+          path: validator
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Comprobar pertenencia del validador a develop
+        working-directory: validator
+        run: git merge-base --is-ancestor "$STAGED_VALIDATOR_SHA" "$GITHUB_SHA"
+      - name: Obtener fuente exacta de main para los artefactos
+        uses: actions/checkout@v6
+        with:
+          ref: c338feb55f61bba51da4de7ef63ab455460d87e1
+          path: source
+          persist-credentials: false
+      - name: Configurar Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Exigir CI exitoso del SHA revisado antes de acceder a Secrets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'NODE'
+          async function get(path) {
+            const response = await fetch(`https://api.github.com/repos/AaronChaves29/Chorotega-E-Market/${path}`, {
+              headers: { Authorization: `Bearer ${process.env.GH_TOKEN}`, Accept: 'application/vnd.github+json' },
+              redirect: 'error', signal: AbortSignal.timeout(15000),
+            });
+            if (!response.ok) throw new Error();
+            return response.json();
+          }
+          try {
+            const sha = process.env.STAGED_VALIDATOR_SHA;
+            const runs = await get(`actions/runs?head_sha=${sha}&branch=develop&event=push&per_page=100`);
+            if (!Array.isArray(runs.workflow_runs) || !Number.isSafeInteger(runs.total_count) ||
+                runs.total_count !== runs.workflow_runs.length) throw new Error();
+            const candidates = runs.workflow_runs.filter((item) => item.path === '.github/workflows/ci.yml');
+            if (!candidates.every((item) => Number.isSafeInteger(item.id) && item.id > 0)) throw new Error();
+            const run = candidates.sort((a, b) => b.id - a.id)[0];
+            if (!run || run.head_sha !== sha || run.head_branch !== 'develop' || run.event !== 'push' ||
+                run.status !== 'completed' || run.conclusion !== 'success') throw new Error();
+            const jobs = await get(`actions/runs/${run.id}/jobs?filter=latest&per_page=100`);
+            if (!Array.isArray(jobs.jobs) || !Number.isSafeInteger(jobs.total_count) || jobs.total_count !== jobs.jobs.length ||
+                !['Build Backend', 'Build Frontend'].every((name) => jobs.jobs.some((job) =>
+                  job.name === name && job.status === 'completed' && job.conclusion === 'success'))) throw new Error();
+            console.log('CI del validador revisado: OK');
+          } catch {
+            console.error('No se acreditó CI exitoso del SHA revisado. No se accederá a Secrets.');
+            process.exitCode = 1;
+          }
+          NODE
+      - name: Instalar CLI oficial sin salida privada
+        timeout-minutes: 5
+        run: npm install --global vercel@65.4.0 > /dev/null 2>&1
+      - name: Validaciones previas de solo lectura
+        working-directory: source
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: node ../validator/scripts/ci/vercel-staged-check.mjs preflight
+      - name: Crear o recuperar un único staged, sin promoción
+        working-directory: source
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: node ../validator/scripts/ci/vercel-staged-check.mjs stage
+      - name: Limpiar configuración y artefactos privados
+        if: ${{ always() }}
+        run: rm -rf -- source/.vercel source/apps/frontend/.vercel
