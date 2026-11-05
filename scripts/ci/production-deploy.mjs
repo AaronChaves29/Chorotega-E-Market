@@ -282,14 +282,14 @@ export function assertPrebuiltOutput({ readPrebuilt = () => {
   }
 }
 
-function vercelEndpoint(path, env) {
+export function vercelEndpoint(path, env) {
   const url = new URL(path, 'https://api.vercel.com');
   if (env.VERCEL_ORG_ID.startsWith('team_')) url.searchParams.set('teamId', env.VERCEL_ORG_ID);
   return url;
 }
 
 // Only GETs retry. A malformed reply, auth/permission error or other 4xx fails closed.
-async function vercelRead(url, env, { fetchImpl, wait, signal }) {
+export async function vercelRead(url, env, { fetchImpl, wait, signal }) {
   for (let retry = 0; retry < 3; retry++) {
     if (signal.aborted || cancellation.signal.aborted) throw new DeploymentError('VERCEL_RELEASE_TIMEOUT');
     try {
@@ -309,7 +309,7 @@ async function vercelRead(url, env, { fetchImpl, wait, signal }) {
   throw new DeploymentError(signal.aborted ? 'VERCEL_RELEASE_TIMEOUT' : 'VERCEL_API_FAILED');
 }
 
-function releaseIdentity(result, env, expectedId) {
+export function releaseIdentity(result, env, expectedId) {
   const owner = result?.ownerId ?? result?.teamId ?? result?.team?.id;
   if (!result || !/^dpl_[a-zA-Z0-9]+$/.test(result.id) ||
       (expectedId && result.id !== expectedId) ||
@@ -337,12 +337,12 @@ async function projectScope(env, options) {
     throw new DeploymentError('VERCEL_RELEASE_INVALID');
 }
 
-async function releaseById(id, env, options) {
+export async function releaseById(id, env, options) {
   const data = await vercelRead(vercelEndpoint(`/v13/deployments/${encodeURIComponent(id)}`, env), env, options);
   return releaseIdentity(data, env, id);
 }
 
-async function existingRelease(env, options) {
+export async function existingRelease(env, options) {
   // The documented SHA filter narrows results. Validate metadata again locally.
   // Never create if the bounded search is incomplete or multiple releases match.
   const url = vercelEndpoint('/v7/deployments', env);
@@ -373,7 +373,7 @@ async function existingRelease(env, options) {
   throw new DeploymentError('VERCEL_API_FAILED');
 }
 
-async function readyRelease(id, env, options) {
+export async function readyRelease(id, env, options) {
   for (let attempt = 0; attempt < options.attempts; attempt++) {
     const result = await releaseById(id, env, options);
     if (result.readyState === 'READY') return result;
