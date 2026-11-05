@@ -1,5 +1,112 @@
 # S1 — CI/CD, incidencia productiva y recuperación
 
+## Contexto de deploy: run 41944599501 — corrección preparada, sin desplegar
+
+Revisión del 4 de noviembre de 2026, rama
+`fix/lab-07-vercel-deploy-context`, desde develop
+`560f6de162708d058fd113eb9dc528b3b3246b9d`.
+El [run 41944599501](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/41944599501)
+corresponde a main `c338feb55f61bba51da4de7ef63ab455460d87e1`.
+Build Backend, Build Frontend, pull/build de Vercel y Render aprobaron. El paso
+Vercel terminó con `VERCEL_COMMAND_FAILED`, comando `vercel_deploy`, causa
+`exit_nonzero`, exit 1, señal none y clase unknown; posteriormente terminó como
+`VERCEL_DEPLOY_AMBIGUOUS`. No fue un despliegue automático completo exitoso.
+
+**Causa raíz no demostrada.** El registro permitido no conserva la salida
+privada original. No prueba incompatibilidad de `--json`, un error de permisos,
+la ausencia de prebuilt ni un defecto en la resolución del equipo. El fallo
+ambiguo tampoco demuestra que el proveedor no haya creado un deployment.
+
+### Argumentos y evidencia de CLI 65.4.0
+
+Se descargó e inspeccionó el [paquete oficial exacto](https://registry.npmjs.org/vercel/65.4.0),
+sin instalarlo ni ejecutar la CLI. La integridad del tarball coincidió con el SRI
+publicado. Sus archivos `dist/commands/deploy/index.js` y los contratos de comandos
+en `dist/chunks` admiten `--project`, `--prebuilt`, `--prod`, `--skip-domain`,
+`--yes`, `--no-wait`, `--json` y `--meta`. No se elimina ningún flag de salida ni
+se incrementan tiempos de espera.
+
+Deploy pasa ahora `--project VERCEL_PROJECT_ID`, como pull, y no recibe el
+`--scope` global. Se conservan `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` y
+`VERCEL_TOKEN` por entorno; el token no aparece en argumentos. Build y las otras
+operaciones conservan sus argumentos anteriores. La selección explícita no
+sustituye la autorización: la API autenticada exige que el proyecto tenga el ID
+esperado y `accountId` del equipo autorizado antes de crear/promover y al final.
+Una diferencia en la resolución global de scope sigue siendo una hipótesis sobre
+el incidente histórico, no una causa confirmada.
+
+### Prebuilt y monorepo
+
+El workflow ejecuta pull/build desde la raíz Git con un enlace por proyecto
+`.vercel/project.json`. En este modo, CLI 65.4.0 usa `.vercel/output` desde ese
+directorio; `rootDirectory=apps/frontend` no implica por sí solo que el output
+esté en `apps/frontend/.vercel/output`. Se contrastaron la resolución de build
+en `dist/commands/build/index.js` y la de deploy en `dist/commands/deploy/index.js`.
+
+Después de build, y otra vez antes del hook de Render, se exigen
+`.vercel/output/config.json` con versión 3 y `builds.json` con target production,
+sin errores de build. Una ausencia, JSON inválido o target distinto termina con
+`VERCEL_PREBUILT_INVALID`, sin imprimir contenidos o rutas privadas.
+No se exige que `builds.json` contenga una lista de builders si el campo está
+ausente; si aparece, se comprueba su estructura y sus errores.
+
+Esta comprobación corresponde al enlace por proyecto actual. Un enlace de
+repositorio `.vercel/repo.json` tiene otra resolución y se rechaza expresamente:
+si se adopta ese modo o cambia el directorio de ejecución, deberá ajustarse y
+probarse la validación antes de publicar. No se buscan artefactos en varias rutas
+para aceptar accidentalmente un build distinto. No se recuperó el artefacto
+del run fallido ni se afirma que allí faltara.
+
+### Diagnóstico, reconciliación y límites
+
+- Se reconocen códigos estructurados en stdout/stderr, incluidos JSON por línea,
+  `prebuilt_not_found`, `missing_archive`, `deploy_failed`, `upload_failed` y
+  categorías de autenticación, permisos, proyecto, argumentos y red.
+  Se conservan muestras acotadas de 8 KiB por canal para clasificar; solo se
+  registran comando/categoría/causa/exit/señal permitidos. Nunca se imprimen las
+  muestras, mensajes, stdout/stderr privados, tokens ni sugerencias de la CLI.
+- JSON con ID, JSON con URL y URL simple son únicamente pistas. Las URLs se
+  restringen a hosts inmutables HTTPS de Vercel, sin credenciales, parámetros,
+  puertos alternativos ni rutas. Una URL solo se resuelve a ID mediante la API
+  autenticada; no autoriza consultas HTTP al host ni una promoción por sí sola.
+- Se conserva la búsqueda GET previa por proyecto/Production/SHA/main. Después
+  de crear se contrasta nuevamente el listado, incluso si la CLI devuelve ID,
+  para rechazar candidatos diferentes o múltiples. Se verifican identidad,
+  proyecto, equipo, SHA, rama, entorno, READY y dominio mediante API y health.
+- Un fallo ambiguo solo permite reconciliación GET acotada: nunca un segundo
+  `vercel deploy`. Upload/deploy fallidos pueden haber creado estado remoto;
+  no se promueve sin READY y validaciones completas. Prebuilt ausente y errores
+  definitivos conocidos fallan cerrados. Se conserva la idempotencia si el SHA
+  ya existe o ya fue promovido, sin repetir creación/promoción.
+- Persisten consistencia eventual del listado y carreras con operadores externos.
+  No existe exclusión distribuida entre proveedores ni rollback automático.
+  Un resultado ambiguo sin candidato exige inspección humana antes de reejecutar.
+
+### Validación sin despliegue
+
+Con Node 24.21.0 se ejecutaron `node --check` de ambos scripts, ESLint para los
+dos archivos MJS con reglas recomendadas y globals Node, y
+`node --test scripts/ci/production-deploy.test.mjs`: **62/62 aprobadas**, sin
+fallidas ni omitidas, frente a 51 casos previos. Se conservan las 96 combinaciones
+de evento/rama/resultados y las mutaciones en memoria que comprueban sus controles.
+También aprobaron los comandos de lint completos de backend y frontend.
+Los proveedores y la CLI se simulan; el runner de procesos usa únicamente Node
+sintético. La prueba de artefactos usa archivos y subprocesos en un directorio
+temporal, eliminado al finalizar. También se verifica `git diff --check`.
+
+No se ejecutan pull/build autenticados, deploy, promote, redeploy, rollback ni
+migraciones. No se modifican workflow, Secrets, proveedores ni
+`apps/frontend/vercel.json`. El workflow sigue activo exclusivamente para
+push/main con ambos builds aprobados; desde este PR/rama debe omitir deploy.
+El CI del PR y una futura ejecución productiva autorizada son evidencias
+separadas: las pruebas locales no demuestran que el incidente esté resuelto en
+Vercel. Para publicar esta rama y crear el PR en borrador se autorizó únicamente
+el posible Preview automático por integración Git, sin autorizar operaciones
+productivas ni la ejecución de comandos de despliegue.
+
+Las secciones siguientes conservan los diagnósticos y decisiones de las etapas
+anteriores; sus argumentos históricos no sustituyen esta corrección.
+
 Actualización tras PR #110: el workflow productivo ya está activo; el primer
 intento tuvo publicación parcial y se describe en «Diagnóstico y recuperación
 preparada tras el primer intento». Las referencias a false/desactivación abajo

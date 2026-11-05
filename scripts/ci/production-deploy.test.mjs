@@ -1,11 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { preflight, deployRender as realDeployRender, health, verifyVercelDeployment,
-  assertCurrentMain, main, safeFailure, DeploymentError, command, cli } from './production-deploy.mjs';
+  assertCurrentMain, main, safeFailure, DeploymentError, command, cli, commandCategory,
+  assertPrebuiltOutput, deploymentReference } from './production-deploy.mjs';
 
 const env = {
   DEPLOY_SHA: 'a'.repeat(40), RENDER_SERVICE_ID: 'srv-test',
@@ -18,13 +21,14 @@ const env = {
 const response = (body, status = 200) => new Response(JSON.stringify(body), { status });
 const wait = async () => {};
 const currentMain = async () => env.DEPLOY_SHA;
+const readPrebuilt = () => ({ config: { version: 3 }, builds: { target: 'production', builds: [] } });
 const deployRender = (config, options) => realDeployRender(config, { readMain: currentMain, ...options });
 
 test('pull enlaza el proyecto antes de build y rechaza contexto distinto sin publicar', async () => {
   const project = { projectId: env.VERCEL_PROJECT_ID, orgId: env.VERCEL_ORG_ID,
     settings: { rootDirectory: 'apps/frontend', nodeVersion: '24.x' } };
   const calls = [];
-  await main('vercel-build', env, { runCli: async (args) => calls.push(args), readProject: () => project });
+  await main('vercel-build', env, { runCli: async (args) => calls.push(args), readProject: () => project, readPrebuilt });
   assert.deepEqual(calls, [['pull', '--yes', '--environment=production'], ['build', '--prod']]);
   for (const [reason, mutate] of [
     ['project_mismatch', (p) => { p.projectId = 'other'; }],
@@ -689,13 +693,13 @@ test('alias a otro deployment impide éxito aunque READY y HTML sean correctos',
   assert.equal(f.commands.filter((a) => a[0] === 'promote').length, 1);
 });
 
-test('CLI fija proyecto para pull y scope para otros comandos, sin entregar credenciales Render', async () => {
+test('CLI fija proyecto para pull/deploy y conserva build/inspect/promote, sin entregar credenciales Render', async () => {
   for (const subcommand of ['pull', 'build', 'deploy', 'inspect', 'promote']) {
     let calls = 0;
     await cli([subcommand], env, async (binary, args, childEnv, timeout, label) => {
       calls++;
       assert.equal(binary, 'vercel');
-      assert.deepEqual(args, subcommand === 'pull'
+      assert.deepEqual(args, ['pull', 'deploy'].includes(subcommand)
         ? [subcommand, '--project', env.VERCEL_PROJECT_ID]
         : [subcommand, '--scope', env.VERCEL_ORG_ID]);
       assert(!args.includes('--token'));
@@ -708,6 +712,197 @@ test('CLI fija proyecto para pull y scope para otros comandos, sin entregar cred
       assert(timeout > 0); return '';
     });
     assert.equal(calls, 1);
+  }
+});
+
+test('argumentos completos de pull/build/deploy conservan JSON y equipo por entorno', async () => {
+  const commands = [];
+  const execute = async (binary, args, config, timeout, label) => {
+    assert.equal(binary, 'vercel');
+    assert.equal(config.VERCEL_ORG_ID, env.VERCEL_ORG_ID);
+    assert.equal(config.VERCEL_TOKEN, env.VERCEL_TOKEN);
+    assert(!args.includes('--token'));
+    commands.push({ args, timeout, label });
+  };
+  await cli(['pull', '--yes', '--environment=production'], env, execute);
+  await cli(['build', '--prod'], env, execute);
+  const f = vercelDependencies(); const fakeCli = f.runCli;
+  f.runCli = async (args, config) => {
+    await cli(args, config, execute);
+    return fakeCli(args);
+  };
+  await main('vercel-deploy', env, f);
+  assert.deepEqual(commands.slice(0, 3), [
+    { args: ['pull', '--yes', '--environment=production', '--project', env.VERCEL_PROJECT_ID], timeout: 120000, label: 'vercel_pull' },
+    { args: ['build', '--prod', '--scope', env.VERCEL_ORG_ID], timeout: 360000, label: 'vercel_build' },
+    { args: ['deploy', '--prebuilt', '--prod', '--skip-domain', '--yes', '--no-wait', '--json',
+      '--meta', `githubCommitSha=${env.DEPLOY_SHA}`, '--meta', 'githubCommitRef=main', '--project', env.VERCEL_PROJECT_ID], timeout: 180000, label: 'vercel_deploy' },
+  ]);
+});
+
+test('códigos estructurados de deploy se clasifican en ambos canales sin imprimir mensajes', async () => {
+  for (const code of ['prebuilt_not_found', 'missing_archive', 'deploy_failed', 'upload_failed']) {
+    for (const channel of ['stdout', 'stderr']) {
+      const payload = JSON.stringify({ status: 'error', reason: code, message: 'synthetic-private-token https://private.test/?key=secret' });
+      await assert.rejects(command(process.execPath,
+        ['-e', `process.${channel}.write(${JSON.stringify(payload)});process.exitCode=1`],
+        process.env, 5000, 'vercel_deploy'), (error) => {
+        assert.equal(error.category, code);
+        assert.equal(error.command, 'vercel_deploy'); assert.equal(error.exitCode, 1);
+        const diagnostic = safeFailure('vercel-deploy', error);
+        assert(diagnostic.includes(`clase=${code}`));
+        assert(!/private-token|private\.test|key=secret/.test(diagnostic + JSON.stringify(error)));
+        return true;
+      });
+    }
+  }
+});
+
+test('clasificación estructurada admite NDJSON/códigos anidados y limita el catálogo', () => {
+  for (const [code, category] of [
+    ['INVALID_ARGUMENTS', 'invalid_argument'], ['token_expired', 'authentication'], ['unauthorized', 'authentication'],
+    ['not_domain_owner', 'permission'], ['project_not_found', 'project'],
+    ['ECONNRESET', 'network'], ['deployment_not_found', 'not_found'],
+    ['secret-with-credentials', 'unknown'],
+  ]) {
+    const data = JSON.stringify({ error: { code, message: 'private' } });
+    assert.equal(commandCategory('', data), category);
+    assert.equal(commandCategory(data, ''), category);
+    assert.equal(commandCategory('', JSON.stringify({ status: 'progress' }) + '\n' + data), category);
+  }
+  assert.equal(commandCategory('No prebuilt output found in private-path', ''), 'prebuilt_not_found');
+  assert.equal(commandCategory('', 'x'.repeat(8192) + JSON.stringify({ reason: 'invalid_token' })), 'unknown');
+  assert.equal(commandCategory('', JSON.stringify({ message: 'upload_failed secret' })), 'unknown');
+});
+
+test('prebuilt válido acepta metadata de build mínima y rechaza errores sin exponer archivos', () => {
+  assert.doesNotThrow(() => assertPrebuiltOutput({ readPrebuilt }));
+  assert.doesNotThrow(() => assertPrebuiltOutput({ readPrebuilt: () => ({ config: { version: 3 }, builds: { target: 'production' } }) }));
+  for (const artifact of [
+    null, { config: { version: 2 }, builds: { target: 'production' } },
+    { config: { version: 3 }, builds: { target: 'preview' } },
+    { config: { version: 3 }, builds: { target: 'production', error: 'private-token' } },
+    { config: { version: 3 }, builds: { target: 'production', builds: [{ error: 'private-token' }] } },
+    { config: { version: 3 }, builds: { target: 'production', builds: 'private-token' } },
+  ]) assert.throws(() => assertPrebuiltOutput({ readPrebuilt: () => artifact }), (error) => {
+    assert.equal(error.code, 'VERCEL_PREBUILT_INVALID');
+    assert(!JSON.stringify(error).includes('private-token'));
+    assert(safeFailure('vercel-build', error).includes('VERCEL_PREBUILT_INVALID'));
+    return true;
+  });
+});
+
+test('prebuilt ausente impide finalizar build y llamar Render, sin consultas externas', async () => {
+  const commands = []; let requests = 0;
+  const options = {
+    readProject: () => ({ projectId: env.VERCEL_PROJECT_ID, orgId: env.VERCEL_ORG_ID,
+      settings: { rootDirectory: 'apps/frontend', nodeVersion: '24.x' } }),
+    runCli: async (args) => commands.push(args[0]),
+    readMain: currentMain,
+    readPrebuilt: () => { throw new Error('private-path synthetic-secret'); },
+    fetchImpl: async () => { requests++; assert.fail('No debe consultar proveedores'); },
+  };
+  await assert.rejects(main('vercel-build', env, options), /VERCEL_PREBUILT_INVALID/);
+  assert.deepEqual(commands, ['pull', 'build']);
+  await assert.rejects(main('render', env, options), /VERCEL_PREBUILT_INVALID/);
+  assert.equal(requests, 0);
+});
+
+test('prebuilt se lee de la raíz Git: ubicación, JSON inválido y repo-link se prueban en disco aislado', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'chorotega-prebuilt-'));
+  const moduleUrl = new URL('./production-deploy.mjs', import.meta.url).href;
+  const check = () => spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import { assertPrebuiltOutput } from ${JSON.stringify(moduleUrl)};
+     process.chdir(${JSON.stringify(dir)});
+     try { assertPrebuiltOutput(); } catch { process.exitCode=1; }`],
+  { env: { PATH: process.env.PATH }, encoding: 'utf8', timeout: 5000 });
+  try {
+    const frontend = join(dir, 'apps/frontend/.vercel/output'); mkdirSync(frontend, { recursive: true });
+    writeFileSync(join(frontend, 'config.json'), '{"version":3}');
+    writeFileSync(join(frontend, 'builds.json'), '{"target":"production"}');
+    assert.equal(check().status, 1, 'No buscar ni aceptar un artefacto en otra raíz');
+    const output = join(dir, '.vercel/output'); mkdirSync(output, { recursive: true });
+    writeFileSync(join(output, 'config.json'), '{"version":3}');
+    writeFileSync(join(output, 'builds.json'), '{"target":"production"}');
+    assert.equal(check().status, 0);
+    writeFileSync(join(output, 'config.json'), 'private-invalid-json');
+    const result = check(); assert.equal(result.status, 1); assert.equal(result.stderr, '');
+    writeFileSync(join(output, 'config.json'), '{"version":3}');
+    writeFileSync(join(dir, '.vercel/repo.json'), '{}');
+    assert.equal(check().status, 1, 'El enlace repo requiere otra resolución explícita');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('referencias CLI JSON/URL son pistas acotadas; rechaza URLs privadas o arbitrarias', () => {
+  for (const data of [JSON.stringify({ id: 'dpl_One' }), JSON.stringify({ deployment: { id: 'dpl_One' } })])
+    assert.deepEqual(deploymentReference(data), { id: 'dpl_One' });
+  for (const data of ['https://immutable-example.vercel.app', JSON.stringify('https://immutable-example.vercel.app'),
+    JSON.stringify({ url: 'immutable-example.vercel.app' }), JSON.stringify({ deployment: { url: 'https://immutable-example.vercel.app' } })])
+    assert.deepEqual(deploymentReference(data), { host: 'immutable-example.vercel.app' });
+  for (const data of ['https://evil.test', 'https://secret@immutable-example.vercel.app',
+    'https://immutable-example.vercel.app?token=secret', 'https://immutable-example.vercel.app/login',
+    'https://immutable-example.vercel.app:8443', JSON.stringify({ status: 'error', id: 'dpl_One' })])
+    assert.equal(deploymentReference(data), null);
+});
+
+test('salidas JSON/URL requieren identidad API válida antes de promover', async () => {
+  for (const output of [(f) => JSON.stringify({ id: f.record.id }),
+    (f) => `https://${f.record.url}`, (f) => JSON.stringify({ url: f.record.url })]) {
+    const f = vercelDependencies(); const fakeCli = f.runCli;
+    f.runCli = async (args) => { const result = await fakeCli(args); return args[0] === 'deploy' ? output(f) : result; };
+    await main('vercel-deploy', env, f);
+    assert(f.requests.some((url) => new URL(url).pathname.startsWith('/v13/deployments/')));
+    assert.deepEqual(f.commands.map((args) => args[0]), ['deploy', 'promote']);
+  }
+  for (const change of [{ projectId: 'other' }, { ownerId: 'other' }, { target: 'preview' },
+    { meta: { githubCommitSha: env.DEPLOY_SHA, githubCommitRef: 'develop' } }, { url: 'other.vercel.app' }]) {
+    const f = vercelDependencies(); const fakeCli = f.runCli; const fetch = f.fetchImpl;
+    f.runCli = async (args) => { const result = await fakeCli(args); return args[0] === 'deploy' ? `https://${f.record.url}` : result; };
+    f.fetchImpl = async (url) => new URL(url).pathname.startsWith('/v13/deployments/')
+      ? response({ ...f.record, ...change }) : fetch(url);
+    await assert.rejects(main('vercel-deploy', env, f), /VERCEL_RELEASE_INVALID/);
+    assert(!f.commands.some((args) => args[0] === 'promote'));
+  }
+});
+
+test('errores de upload/deploy reconcilian por API sin repetir deploy; prebuilt ausente falla cerrado', async () => {
+  for (const category of ['missing_archive', 'upload_failed', 'deploy_failed', 'prebuilt_not_found']) {
+    const f = vercelDependencies(); const fakeCli = f.runCli;
+    f.runCli = async (args) => {
+      const result = await fakeCli(args);
+      if (args[0] !== 'deploy') return result;
+      throw Object.assign(new DeploymentError('VERCEL_COMMAND_FAILED'), { command: 'vercel_deploy', reason: 'exit_nonzero', category, exitCode: 1 });
+    };
+    if (category === 'prebuilt_not_found') await assert.rejects(main('vercel-deploy', env, f), /VERCEL_COMMAND_FAILED/);
+    else await main('vercel-deploy', env, f);
+    assert.equal(f.commands.filter((args) => args[0] === 'deploy').length, 1);
+    assert.equal(f.commands.filter((args) => args[0] === 'promote').length, category === 'prebuilt_not_found' ? 0 : 1);
+  }
+});
+
+test('ID CLI válido no oculta candidatos concurrentes del mismo SHA', async () => {
+  const f = vercelDependencies(); const fetch = f.fetchImpl;
+  f.fetchImpl = async (url) => f.state.created && new URL(url).pathname === '/v7/deployments'
+    ? response({ deployments: [{ uid: 'dpl_Other', meta: f.record.meta }], pagination: { next: null } }) : fetch(url);
+  await assert.rejects(main('vercel-deploy', env, f), /VERCEL_DUPLICATES/);
+  assert.deepEqual(f.commands.map((args) => args[0]), ['deploy']);
+});
+
+test('fallo ambiguo no promueve con dos candidatos ni con un upload que no llega a READY', async () => {
+  for (const scenario of ['duplicates', 'not-ready']) {
+    const f = vercelDependencies(); const fakeCli = f.runCli; const fetch = f.fetchImpl;
+    f.runCli = async (args) => {
+      const result = await fakeCli(args);
+      if (args[0] !== 'deploy') return result;
+      if (scenario === 'not-ready') f.record.readyState = 'BUILDING';
+      throw Object.assign(new DeploymentError('VERCEL_COMMAND_FAILED'),
+        { command: 'vercel_deploy', reason: 'exit_nonzero', category: 'upload_failed', exitCode: 1 });
+    };
+    f.fetchImpl = async (url) => scenario === 'duplicates' && f.state.created && new URL(url).pathname === '/v7/deployments'
+      ? response({ deployments: [{ uid: f.record.id, meta: f.record.meta },
+        { uid: 'dpl_Other', meta: f.record.meta }], pagination: { next: null } }) : fetch(url);
+    await assert.rejects(main('vercel-deploy', env, f), scenario === 'duplicates' ? /VERCEL_DUPLICATES/ : /VERCEL_RELEASE_TIMEOUT/);
+    assert.deepEqual(f.commands.map((args) => args[0]), ['deploy']);
   }
 });
 
