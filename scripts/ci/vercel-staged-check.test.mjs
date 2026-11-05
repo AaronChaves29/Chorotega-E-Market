@@ -401,7 +401,7 @@ test('staged: workflow manual inerte, checkout doble fijado, autorización adici
       STAGED_BACKUP_VERIFIED: 'true', STAGED_AUTHORIZATION: 'synthetic-confirmation' }, encoding: 'utf8' });
     assert.equal(result.status, sha === 'f'.repeat(40) ? 0 : 1);
   }
-  assert.equal(job.environment, undefined, 'No fingir un Environment protegido que no existe');
+  assert.deepEqual(job.environment, { name: 'vercel-staged-approval' });
   const condition = job.if.match(/^\$\{\{\s*(.*?)\s*\}\}$/)[1]; assert(condition.startsWith('false && '));
   const evaluate = (expression) => Function('github', 'inputs', `return (${expression})`);
   for (const repository of ['AaronChaves29/Chorotega-E-Market', 'other/fork'])

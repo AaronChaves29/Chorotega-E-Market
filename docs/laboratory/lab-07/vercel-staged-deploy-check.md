@@ -13,9 +13,29 @@ o Render ni puede asumir que ese estado seguirá vigente.
 
 ## Autorización: estado real y puertas cerradas
 
-La consulta de solo lectura a GitHub `/repos/AaronChaves29/Chorotega-E-Market/environments`
-devolvió **cero Environments**. No existe una aprobación de revisores comprobada.
-No se crea un Environment vacío para aparentar protección.
+En la preparación inicial del PR #122, la consulta de solo lectura a GitHub
+`/repos/AaronChaves29/Chorotega-E-Market/environments` devolvió **cero Environments**.
+Ese resultado es histórico y no describe la configuración actual.
+
+Después de integrar #122 se configuró manualmente `vercel-staged-approval`.
+Esta revisión confirmó mediante GET a la API de GitHub:
+
+- `required_reviewers` con el revisor `SofiaSJ09`.
+- `prevent_self_review: true`.
+- `can_admins_bypass: false`.
+- Política de ramas personalizada con una única regla: `develop`, tipo `branch`.
+
+Este cambio asocia el job `vercel_staged_check` a ese Environment mediante
+`environment.name: vercel-staged-approval`. No crea ni modifica el Environment,
+sus reglas ni Secrets. **No se ejecutó una aprobación real ni el ensayo.** La
+asociación se incorpora manteniendo el bloqueo literal `false &&`, los datos
+pendientes y todas las verificaciones de autorización existentes.
+
+El PR #122 quedó integrado en `266c56386abb77f701d3ccfc091d43870115788d`.
+Se verificaron los runs aprobados del
+[PR](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/41972001866)
+y del [push a develop](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/41974158949).
+Ninguno acredita una aprobación del Environment ni un despliegue staged.
 
 GitHub exige que la definición de `workflow_dispatch` exista en la rama por
 defecto para recibir ese evento. Se consultó la API del repositorio y su rama
@@ -46,12 +66,12 @@ Todo lo siguiente necesita **otra autorización expresa**; no se realizó aquí:
 1. Revisar e integrar el código de este ensayo en develop manteniendo `false`.
    Obtener su SHA completo y comprobar los checks. Fijarlo como
    `STAGED_VALIDATOR_SHA`; no usar una rama o input libre.
-2. Preferentemente configurar, con autorización separada, un Environment con
-   required reviewers, restricción a develop y prevención de autoaprobación.
-   Verificar esa protección por API antes de añadirlo al job. Si se propone
-   continuar sin Environment, aceptar explícitamente el control alternativo por
-   PR de activación revisado: **la configuración actual no impone revisión humana
-   mediante un Environment**. Una frase manual no sustituye ese control.
+2. Revalidar por API que `vercel-staged-approval` conserve revisor requerido,
+   prevención de autoaprobación, bypass administrativo deshabilitado y únicamente
+   la rama develop autorizada. Mantener su asociación al job. Una futura ejecución
+   autorizada deberá obtener la aprobación del Environment; la frase manual no
+   sustituye ese control. La configuración comprobada no demuestra que esa
+   aprobación ya haya ocurrido.
 3. El responsable verifica un respaldo actualizado y recuperable de PostgreSQL
    fuera del runner. Registrar la evidencia sin secretos en un comentario de
    issue/PR del repositorio. No se buscan archivos de la Mac desde Actions.
@@ -186,8 +206,9 @@ no reejecutar ciegamente. Después de obtener evidencia, retirar el job y el
 ensayo temporal por PR, conservando este documento y la corrección permanente.
 No llevar la activación a main. Los guards y los SHA fijados protegen el flujo
 propuesto; no impiden que un actor con permisos para cambiar workflows omita
-controles en otro código. Resolver la protección de Secrets/Environment y revisión
-es una condición previa de activación, no una garantía proporcionada por este PR.
+controles en otro código. El Environment configurado y asociado añade la puerta
+de revisión humana. Sus reglas deben revalidarse antes de activar y obtenerse
+la aprobación en la ejecución autorizada; esa aprobación real sigue pendiente.
 
 Validación local realizada con Node 24.21.0: **93/93 pruebas aprobadas**, sin
 fallidas ni omitidas (62 permanentes y 31 del ensayo). Incluye las 96 combinaciones
