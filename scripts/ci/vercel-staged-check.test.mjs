@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
+import './vercel-staged-readonly.test.mjs';
 import { DeploymentError } from './production-deploy.mjs';
 import { TARGET_SHA, AUTHORIZATION_MARKER, authorizeStaged, stagedCheck, stagedFailure, stagedCli } from './vercel-staged-check.mjs';
 
