@@ -1,5 +1,22 @@
 # Ensayo staged de Vercel — activación manual propuesta
 
+## Resultado del primer ensayo y recuperación de solo lectura
+
+El [run 41986271238](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/41986271238)
+creó un único deployment `dpl_2RA5JfKczFobQfTwmLPqQV8RrBRB`, READY en el SHA
+objetivo, y terminó con `POSTCHECK_FAILED`. El alias principal sigue en el ID
+anterior. La lectura anónima actual devuelve 302 a Vercel Authentication;
+el health check no enviaba autenticación y rechazaba redirecciones.
+
+**No volver a ejecutar el ensayo de creación para resolver ese postcheck.**
+La [verificación independiente del deployment existente](vercel-staged-readonly.md)
+prepara únicamente GET autenticados con OIDC. Su workflow queda bloqueado y
+requiere autorización humana para Trusted Sources, nuevo pin revisado con CI
+aprobado y la aprobación del Environment antes de una futura lectura.
+
+El resto del documento conserva la preparación y validación previas al primer
+ensayo; sus afirmaciones de ausencia de ejecución son históricas de esa preparación.
+
 Preparación inicial del 4 de noviembre de 2026 desde develop
 `b3fbd457ab5ea9f0b518804f6ab0b1d4b37db081`. **No se ejecutó el ensayo autenticado,
 no se creó ningún deployment y este PR no autoriza una publicación.**
