@@ -4,12 +4,17 @@ import type { Request } from 'express';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from '../services/orders.service';
 import { OrdersReadService } from '../services/orders-read.service';
+import { OrderPreparationService } from '../services/order-preparation.service';
 import { OrderSearchQueryDto } from '../dtos/order-search-query.dto';
-import { InsufficientOrderStockException } from '../exceptions/order.exceptions';
-import { ConflictException } from '@nestjs/common';
+import {
+  InsufficientOrderStockException,
+  InvalidOrderTransitionException,
+} from '../exceptions/order.exceptions';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 
 describe('OrdersController', () => {
   const business = { createAndConfirm: jest.fn() };
+  const preparation = { prepare: jest.fn() };
   const reads = {
     search: jest.fn(),
     findById: jest.fn(),
@@ -19,6 +24,7 @@ describe('OrdersController', () => {
   const controller = new OrdersController(
     business as unknown as OrdersService,
     reads as unknown as OrdersReadService,
+    preparation as unknown as OrderPreparationService,
   );
   const user = { idUsuario: 8, sub: 'correo@example.test', rol: 'CLIENTE' };
   const request = { user } as Request & { user: typeof user };
@@ -28,6 +34,29 @@ describe('OrdersController', () => {
     items: [{ idProducto: 4, cantidad: 2 }],
   };
   beforeEach(() => jest.resetAllMocks());
+  it('delegates preparation with the trusted actor and fixed action', async () => {
+    const result = { idPedido: 19, estado: 'PREPARANDO' };
+    preparation.prepare.mockResolvedValue(result);
+    expect(await controller.prepare(request, 19, undefined)).toBe(result);
+    expect(preparation.prepare).toHaveBeenCalledWith(user, 19);
+  });
+  it('maps incompatible preparation to HTTP 409', async () => {
+    preparation.prepare.mockRejectedValue(
+      new InvalidOrderTransitionException('PREPARANDO', 'PREPARANDO'),
+    );
+    await expect(controller.prepare(request, 19, {})).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+  it.each([{ estado: 'PREPARANDO' }, null, [], 'PREPARANDO'])(
+    'rejects body %j before preparing',
+    async (body) => {
+      await expect(
+        controller.prepare(request, 19, body),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(preparation.prepare).not.toHaveBeenCalled();
+    },
+  );
   it('usa idUsuario del JWT y Location del resultado sin recalcular la compra', async () => {
     const result = { idPedido: 19, total: '1.20' };
     business.createAndConfirm.mockResolvedValue(result);

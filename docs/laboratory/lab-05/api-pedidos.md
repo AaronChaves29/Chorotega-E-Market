@@ -7,17 +7,64 @@ integrado. Rama: `feat/orders-rest-api`.
 
 Se publican la compra transaccional existente y lecturas autorizadas de pedidos y
 sus detalles. No se implementan PATCH/DELETE genéricos de pedidos, escrituras
-individuales de detalles, cancelación ni otras transiciones HTTP.
+individuales de detalles ni cancelación. La preparación dispone de una operación
+específica, descrita a continuación.
+
+## Comenzar preparación
+
+`PATCH /api/v1/orders/:id/prepare` requiere JWT válido y cuenta activa con rol
+EMPRENDEDOR, propietaria de la tienda del pedido. ADMIN, CLIENTE y REPARTIDOR
+reciben 403. La identidad y el rol vigentes se consultan mediante el guard actual.
+
+No se envía cuerpo (también se admite `{}`). Cualquier campo, incluido `estado`,
+se rechaza con 400. El estado destino está fijado en el servidor.
+
+Solo se permite `CONFIRMADO → PREPARANDO`. La respuesta 200 es el
+`OrderResponseDto` existente, con `estado: "PREPARANDO"` e importes y detalles
+intactos. Repetir la solicitud devuelve 409; no es una operación idempotente.
+
+Errores: 400 por ID/cuerpo inválido, 401 por sesión ausente, inválida, expirada o
+cuenta inactiva, 403 por rol no autorizado, 404 por pedido inexistente o ajeno,
+409 por estado incompatible y 500 seguro ante fallos internos.
+
+`OrderPreparationService` ejecuta una transacción TypeORM con un
+`OrdersRepository` ligado al mismo EntityManager. La consulta intersecta el ID
+del pedido con el propietario de la tienda y usa `FOR UPDATE OF pedido`.
+Solo actualiza `estado`, después de validar `transitionOrderState`; no modifica
+inventario, versiones, importes ni detalles. El DTO se construye antes del commit:
+un fallo posterior al UPDATE revierte la transacción.
+
+Dos preparaciones concurrentes se serializan: una devuelve 200 y la otra 409.
+Las lecturas normales observan estados confirmados, sin lecturas sucias. La
+asignación existente también bloquea primero el pedido: si observa CONFIRMADO
+rechaza con 409; si obtiene el bloqueo después de la preparación confirmada,
+puede asignar. La preparación no bloquea productos, tienda ni repartidor.
+
+No se agregan notificaciones ni escritura en la bitácora MongoDB en esta fase.
+No existe todavía una pantalla operativa del emprendedor para esta acción.
+
+Ejemplo para un entorno local aislado, con un pedido propio creado mediante POST:
+
+```http
+PATCH /api/v1/orders/1/prepare
+Authorization: Bearer <JWT de EMPRENDEDOR propietario>
+```
+
+Las pruebas `order-preparation.integration-spec.ts` crean las compras con HTTP y
+validan persistencia, rollback, autorización y concurrencia real en PostgreSQL
+efímero. Para la concurrencia retienen un bloqueo y comprueban las solicitudes
+en espera mediante `pg_stat_activity` antes de liberarlo.
 
 | Método y ruta                            | Permisos                    | Respuesta                        |
 | ---------------------------------------- | --------------------------- | -------------------------------- |
 | GET /api/v1/orders                       | ADMIN, CLIENTE, EMPRENDEDOR | 200, página de OrderResponseDto  |
 | GET /api/v1/orders/:id                   | ADMIN, CLIENTE, EMPRENDEDOR | 200, OrderResponseDto            |
 | POST /api/v1/orders                      | Solo CLIENTE                | 201, OrderResponseDto y Location |
+| PATCH /api/v1/orders/:id/prepare          | EMPRENDEDOR propietario     | 200, OrderResponseDto            |
 | GET /api/v1/orders/:id/details           | ADMIN, CLIENTE, EMPRENDEDOR | 200, OrderItemResponseDto[]      |
 | GET /api/v1/orders/:id/details/:detailId | ADMIN, CLIENTE, EMPRENDEDOR | 200, OrderItemResponseDto        |
 
-`@Controller('orders')` utiliza el prefijo global `/api/v1`. Los cinco endpoints
+`@Controller('orders')` utiliza el prefijo global `/api/v1`. Los seis endpoints
 usan `JwtAuthGuard`, `RolesGuard` y los decoradores `@Roles` existentes.
 REPARTIDOR recibe 403 en todos. ADMIN y EMPRENDEDOR también reciben 403 en POST.
 

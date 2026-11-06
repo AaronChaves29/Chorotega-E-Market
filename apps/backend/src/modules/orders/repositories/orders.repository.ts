@@ -21,6 +21,21 @@ export class OrdersRepository extends TypeOrmBaseRepository<
     return { idPedido: id };
   }
 
+  // Call only with a transaction-scoped repository. Lock the order, not the
+  // joined store: delivery assignment also locks the order before proceeding.
+  findOwnedForUpdate(
+    idPedido: number,
+    idEmprendedor: number,
+  ): Promise<Order | null> {
+    return this.repository
+      .createQueryBuilder('pedido')
+      .innerJoin('pedido.tienda', 'tienda')
+      .where('pedido.idPedido = :idPedido', { idPedido })
+      .andWhere('tienda.idEmprendedor = :idEmprendedor', { idEmprendedor })
+      .setLock('pessimistic_write', undefined, ['pedido'])
+      .getOne();
+  }
+
   findAllWithDetails(): Promise<Order[]> {
     return this.repository
       .createQueryBuilder('pedido')
