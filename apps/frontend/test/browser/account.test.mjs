@@ -172,6 +172,17 @@ test(
         await ready("/login");
       };
 
+      await t.test("intermediarios reales rechazan consultas sin cookie", async () => {
+        for (const path of ["/api/stores", "/api/products?idTienda=1", "/api/neighborhoods"]) {
+          const response = await fetch(`${origin}${path}`);
+          assert.equal(response.status, 401);
+          assert.equal(response.headers.get("cache-control"), "no-store");
+          const body = await response.json();
+          assert.equal(body.token, undefined);
+          assert.equal(body.content, undefined);
+        }
+      });
+
       await t.test(
         "registro real, confirmación, validación y login con nombre persistido",
         async () => {

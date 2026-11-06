@@ -39,6 +39,8 @@ import { ProductResponseDto } from './dto/product-response.dto';
 import { ProductSearchQueryDto } from './dto/product-search-query.dto';
 
 @ApiTags('products')
+@ApiBearerAuth('bearer')
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('products')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
@@ -46,10 +48,10 @@ export class ProductsController {
   @ApiOperation({
     summary: 'Listar productos',
     description:
-      'Acceso público. Paginación en PostgreSQL, filtros combinables, columnas de orden controladas y desempate por identificador.',
+      'Cuenta activa autenticada. Paginación en PostgreSQL, filtros combinables, columnas de orden controladas y desempate por identificador.',
   })
   @ApiPageResponse(ProductResponseDto)
-  @ApiProblemResponses([400, 500])
+  @ApiProblemResponses([400, 401, 500])
   @Get()
   findAll(
     @Query() query: ProductSearchQueryDto,
@@ -59,7 +61,7 @@ export class ProductsController {
 
   @ApiOperation({
     summary: 'Consultar productos por ID',
-    description: 'Acceso público.',
+    description: 'Cuenta activa autenticada.',
   })
   @ApiParam({
     name: 'id',
@@ -72,7 +74,7 @@ export class ProductsController {
     isArray: false,
     description: 'Respuesta pública mediante DTO.',
   })
-  @ApiProblemResponses([400, 404, 500])
+  @ApiProblemResponses([400, 401, 404, 500])
   @Get(':id')
   findById(@Param('id', ParseIntPipe) id: number): Promise<ProductResponseDto> {
     return this.productsService.findById(id);
@@ -96,8 +98,6 @@ export class ProductsController {
     },
   })
   @ApiProblemResponses([400, 401, 403, 404, 500])
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'EMPRENDEDOR')
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -129,8 +129,6 @@ export class ProductsController {
     description: 'Respuesta pública mediante DTO.',
   })
   @ApiProblemResponses([400, 401, 403, 404, 409, 500])
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'EMPRENDEDOR')
   @Patch(':id')
   update(
@@ -155,8 +153,6 @@ export class ProductsController {
     description: 'Eliminación correcta; sin cuerpo.',
   })
   @ApiProblemResponses([400, 401, 403, 404, 409, 500])
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'EMPRENDEDOR')
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)

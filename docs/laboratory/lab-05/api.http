@@ -141,11 +141,13 @@ Content-Type: application/json
 # @name listStore
 # expected-status: 200
 GET {{baseUrl}}/api/v1/stores?page=0&size=10&sortDirection=DESC
+Authorization: Bearer {{clientToken}}
 
 ### stores — detalle
 # @name getStore
 # expected-status: 200
 GET {{baseUrl}}/api/v1/stores/{{storeId}}
+Authorization: Bearer {{clientToken}}
 
 ### stores — PATCH parcial
 # @name patchStore
@@ -181,11 +183,13 @@ Content-Type: application/json
 # @name listCategory
 # expected-status: 200
 GET {{baseUrl}}/api/v1/categories?page=0&size=10&sortDirection=DESC
+Authorization: Bearer {{clientToken}}
 
 ### categories — detalle
 # @name getCategory
 # expected-status: 200
 GET {{baseUrl}}/api/v1/categories/{{categoryId}}
+Authorization: Bearer {{clientToken}}
 
 ### categories — PATCH parcial
 # @name patchCategory
@@ -223,11 +227,13 @@ Content-Type: application/json
 # @name listProduct
 # expected-status: 200
 GET {{baseUrl}}/api/v1/products?page=0&size=10&sortDirection=DESC
+Authorization: Bearer {{clientToken}}
 
 ### products — detalle
 # @name getProduct
 # expected-status: 200
 GET {{baseUrl}}/api/v1/products/{{productId}}
+Authorization: Bearer {{clientToken}}
 
 ### products — PATCH parcial
 # @name patchProduct
@@ -335,21 +341,25 @@ Authorization: Bearer {{adminToken}}
 # @name listneighborhoods
 # expected-status: 200
 GET {{baseUrl}}/api/v1/neighborhoods
+Authorization: Bearer {{clientToken}}
 
 ### neighborhoods — detalle
 # @name getneighborhoods
 # expected-status: 200
 GET {{baseUrl}}/api/v1/neighborhoods/{{neighborhoodId}}
+Authorization: Bearer {{clientToken}}
 
 ### couriers — listado array
 # @name listcouriers
 # expected-status: 200
 GET {{baseUrl}}/api/v1/couriers
+Authorization: Bearer {{adminToken}}
 
 ### couriers — detalle
 # @name getcouriers
 # expected-status: 200
 GET {{baseUrl}}/api/v1/couriers/{{courierId}}
+Authorization: Bearer {{adminToken}}
 
 ### Health — excepción al prefijo v1
 # @name health
@@ -360,6 +370,7 @@ GET {{baseUrl}}/api/database/health
 # @name error400
 # expected-status: 400
 GET {{baseUrl}}/api/v1/products?disponible=yes
+Authorization: Bearer {{clientToken}}
 
 ### Error 401 — falta JWT
 # @name error401
@@ -376,6 +387,7 @@ Authorization: Bearer {{clientToken}}
 # @name error404
 # expected-status: 404
 GET {{baseUrl}}/api/v1/products/2147483647
+Authorization: Bearer {{clientToken}}
 
 ### Error 409 — categoría ya existente
 # @name error409

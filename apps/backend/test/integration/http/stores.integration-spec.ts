@@ -117,6 +117,7 @@ describe('Tiendas: API real con PostgreSQL', () => {
     expect(response.headers.location).toBe(`${path}/${store.idTienda}`);
     await request(server())
       .get(`${path}/${store.idTienda}`)
+      .set('Authorization', `Bearer ${token}`)
       .expect(200)
       .expect(store);
   });
@@ -155,13 +156,25 @@ describe('Tiendas: API real con PostgreSQL', () => {
   });
 
   it('devuelve 404 para una tienda inexistente', async () => {
-    problem(await request(server()).get(`${path}/999`).expect(404), 404);
+    problem(
+      await request(server())
+        .get(`${path}/999`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404),
+      404,
+    );
   });
 
   it.each(['abc', '1.5', '0', '-1', '2147483648'])(
     'rechaza identificador %s',
     async (id) => {
-      problem(await request(server()).get(`${path}/${id}`).expect(400), 400);
+      problem(
+        await request(server())
+          .get(`${path}/${id}`)
+          .set('Authorization', `Bearer ${token}`)
+          .expect(400),
+        400,
+      );
     },
   );
 
@@ -186,6 +199,7 @@ describe('Tiendas: API real con PostgreSQL', () => {
       .expect(updated);
     await request(server())
       .get(`${path}/${store.idTienda}`)
+      .set('Authorization', `Bearer ${token}`)
       .expect(200)
       .expect(updated);
     await request(server())
@@ -234,7 +248,10 @@ describe('Tiendas: API real con PostgreSQL', () => {
         .expect(404),
       404,
     );
-    const response = await request(server()).get(path).expect(200);
+    const response = await request(server())
+      .get(path)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
     expect(response.body).toMatchObject({ content: [], totalElements: 0 });
   });
 
@@ -245,7 +262,10 @@ describe('Tiendas: API real con PostgreSQL', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(204);
     expect(response.text).toBe('');
-    await request(server()).get(`${path}/${store.idTienda}`).expect(404);
+    await request(server())
+      .get(`${path}/${store.idTienda}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(404);
   });
 
   it('DELETE inexistente devuelve 404', async () => {
@@ -288,6 +308,7 @@ describe('Tiendas: API real con PostgreSQL', () => {
     );
     await request(server())
       .get(`${path}/${store.idTienda}`)
+      .set('Authorization', `Bearer ${token}`)
       .expect(200)
       .expect(store);
     await request(server())
@@ -297,6 +318,7 @@ describe('Tiendas: API real con PostgreSQL', () => {
       .expect(403);
     await request(server())
       .get(`${path}/${store.idTienda}`)
+      .set('Authorization', `Bearer ${token}`)
       .expect(200)
       .expect(store);
   });
@@ -355,6 +377,7 @@ describe('Tiendas: API real con PostgreSQL', () => {
       );
       await request(server())
         .get(`${path}/${store.idTienda}`)
+        .set('Authorization', `Bearer ${token}`)
         .expect(200)
         .expect(store);
       await assertRelated();
@@ -363,7 +386,10 @@ describe('Tiendas: API real con PostgreSQL', () => {
 
   it('lista con defaults y metadatos compartidos', async () => {
     await fixtures();
-    const response = await request(server()).get(path).expect(200);
+    const response = await request(server())
+      .get(path)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
     const page = response.body as PaginationResult<StoreResponseDto>;
     expect(page).toMatchObject({
       page: 0,
@@ -392,10 +418,17 @@ describe('Tiendas: API real con PostgreSQL', () => {
 
   it('pagina en PostgreSQL y conserva el total incluso fuera de rango', async () => {
     await fixtures();
-    const first = (await request(server()).get(`${path}?size=2`).expect(200))
-      .body as PaginationResult<StoreResponseDto>;
+    const first = (
+      await request(server())
+        .get(`${path}?size=2`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200)
+    ).body as PaginationResult<StoreResponseDto>;
     const second = (
-      await request(server()).get(`${path}?size=2&page=1`).expect(200)
+      await request(server())
+        .get(`${path}?size=2&page=1`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200)
     ).body as PaginationResult<StoreResponseDto>;
     expect(first.content.map((x) => x.nombre)).toEqual(['Beta', 'Alfa']);
     expect(second.content.map((x) => x.nombre)).toEqual(['Alfarería', 'Gamma']);
@@ -405,13 +438,17 @@ describe('Tiendas: API real con PostgreSQL', () => {
       totalElements: 4,
       totalPages: 2,
     });
-    await request(server()).get(`${path}?size=2&page=9`).expect(200).expect({
-      content: [],
-      page: 9,
-      size: 2,
-      totalElements: 4,
-      totalPages: 2,
-    });
+    await request(server())
+      .get(`${path}?size=2&page=9`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+      .expect({
+        content: [],
+        page: 9,
+        size: 2,
+        totalElements: 4,
+        totalPages: 2,
+      });
   });
 
   it('combina nombre, estado, paginación y orden', async () => {
@@ -424,6 +461,7 @@ describe('Tiendas: API real con PostgreSQL', () => {
       .expect(201);
     const response = await request(server())
       .get(path)
+      .set('Authorization', `Bearer ${token}`)
       .query({
         idEmprendedor: ownerId,
         nombre: 'ALF',
@@ -451,6 +489,7 @@ describe('Tiendas: API real con PostgreSQL', () => {
     await fixtures();
     const response = await request(server())
       .get(path)
+      .set('Authorization', `Bearer ${token}`)
       .query({ sortBy: 'nombre', sortDirection })
       .expect(200);
     expect(
@@ -464,6 +503,7 @@ describe('Tiendas: API real con PostgreSQL', () => {
     await fixtures();
     const response = await request(server())
       .get(path)
+      .set('Authorization', `Bearer ${token}`)
       .query({ sortBy: 'estado', sortDirection: 'DESC' })
       .expect(200);
     expect(
@@ -478,6 +518,7 @@ describe('Tiendas: API real con PostgreSQL', () => {
     await create('Otro');
     const response = await request(server())
       .get(path)
+      .set('Authorization', `Bearer ${token}`)
       .query({ nombre: '%' })
       .expect(200);
     expect(
@@ -487,6 +528,7 @@ describe('Tiendas: API real con PostgreSQL', () => {
     ).toEqual(['100% local']);
     const injected = await request(server())
       .get(path)
+      .set('Authorization', `Bearer ${token}`)
       .query({ nombre: "' OR 1=1 --" })
       .expect(200);
     expect(injected.body).toMatchObject({ content: [], totalElements: 0 });
@@ -506,6 +548,13 @@ describe('Tiendas: API real con PostgreSQL', () => {
     { idEmprendedor: -1 },
     { idEmprendedor: 2147483648 },
   ])('rechaza query inválida %j', async (query) => {
-    problem(await request(server()).get(path).query(query).expect(400), 400);
+    problem(
+      await request(server())
+        .get(path)
+        .set('Authorization', `Bearer ${token}`)
+        .query(query)
+        .expect(400),
+      400,
+    );
   });
 });

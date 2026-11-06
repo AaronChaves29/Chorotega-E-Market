@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { apiRequest } from "@/lib/api-client";
+import { apiRequest, SESSION_COOKIE } from "@/lib/api-client";
 
 const PAGE_SIZE = 20;
 
@@ -27,10 +27,18 @@ export async function GET(request: NextRequest) {
   });
 
   try {
-    const { response, data } = await apiRequest<unknown>(
+    const { response, data, sessionExpired } = await apiRequest<unknown>(
       `/stores?${params.toString()}`,
-      { authenticated: false },
     );
+
+    if (sessionExpired) {
+      const result = NextResponse.json(
+        { message: "Tu sesión venció o no es válida. Iniciá sesión nuevamente." },
+        { status: 401, headers: { "Cache-Control": "no-store" } },
+      );
+      result.cookies.delete(SESSION_COOKIE);
+      return result;
+    }
 
     if (!response.ok) {
       return NextResponse.json(

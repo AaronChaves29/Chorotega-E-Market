@@ -254,7 +254,10 @@ describe('Catálogo: seguridad de escrituras con JWT real y PostgreSQL', () => {
         .send(body(method, resource))
         .expect(status);
       if (status === 201)
-        await request(server()).get(response.headers.location).expect(200);
+        await request(server())
+          .get(response.headers.location)
+          .set('Authorization', `Bearer ${tokens.ADMIN}`)
+          .expect(200);
       if (status === 204) expect(response.text).toBe('');
     });
     if (resource === 'categories') {
@@ -282,14 +285,21 @@ describe('Catálogo: seguridad de escrituras con JWT real y PostgreSQL', () => {
   });
 
   it.each(['stores', 'categories', 'products'] as const)(
-    'GET listado y detalle de %s siguen públicos incluso con token inválido',
+    'GET listado y detalle de %s requieren identidad vigente',
     async (resource) => {
-      await request(server()).get(`/api/v1/${resource}`).expect(200);
-      await request(server()).get(route('patch', resource)).expect(200);
-      await request(server())
-        .get(`/api/v1/${resource}`)
-        .set('Authorization', 'Bearer invalido')
-        .expect(200);
+      for (const path of [`/api/v1/${resource}`, route('patch', resource)]) {
+        await request(server()).get(path).expect(401);
+        await request(server())
+          .get(path)
+          .set('Authorization', 'Bearer invalido')
+          .expect(401);
+        for (const role of ['ADMIN', 'CLIENTE', 'EMPRENDEDOR', 'REPARTIDOR']) {
+          await request(server())
+            .get(path)
+            .set('Authorization', `Bearer ${tokens[role]}`)
+            .expect(200);
+        }
+      }
     },
   );
   it('EMPRENDEDOR no crea tienda para otro usuario', async () => {

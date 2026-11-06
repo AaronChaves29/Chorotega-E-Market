@@ -56,8 +56,8 @@ add('post', 'auth/login', [201, 400, 401, 429, 500]);
 add('post', 'auth/register', [201, 400, 409, 429, 500]);
 add('get', 'auth/me', [200, 401, 500], true);
 for (const resource of ['stores', 'categories', 'products']) {
-  add('get', resource, [200, 400, 500]);
-  add('get', resource + '/{id}', [200, 400, 404, 500]);
+  add('get', resource, [200, 400, 401, 500], true);
+  add('get', resource + '/{id}', [200, 400, 401, 404, 500], true);
   add(
     'post',
     resource,
@@ -102,8 +102,20 @@ for (const action of ['start', 'complete', 'cancel'])
     true,
   );
 for (const resource of ['neighborhoods', 'couriers']) {
-  add('get', resource, [200, 500]);
-  add('get', resource + '/{id}', [200, 400, 404, 500]);
+  add(
+    'get',
+    resource,
+    resource === 'couriers' ? [200, 401, 403, 500] : [200, 401, 500],
+    true,
+  );
+  add(
+    'get',
+    resource + '/{id}',
+    resource === 'couriers'
+      ? [200, 400, 401, 403, 404, 500]
+      : [200, 400, 401, 404, 500],
+    true,
+  );
 }
 expected.push({
   method: 'get',
