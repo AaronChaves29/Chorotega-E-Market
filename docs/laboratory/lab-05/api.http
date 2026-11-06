@@ -295,6 +295,12 @@ Authorization: Bearer {{clientToken}}
 GET {{baseUrl}}/api/v1/orders/{{orderId}}/details/{{detailId}}
 Authorization: Bearer {{clientToken}}
 
+### Orders — comenzar preparacion como propietario
+# @name prepareOrder
+# expected-status: 200
+PATCH {{baseUrl}}/api/v1/orders/{{orderId}}/prepare
+Authorization: Bearer {{entrepreneurToken}}
+
 ### Deliveries — asignar pedido PREPARANDO preparado previamente
 # @name assignDelivery
 # expected-status: 201
