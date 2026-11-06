@@ -40,13 +40,17 @@ describe('Base HTTP sobre PostgreSQL temporal', () => {
   }
 
   it('consulta la ruta real de productos con prefijo y PostgreSQL sin seeds', async () => {
-    await request(server()).get('/api/v1/products').expect(200).expect({
-      content: [],
-      page: 0,
-      size: 20,
-      totalElements: 0,
-      totalPages: 0,
-    });
+    await request(server())
+      .get('/api/v1/products')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+      .expect({
+        content: [],
+        page: 0,
+        size: 20,
+        totalElements: 0,
+        totalPages: 0,
+      });
   });
 
   it('retira la ruta de productos sin versión', async () => {
@@ -155,6 +159,7 @@ describe('Base HTTP sobre PostgreSQL temporal', () => {
       .mockRejectedValueOnce(error);
     const response = await request(server())
       .get('/api/v1/products')
+      .set('Authorization', `Bearer ${token}`)
       .expect(500)
       .expect('Content-Type', /application\/problem\+json/);
     expect(response.body).toEqual({
@@ -183,6 +188,7 @@ describe('Base HTTP sobre PostgreSQL temporal', () => {
         .mockRejectedValueOnce(error);
       const response = await request(server())
         .get('/api/v1/products')
+        .set('Authorization', `Bearer ${token}`)
         .expect(status)
         .expect('Content-Type', /application\/problem\+json/);
       expect(response.body).toMatchObject({ status, detail: error.message });

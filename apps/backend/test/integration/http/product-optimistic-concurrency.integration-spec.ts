@@ -148,8 +148,14 @@ describe('Productos: concurrencia optimista con HTTP y PostgreSQL real', () => {
     const first = request.agent(server()),
       second = request.agent(server());
     const [readA, readB] = await Promise.all([
-      first.get(path()).expect(200),
-      second.get(path()).expect(200),
+      first
+        .get(path())
+        .set('Authorization', `Bearer ${tokens.EMPRENDEDOR}`)
+        .expect(200),
+      second
+        .get(path())
+        .set('Authorization', `Bearer ${tokens.EMPRENDEDOR}`)
+        .expect(200),
     ]);
     const a = readA.body as ProductResponseDto,
       b = readB.body as ProductResponseDto;
@@ -184,7 +190,10 @@ describe('Productos: concurrencia optimista con HTTP y PostgreSQL real', () => {
       cantidadDisponible: 8,
       version: 2,
     });
-    const fresh = await second.get(path()).expect(200);
+    const fresh = await second
+      .get(path())
+      .set('Authorization', `Bearer ${tokens.EMPRENDEDOR}`)
+      .expect(200);
     await second
       .patch(path())
       .set('Authorization', `Bearer ${tokens.EMPRENDEDOR}`)

@@ -264,17 +264,23 @@ describe('MVC administrativo: Nest, JWT y PostgreSQL temporal reales', () => {
       expect(await count(resource)).toBe(before);
     },
   );
-  it('mantiene login, REST público y protección JWT de pedidos', async () => {
+  it('mantiene login y MVC con catalogo REST y pedidos protegidos por JWT', async () => {
     const result = await request(server())
       .post('/api/v1/auth/login')
       .send({ correo: 'admin@example.test', clave: password })
       .expect(201);
     const token = (result.body as { token: string }).token;
+    await request(server()).get('/api/v1/products').expect(401);
+    await request(server()).get('/api/v1/stores').expect(401);
     await request(server())
       .get('/api/v1/products')
+      .set('Authorization', `Bearer ${token}`)
       .expect(200)
       .expect('Content-Type', /application\/json/);
-    await request(server()).get('/api/v1/stores').expect(200);
+    await request(server())
+      .get('/api/v1/stores')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
     await request(server())
       .post('/api/v1/products')
       .send(input('products'))

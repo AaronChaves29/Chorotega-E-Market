@@ -100,6 +100,11 @@ export default function CreateOrderForm() {
                     cache: "no-store",
                 });
 
+                if (response.status === 401) {
+                    router.replace("/login?sesion=vencida");
+                    return;
+                }
+
                 if (!response.ok) {
                     throw new Error("No fue posible cargar las tiendas.");
                 }
@@ -127,7 +132,7 @@ export default function CreateOrderForm() {
         void loadStores();
 
         return () => controller.abort();
-    }, [page]);
+    }, [page, router]);
 
     useEffect(() => {
         if (!selectedStoreId) return;
@@ -147,6 +152,11 @@ export default function CreateOrderForm() {
                         cache: "no-store",
                     },
                 );
+
+                if (response.status === 401) {
+                    router.replace("/login?sesion=vencida");
+                    return;
+                }
 
                 if (!response.ok) {
                     throw new Error("No fue posible cargar los productos.");
@@ -175,7 +185,7 @@ export default function CreateOrderForm() {
         void loadProducts();
 
         return () => controller.abort();
-    }, [selectedStoreId, productPage]);
+    }, [selectedStoreId, productPage, router]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -189,6 +199,11 @@ export default function CreateOrderForm() {
                     signal: controller.signal,
                     cache: "no-store",
                 });
+
+                if (response.status === 401) {
+                    router.replace("/login?sesion=vencida");
+                    return;
+                }
 
                 if (!response.ok) {
                     throw new Error("No fue posible cargar los barrios.");
@@ -215,7 +230,7 @@ export default function CreateOrderForm() {
         void loadNeighborhoods();
 
         return () => controller.abort();
-    }, []);
+    }, [router]);
 
     const selectedItems = Object.entries(quantities)
         .filter(([, quantity]) => quantity > 0)

@@ -56,6 +56,59 @@ const profile = {
   correo: "ana@example.test",
   rol: "CLIENTE",
 };
+
+for (const resource of ["stores", "products", "neighborhoods"]) {
+  const request = {
+    nextUrl: new URL(`http://localhost/api/${resource}?idTienda=1`),
+  };
+  test(`${resource}: sin cookie devuelve 401 sin consultar backend`, async () => {
+    session = undefined;
+    global.fetch = () => assert.fail("No debe consultar sin sesion");
+    const response = await load(`app/api/${resource}/route.ts`).GET(request);
+    assert.equal(response.status, 401);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.match(response.headers.get("set-cookie"), /chorotega_session=;/);
+  });
+  test(`${resource}: usa Bearer exclusivamente en servidor y conserva datos`, async () => {
+    session = "catalog-private-marker";
+    const data = resource === "neighborhoods"
+      ? [{ idBarrio: 1, estado: "ACTIVO" }, { idBarrio: 2, estado: "INACTIVO" }]
+      : { content: [{ id: 1 }], totalPages: 1 };
+    global.fetch = async (url, options) => {
+      assert.ok(url.startsWith(`http://127.0.0.1:3999/api/v1/${resource}`));
+      assert.equal(options.headers.get("Authorization"), "Bearer catalog-private-marker");
+      assert.equal(options.cache, "no-store");
+      if (resource === "products") {
+        assert.equal(new URL(url).searchParams.get("idTienda"), "1");
+        assert.equal(new URL(url).searchParams.get("disponible"), "true");
+      }
+      return Response.json(data);
+    };
+    const response = await load(`app/api/${resource}/route.ts`).GET(request);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("set-cookie"), null);
+    const body = await response.text();
+    assert.ok(!body.includes(session));
+    assert.deepEqual(JSON.parse(body), resource === "neighborhoods" ? [data[0]] : data);
+  });
+  test(`${resource}: distingue 401 de errores temporales y no filtra datos de error`, async () => {
+    session = "catalog-private-marker";
+    for (const status of [401, 403, 404, 500, 502, 503]) {
+      global.fetch = async () => Response.json({ token: session, private: "private-error-marker" }, { status });
+      const response = await load(`app/api/${resource}/route.ts`).GET(request);
+      assert.equal(response.status, status);
+      assert.equal(response.headers.has("set-cookie"), status === 401);
+      const body = await response.text();
+      assert.ok(!body.includes(session));
+      assert.ok(!body.includes("private-error-marker"));
+    }
+    global.fetch = async () => { throw new Error("private-error-marker"); };
+    const response = await load(`app/api/${resource}/route.ts`).GET(request);
+    assert.equal(response.status, 502);
+    assert.equal(response.headers.get("set-cookie"), null);
+    assert.ok(!(await response.text()).includes("private-error-marker"));
+  });
+}
 test("perfil usa Bearer servidor/no-store y solo devuelve campos necesarios", async () => {
   session = "test-token";
   global.fetch = async (url, options) => {

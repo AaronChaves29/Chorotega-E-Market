@@ -92,7 +92,11 @@ describe('Productos: API real con PostgreSQL', () => {
   async function list(
     query: Record<string, string | number | boolean> = {},
   ): Promise<PaginationResult<ProductJson>> {
-    const response = await request(server()).get(path).query(query).expect(200);
+    const response = await request(server())
+      .get(path)
+      .set('Authorization', `Bearer ${token}`)
+      .query(query)
+      .expect(200);
     return response.body as PaginationResult<ProductJson>;
   }
   function problem(response: request.Response, status: number) {
@@ -158,6 +162,7 @@ describe('Productos: API real con PostgreSQL', () => {
     expect(response.headers.location).toBe(`${path}/${product.idProducto}`);
     await request(server())
       .get(`${path}/${product.idProducto}`)
+      .set('Authorization', `Bearer ${token}`)
       .expect(200)
       .expect(product);
   });
@@ -211,13 +216,25 @@ describe('Productos: API real con PostgreSQL', () => {
   });
 
   it('GET inexistente devuelve 404', async () => {
-    problem(await request(server()).get(`${path}/999`).expect(404), 404);
+    problem(
+      await request(server())
+        .get(`${path}/999`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404),
+      404,
+    );
   });
 
   it.each(['abc', '1.5', '0', '-1', '2147483648'])(
     'rechaza ID %s',
     async (id) => {
-      problem(await request(server()).get(`${path}/${id}`).expect(400), 400);
+      problem(
+        await request(server())
+          .get(`${path}/${id}`)
+          .set('Authorization', `Bearer ${token}`)
+          .expect(400),
+        400,
+      );
     },
   );
 
@@ -236,6 +253,7 @@ describe('Productos: API real con PostgreSQL', () => {
     });
     await request(server())
       .get(`${path}/${product.idProducto}`)
+      .set('Authorization', `Bearer ${token}`)
       .expect(200)
       .expect(response.body as ProductJson);
     await request(server())
@@ -292,6 +310,7 @@ describe('Productos: API real con PostgreSQL', () => {
       );
       await request(server())
         .get(`${path}/${product.idProducto}`)
+        .set('Authorization', `Bearer ${token}`)
         .expect(200)
         .expect(product);
     },
@@ -326,7 +345,10 @@ describe('Productos: API real con PostgreSQL', () => {
           .expect(204)
       ).text,
     ).toBe('');
-    await request(server()).get(`${path}/${product.idProducto}`).expect(404);
+    await request(server())
+      .get(`${path}/${product.idProducto}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(404);
   });
 
   it('DELETE inexistente devuelve 404', async () => {
@@ -370,6 +392,7 @@ describe('Productos: API real con PostgreSQL', () => {
     );
     await request(server())
       .get(`${path}/${product.idProducto}`)
+      .set('Authorization', `Bearer ${token}`)
       .expect(200)
       .expect(product);
     expect(
@@ -511,6 +534,13 @@ describe('Productos: API real con PostgreSQL', () => {
     { idCategoria: 'abc' },
     { extra: 'x' },
   ])('rechaza query inválida %j', async (query) => {
-    problem(await request(server()).get(path).query(query).expect(400), 400);
+    problem(
+      await request(server())
+        .get(path)
+        .set('Authorization', `Bearer ${token}`)
+        .query(query)
+        .expect(400),
+      400,
+    );
   });
 });
