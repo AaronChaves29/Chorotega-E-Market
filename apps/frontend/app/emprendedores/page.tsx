@@ -50,10 +50,11 @@ export default async function EntrepreneursPage() {
           <section className="account-card entrepreneur-notice">
             <h2>¿Cómo incorporarte?</h2>
             <p>
-              La incorporación de emprendedores requiere un procedimiento
-              administrativo. Este trámite todavía no está disponible desde la
-              plataforma.
+              Ya está disponible el registro de una nueva cuenta de emprendedor
+              junto con su negocio. Registrarte no convierte tu cuenta actual ni
+              cambia su rol.
             </p>
+            <Link className="account-action" href="/registro/emprendedor">Registrar un negocio</Link>
             <p>
               Esta página es informativa: no envía solicitudes ni cambia el rol
               de tu cuenta. Los beneficios describen las posibilidades del

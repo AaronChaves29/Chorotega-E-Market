@@ -27,11 +27,34 @@ import { LoginDto } from './dto/login.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UserResponseDto } from '../modules/users/dtos/user-response.dto';
+import { RegisterEntrepreneurDto } from './dto/register-entrepreneur.dto';
+import { EntrepreneurRegistrationResponseDto } from './dto/entrepreneur-registration-response.dto';
+import { EntrepreneurRegistrationService } from './entrepreneur-registration.service';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly entrepreneurs: EntrepreneurRegistrationService,
+  ) {}
+
+  @Post('register/entrepreneur')
+  @UseGuards(AuthRateLimitGuard)
+  @LimitAuthOperation('register')
+  @ApiOperation({
+    summary: 'Registrar emprendedor y negocio',
+    description:
+      'Acceso publico. Crea cuenta EMPRENDEDOR y tienda ACTIVA de forma atomica. No acepta rol, estado ni propietario. Despues se inicia sesion.',
+  })
+  @ApiBody({ type: RegisterEntrepreneurDto })
+  @ApiResponse({ status: 201, type: EntrepreneurRegistrationResponseDto })
+  @ApiProblemResponses([400, 409, 429, 500])
+  registerEntrepreneur(
+    @Body() dto: RegisterEntrepreneurDto,
+  ): Promise<EntrepreneurRegistrationResponseDto> {
+    return this.entrepreneurs.register(dto);
+  }
 
   @ApiOperation({ summary: 'Iniciar sesión', description: 'Acceso público.' })
   @ApiBody({ type: LoginDto })

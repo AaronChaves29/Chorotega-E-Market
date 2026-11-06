@@ -9,7 +9,7 @@ const accountTypes = [
   {
     name: "Emprendedor",
     description: "Compartí tus productos y hacé crecer tu emprendimiento.",
-    available: false,
+    available: true,
   },
   {
     name: "Repartidor",
@@ -55,7 +55,7 @@ export default function RegisterPage() {
             <Link
               key={account.name}
               className="account-type-card account-type-card-available"
-              href="/registro/cliente"
+              href={account.name === "Emprendedor" ? "/registro/emprendedor" : "/registro/cliente"}
             >
               {content}
             </Link>

@@ -7,7 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'node:crypto';
-import { QueryFailedError } from 'typeorm';
+import { rethrowRegistrationError } from './registration-error';
 import { UsersRepository } from '../modules/users/repositories/users.repository';
 import { User } from '../modules/users/entities/user.entity';
 import { UserMapper } from '../modules/users/mappers/user.mapper';
@@ -46,7 +46,7 @@ export class AuthService {
     try {
       return UserMapper.toResponseDto(await this.usersRepository.save(user));
     } catch (error) {
-      this.rethrowDuplicateEmail(error);
+      rethrowRegistrationError(error);
     }
   }
 
@@ -104,24 +104,5 @@ export class AuthService {
       tipo: 'Bearer',
       expiraEnSegundos: 3600,
     };
-  }
-
-  private rethrowDuplicateEmail(error: unknown): never {
-    if (error instanceof QueryFailedError) {
-      const driver: unknown = error.driverError;
-      if (
-        typeof driver === 'object' &&
-        driver !== null &&
-        'code' in driver &&
-        'constraint' in driver &&
-        driver.code === '23505' &&
-        driver.constraint === 'usuario_correo_key'
-      ) {
-        throw new ConflictException(
-          'Ya existe una cuenta con ese correo electrónico.',
-        );
-      }
-    }
-    throw error;
   }
 }

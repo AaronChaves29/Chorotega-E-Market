@@ -1083,7 +1083,8 @@ body {
   font-weight: 400;
 }
 
-.registration-field input {
+.registration-field input,
+.registration-field textarea {
   width: 100%;
   min-width: 0;
   min-height: 48px;
@@ -1104,7 +1105,8 @@ body {
   color: #a1a69d;
 }
 
-.registration-field input:focus-visible {
+.registration-field input:focus-visible,
+.registration-field textarea:focus-visible {
   border-color: #517765;
   box-shadow: 0 0 0 3px rgb(81 119 101 / 17%);
 }
@@ -2347,3 +2349,22 @@ body {
     transition: none;
   }
 }
+
+/* Entrepreneur registration: reuse the existing registration grid and fields. */
+.entrepreneur-story { background: #244f3e; }
+.entrepreneur-story-content { display: flex; flex-direction: column; gap: 28px; width: 100%; max-width: 464px; margin: 0 auto; }
+.entrepreneur-story h1 { margin: 0; font-family: Georgia, 'Times New Roman', serif; font-weight: 400; font-size: clamp(36px, 4vw, 56px); line-height: 1.12; }
+.entrepreneur-story p { margin: 0; line-height: 1.5; }
+.entrepreneur-story .login-eyebrow { margin: 0; }
+.entrepreneur-emblem { position: relative; width: 88px; height: 84px; overflow: hidden; }
+.entrepreneur-emblem img { position: absolute; width: 125.19%; height: 130.94%; max-width: none; left: -12.11%; top: -13.93%; }
+.entrepreneur-crafts { width: 100%; height: 340px; object-fit: cover; border-radius: 18px; }
+.registration-access { display: flex; gap: 4px; padding: 5px; margin-bottom: 28px; background: #eee7d9; border-radius: 12px; }
+.registration-access a { flex: 1; min-width: 0; padding: 13px 6px; text-align: center; color: var(--registration-ink); text-decoration: none; font-size: 14px; font-weight: 600; }
+.registration-access [aria-current] { background: white; border-radius: 9px; }
+.registration-entrepreneur-card .registration-kicker { color: #702b3d; }
+.registration-entrepreneur-card .registration-back { margin-top: 28px; }
+.registration-field textarea { resize: vertical; min-height: 90px; width: 100%; font: inherit; }
+.registration-pending { border: 1px dashed #c9cbbd; border-radius: 12px; padding: 16px; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.registration-pending p { margin: 8px 0 0; }
+@media (max-width: 900px) { .entrepreneur-story-content { gap: 18px; } .entrepreneur-story h1 { font-size: 36px; } .entrepreneur-crafts { height: 190px; } }
