@@ -54,6 +54,7 @@ function add(
 }
 add('post', 'auth/login', [201, 400, 401, 429, 500]);
 add('post', 'auth/register', [201, 400, 409, 429, 500]);
+add('post', 'auth/register/entrepreneur', [201, 400, 409, 429, 500]);
 add('get', 'auth/me', [200, 401, 500], true);
 for (const resource of ['stores', 'categories', 'products']) {
   add('get', resource, [200, 400, 401, 500], true);
@@ -192,7 +193,7 @@ const responseModels: Record<string, string> = {
   couriers: 'CourierResponseDto',
 };
 
-describe('OpenAPI HTTP: contrato generado de las 38 operaciones', () => {
+describe('OpenAPI HTTP: contrato generado de las 39 operaciones', () => {
   let context: Awaited<ReturnType<typeof createHttpTestApp>> | undefined;
   let document: OpenAPIObject;
   const previousSecret = process.env.JWT_SECRET;
@@ -278,7 +279,7 @@ describe('OpenAPI HTTP: contrato generado de las 38 operaciones', () => {
     expect(actual.sort()).toEqual(
       expected.map((x) => `${x.method} ${x.path}`).sort(),
     );
-    expect(actual).toHaveLength(38);
+    expect(actual).toHaveLength(39);
     expect(document.paths).not.toHaveProperty('/api/v1/api/v1/couriers');
     expect(document.paths).not.toHaveProperty('/api/v1/api/v1/neighborhoods');
     expect(document.paths['/api/v1/users'].post).toBeUndefined();
@@ -340,7 +341,11 @@ describe('OpenAPI HTTP: contrato generado de las 38 operaciones', () => {
       }
       if (
         entry.statuses.includes(201) &&
-        !['/api/v1/auth/login', '/api/v1/auth/register'].includes(entry.path)
+        ![
+          '/api/v1/auth/login',
+          '/api/v1/auth/register',
+          '/api/v1/auth/register/entrepreneur',
+        ].includes(entry.path)
       ) {
         const r = op.responses['201'];
         if (!r || '$ref' in r) throw new Error('Respuesta inesperada');
@@ -724,7 +729,7 @@ describe('OpenAPI HTTP: contrato generado de las 38 operaciones', () => {
         expect(response.headers.location).toEqual(expect.any(String));
       executed.push(name);
     }
-    expect(executed).toHaveLength(47);
+    expect(executed).toHaveLength(48);
     expect(
       await orders.findOneByOrFail({ idPedido: prepared.idPedido }),
     ).toMatchObject({ estado: 'ENTREGADO' });

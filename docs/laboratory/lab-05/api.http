@@ -51,6 +51,20 @@ Content-Type: application/json
   "clave": "{{registerPassword}}"
 }
 
+### Auth - registrar emprendedor y negocio
+# @name registerEntrepreneur
+# expected-status: 201
+POST {{baseUrl}}/api/v1/auth/register/entrepreneur
+Content-Type: application/json
+
+{
+  "nombre": "Persona",
+  "apellido": "Emprendedora",
+  "correo": "nuevo-negocio@example.test",
+  "clave": "{{registerPassword}}",
+  "tienda": { "nombre": "Negocio de prueba", "direccion": "Nicoya, direccion de prueba" }
+}
+
 ### Auth — login Admin
 # @name loginAdmin
 # expected-status: 201

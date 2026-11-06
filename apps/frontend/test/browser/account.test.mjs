@@ -4,6 +4,8 @@ import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
+import { writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { chrome, freePort, until } from "./support.mjs";
 
 const frontend = resolve(import.meta.dirname, "../..");
@@ -322,7 +324,7 @@ test(
           );
           assert.match(
             await browser.evaluate("document.body.innerText"),
-            /todavía no está disponible/,
+            /Ya está disponible el registro/,
           );
           assert.equal(
             await browser.evaluate(
@@ -580,6 +582,58 @@ test(
           }
         },
       );
+      await t.test("registro emprendedor real: seleccion, validaciones, persistencia, perfil y logout", async () => {
+        await browser.navigate(`${origin}/registro`);
+        await ready("/registro");
+        assert.ok(await browser.evaluate("!!document.querySelector('a[href=\"/registro/emprendedor\"]')"));
+        await click('a[href="/registro/emprendedor"]');
+        await ready("/registro/emprendedor");
+        await browser.wait("!!document.querySelector('#entrepreneur-negocio')", "formulario de negocio");
+        await browser.wait("Array.from(document.querySelectorAll('.entrepreneur-story img')).every(img => img.complete && img.naturalWidth > 0)", "recursos locales de Figma cargados");
+        for (const width of [320, 390, 768, 1280]) {
+          await browser.call("Emulation.setDeviceMetricsOverride", { width, height: 900, deviceScaleFactor: 1, mobile: false });
+          assert.ok(await browser.evaluate("document.documentElement.scrollWidth <= innerWidth"), `registro sin desbordamiento en ${width}`);
+        }
+        const metrics = await browser.call("Page.getLayoutMetrics");
+        const capture = await browser.call("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: { x: 0, y: 0, width: 1280, height: metrics.cssContentSize.height, scale: 1 } });
+        const screenshot = resolve(tmpdir(), "chorotega-entrepreneur-registration.png");
+        await writeFile(screenshot, Buffer.from(capture.data, "base64"));
+        t.diagnostic(`Registro de negocio, captura sin datos personales: ${screenshot}`);
+        const fields = { negocio: "Ceramica de Ana", nombre: "Ana", apellido: "Persona", correo: "emprendedora-nueva@example.test", clave: password, confirmacion: "no coincide", direccion: "Nicoya, local de prueba", descripcion: "Artesanias", telefono: "+506 8888-8888", horario: "Lunes a viernes" };
+        for (const [field, value] of Object.entries(fields)) await browser.fill(`#entrepreneur-${field}`, value);
+        await click('button[aria-label="Mostrar contraseña"]');
+        assert.equal(await browser.evaluate("document.querySelector('#entrepreneur-clave').type"), "text");
+        await browser.evaluate("document.querySelector('form').requestSubmit()");
+        await browser.wait("document.body.innerText.includes('Las contraseñas no coinciden')", "confirmacion de negocio rechazada");
+        assert.equal(await users.countBy({ correo: fields.correo }), 0);
+        await browser.fill("#entrepreneur-confirmacion", password);
+        await browser.fill("#entrepreneur-telefono", "abc");
+        await browser.evaluate("document.querySelector('form').requestSubmit()");
+        await browser.wait("document.body.innerText.includes('entre 8 y 15')", "telefono validado");
+        await browser.fill("#entrepreneur-telefono", fields.telefono);
+        // Backend error remains an error in the form, never a success screen.
+        await browser.fill("#entrepreneur-correo", accounts.EMPRENDEDOR.correo);
+        await browser.evaluate("document.querySelector('form').requestSubmit()");
+        await browser.wait("document.body.innerText.includes('Ya existe una cuenta')", "duplicado visible");
+        assert.equal(await browser.evaluate("!!document.querySelector('.registration-success')"), false);
+        await browser.fill("#entrepreneur-correo", fields.correo);
+        await browser.evaluate("document.querySelector('form').requestSubmit(); document.querySelector('form').requestSubmit()");
+        await browser.wait("!!document.querySelector('.registration-success')", "registro de negocio confirmado");
+        const entrepreneur = await users.findOneByOrFail({ correo: fields.correo });
+        assert.equal(entrepreneur.rol, "EMPRENDEDOR");
+        assert.ok(await bcrypt.compare(password, entrepreneur.claveHash));
+        const stores = await ds.getRepository(Store).findBy({ idEmprendedor: entrepreneur.idUsuario });
+        assert.equal(stores.length, 1);
+        assert.equal(stores[0].nombre, fields.negocio);
+        assert.equal(stores[0].direccion, fields.direccion);
+        await click('.registration-success a[href="/login"]');
+        await ready("/login");
+        await login(fields.correo);
+        await ready("/cuenta");
+        assert.ok(await browser.evaluate("document.body.innerText.includes('Emprendedor') && document.body.innerText.includes('Ana Persona')"));
+        assert.equal(await browser.evaluate("document.cookie.includes('chorotega_session')"), false);
+        await logout();
+      });
     } finally {
       await browser?.close();
       if (next && next.exitCode === null) {

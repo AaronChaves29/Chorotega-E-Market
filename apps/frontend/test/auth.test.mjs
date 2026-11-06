@@ -57,6 +57,52 @@ const profile = {
   rol: "CLIENTE",
 };
 
+const businessRegistration = {
+  nombre: "Ana", apellido: "Personal", correo: "ana@example.test", clave: "Clave-negocio-test-123!", telefono: "+506 8888-8888",
+  tienda: { nombre: "Negocio distinto", direccion: "Nicoya", descripcion: "Ceramica", horario: "Lunes a viernes" },
+};
+test("registro emprendedor publica solo los campos permitidos y nunca retorna credenciales", async () => {
+  global.fetch = async (url, options) => {
+    assert.equal(url, "http://127.0.0.1:3999/api/v1/auth/register/entrepreneur");
+    assert.equal(options.method, "POST");
+    assert.equal(options.headers.get("Authorization"), null);
+    assert.deepEqual(JSON.parse(options.body), businessRegistration);
+    return Response.json({ usuario: { rol: "EMPRENDEDOR" }, tienda: { idTienda: 1 }, token: "private-token", claveHash: "private-hash" }, { status: 201 });
+  };
+  const response = await load("app/api/auth/register/entrepreneur/route.ts").POST(new Request("http://localhost/api/auth/register/entrepreneur", { method: "POST", body: JSON.stringify(businessRegistration) }));
+  assert.equal(response.status, 201);
+  assert.equal(response.headers.get("set-cookie"), null);
+  assert.deepEqual(await response.json(), { message: "Tu cuenta y tu negocio se registraron correctamente." });
+});
+test("registro emprendedor rechaza rol, propietario, logo y datos invalidos antes del backend", async () => {
+  global.fetch = () => assert.fail("No debe consultar backend");
+  for (const invalid of [
+    { ...businessRegistration, rol: "ADMIN" },
+    { ...businessRegistration, tienda: { ...businessRegistration.tienda, idEmprendedor: 9 } },
+    { ...businessRegistration, tienda: { ...businessRegistration.tienda, logo: "fake-upload" } },
+    { ...businessRegistration, tienda: { nombre: "Sin direccion" } },
+    { ...businessRegistration, nombre: " " }, { ...businessRegistration, correo: "invalid" },
+    { ...businessRegistration, clave: "🔒".repeat(19) }, { ...businessRegistration, telefono: "abc" },
+  ]) {
+    const response = await load("app/api/auth/register/entrepreneur/route.ts").POST(new Request("http://localhost/register", { method: "POST", body: JSON.stringify(invalid) }));
+    assert.equal(response.status, 400);
+  }
+});
+test("registro emprendedor preserva errores HTTP sin exponer secretos ni crear sesion", async () => {
+  for (const status of [400, 409, 429, 500, 503]) {
+    global.fetch = async () => Response.json({ detail: "private-detail", token: "private-token", errors: [businessRegistration.clave, "Revisar campo"] }, { status });
+    const response = await load("app/api/auth/register/entrepreneur/route.ts").POST(new Request("http://localhost/register", { method: "POST", body: JSON.stringify(businessRegistration) }));
+    assert.equal(response.status, status);
+    assert.equal(response.headers.get("set-cookie"), null);
+    const text = await response.text();
+    assert.ok(!text.includes("private-detail") && !text.includes("private-token") && !text.includes(businessRegistration.clave));
+  }
+  global.fetch = async () => { throw new Error("private-network-detail"); };
+  const response = await load("app/api/auth/register/entrepreneur/route.ts").POST(new Request("http://localhost/register", { method: "POST", body: JSON.stringify(businessRegistration) }));
+  assert.equal(response.status, 502);
+  assert.ok(!(await response.text()).includes("private-network-detail"));
+});
+
 for (const resource of ["stores", "products", "neighborhoods"]) {
   const request = {
     nextUrl: new URL(`http://localhost/api/${resource}?idTienda=1`),
