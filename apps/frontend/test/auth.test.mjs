@@ -292,3 +292,34 @@ test("logout elimina la cookie con el mismo path", async () => {
   assert.match(response.headers.get("set-cookie"), /Max-Age=0/);
   assert.match(response.headers.get("set-cookie"), /Path=\//);
 });
+
+const courierRegistration = {nombre:'Luis',apellido:'Persona',correo:'courier@example.test',clave:'Clave-repartidor-test-123!',telefono:'+506 8888-8888',medioTransporte:'Bicicleta'};
+test('registro repartidor envia datos sin JWT y retorna solo confirmacion',async()=>{
+ global.fetch=async(url,options)=>{
+  assert.equal(url,'http://127.0.0.1:3999/api/v1/auth/register/courier');
+  assert.equal(options.headers.get('Authorization'),null);
+  assert.deepEqual(JSON.parse(options.body),courierRegistration);
+  return Response.json({usuario:{rol:'REPARTIDOR'},repartidor:{idRepartidor:1},token:'private-token',claveHash:'private-hash'},{status:201});
+ };
+ const response=await load('app/api/auth/register/courier/route.ts').POST(new Request('http://localhost/register',{method:'POST',body:JSON.stringify(courierRegistration)}));
+ assert.equal(response.status,201);assert.equal(response.headers.get('set-cookie'),null);
+ assert.deepEqual(await response.json(),{message:'Tu cuenta de repartidor se registró correctamente.'});
+});
+test('registro repartidor rechaza privilegios y datos invalidos antes de consultar backend',async()=>{
+ global.fetch=()=>assert.fail('No debe consultar backend');
+ for(const override of [{rol:'ADMIN'},{idUsuario:1},{idRepartidor:2},{authId:'foreign'},{disponibilidad:'DISPONIBLE'},{placa:'unsupported'},{medioTransporte:''},{medioTransporte:[]},{medioTransporte:'T'.repeat(51)},{telefono:'123'},{correo:'invalid'},{clave:'short'},{clave:'\u{1F512}'.repeat(19)},{nombre:' '},{apellido:''}]){
+ const response=await load('app/api/auth/register/courier/route.ts').POST(new Request('http://localhost/register',{method:'POST',body:JSON.stringify({...courierRegistration,...override})}));
+ assert.equal(response.status,400);assert.equal(response.headers.get('set-cookie'),null);
+ }
+});
+test('registro repartidor conserva errores sin secretos y rechaza JSON invalido',async()=>{
+ const post=()=>load('app/api/auth/register/courier/route.ts').POST(new Request('http://localhost/register',{method:'POST',body:JSON.stringify(courierRegistration)}));
+ for(const status of [400,409,429,500,503]){
+ global.fetch=async()=>Response.json({message:'private-detail',errors:['private-secret',courierRegistration.clave],token:'private-token'},{status});
+ const response=await post();assert.equal(response.status,status);
+ assert.equal(response.headers.get('set-cookie'),null);assert.doesNotMatch(await response.text(),/private-detail|private-secret|private-token|Clave-repartidor/);
+ }
+ global.fetch=async()=>{throw Error('private-network')};const response=await post();assert.equal(response.status,502);assert.doesNotMatch(await response.text(),/private-network/);
+ global.fetch=()=>assert.fail('No debe consultar backend');
+ const malformed=await load('app/api/auth/register/courier/route.ts').POST(new Request('http://localhost/register',{method:'POST',body:'{'}));assert.equal(malformed.status,400);
+});

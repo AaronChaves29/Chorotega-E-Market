@@ -2368,3 +2368,6 @@ body {
 .registration-pending { border: 1px dashed #c9cbbd; border-radius: 12px; padding: 16px; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .registration-pending p { margin: 8px 0 0; }
 @media (max-width: 900px) { .entrepreneur-story-content { gap: 18px; } .entrepreneur-story h1 { font-size: 36px; } .entrepreneur-crafts { height: 190px; } }
+
+.registration-field select { width: 100%; min-width: 0; padding: 12px 14px; border: 1px solid #d4d8cf; border-radius: 8px; background: #fff; color: #244f3e; font: inherit; }
+.registration-field select:focus-visible { outline: 2px solid #244f3e; outline-offset: 2px; }

@@ -51,6 +51,21 @@ Content-Type: application/json
   "clave": "{{registerPassword}}"
 }
 
+### Auth - registrar repartidor
+# @name registerCourier
+# expected-status: 201
+POST {{baseUrl}}/api/v1/auth/register/courier
+Content-Type: application/json
+
+{
+  "nombre": "Persona",
+  "apellido": "Repartidora",
+  "correo": "nuevo-repartidor@example.test",
+  "clave": "{{registerPassword}}",
+  "telefono": "88888888",
+  "medioTransporte": "Bicicleta"
+}
+
 ### Auth - registrar emprendedor y negocio
 # @name registerEntrepreneur
 # expected-status: 201

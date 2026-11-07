@@ -55,6 +55,7 @@ function add(
 add('post', 'auth/login', [201, 400, 401, 429, 500]);
 add('post', 'auth/register', [201, 400, 409, 429, 500]);
 add('post', 'auth/register/entrepreneur', [201, 400, 409, 429, 500]);
+add('post', 'auth/register/courier', [201, 400, 409, 429, 500]);
 add('get', 'auth/me', [200, 401, 500], true);
 for (const resource of ['stores', 'categories', 'products']) {
   add('get', resource, [200, 400, 401, 500], true);
@@ -193,7 +194,7 @@ const responseModels: Record<string, string> = {
   couriers: 'CourierResponseDto',
 };
 
-describe('OpenAPI HTTP: contrato generado de las 39 operaciones', () => {
+describe('OpenAPI HTTP: contrato generado de las 40 operaciones', () => {
   let context: Awaited<ReturnType<typeof createHttpTestApp>> | undefined;
   let document: OpenAPIObject;
   const previousSecret = process.env.JWT_SECRET;
@@ -279,7 +280,7 @@ describe('OpenAPI HTTP: contrato generado de las 39 operaciones', () => {
     expect(actual.sort()).toEqual(
       expected.map((x) => `${x.method} ${x.path}`).sort(),
     );
-    expect(actual).toHaveLength(39);
+    expect(actual).toHaveLength(40);
     expect(document.paths).not.toHaveProperty('/api/v1/api/v1/couriers');
     expect(document.paths).not.toHaveProperty('/api/v1/api/v1/neighborhoods');
     expect(document.paths['/api/v1/users'].post).toBeUndefined();
@@ -345,6 +346,7 @@ describe('OpenAPI HTTP: contrato generado de las 39 operaciones', () => {
           '/api/v1/auth/login',
           '/api/v1/auth/register',
           '/api/v1/auth/register/entrepreneur',
+          '/api/v1/auth/register/courier',
         ].includes(entry.path)
       ) {
         const r = op.responses['201'];
@@ -391,7 +393,17 @@ describe('OpenAPI HTTP: contrato generado de las 39 operaciones', () => {
       ].sort(),
     );
     expect(JSON.stringify(models)).not.toMatch(
-      /authId|claveHash|clave_hash|driverError|"repartidor"|"pedido"|"detalles"/,
+      /authId|claveHash|clave_hash|driverError|"pedido"|"detalles"/,
+    );
+    // Explicit registration DTO, not the raw User.repartidor relation.
+    expect(
+      schema(models.CourierRegistrationResponseDto).properties,
+    ).toMatchObject({
+      usuario: { $ref: '#/components/schemas/UserResponseDto' },
+      repartidor: { $ref: '#/components/schemas/CourierResponseDto' },
+    });
+    expect(schema(models.UserResponseDto).properties).not.toHaveProperty(
+      'repartidor',
     );
     for (const name of [
       'User',
@@ -729,7 +741,7 @@ describe('OpenAPI HTTP: contrato generado de las 39 operaciones', () => {
         expect(response.headers.location).toEqual(expect.any(String));
       executed.push(name);
     }
-    expect(executed).toHaveLength(48);
+    expect(executed).toHaveLength(49);
     expect(
       await orders.findOneByOrFail({ idPedido: prepared.idPedido }),
     ).toMatchObject({ estado: 'ENTREGADO' });

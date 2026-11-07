@@ -30,6 +30,9 @@ import { UserResponseDto } from '../modules/users/dtos/user-response.dto';
 import { RegisterEntrepreneurDto } from './dto/register-entrepreneur.dto';
 import { EntrepreneurRegistrationResponseDto } from './dto/entrepreneur-registration-response.dto';
 import { EntrepreneurRegistrationService } from './entrepreneur-registration.service';
+import { CourierRegistrationService } from './courier-registration.service';
+import { RegisterCourierDto } from './dto/register-courier.dto';
+import { CourierRegistrationResponseDto } from './dto/courier-registration-response.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -37,7 +40,25 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly entrepreneurs: EntrepreneurRegistrationService,
+    private readonly couriers: CourierRegistrationService,
   ) {}
+
+  @Post('register/courier')
+  @UseGuards(AuthRateLimitGuard)
+  @LimitAuthOperation('register')
+  @ApiOperation({
+    summary: 'Registrar repartidor',
+    description:
+      'Acceso publico. Crea cuenta REPARTIDOR y perfil DISPONIBLE atomicamente. Rol, disponibilidad y usuario se asignan internamente. No inicia sesion.',
+  })
+  @ApiBody({ type: RegisterCourierDto })
+  @ApiResponse({ status: 201, type: CourierRegistrationResponseDto })
+  @ApiProblemResponses([400, 409, 429, 500])
+  registerCourier(
+    @Body() dto: RegisterCourierDto,
+  ): Promise<CourierRegistrationResponseDto> {
+    return this.couriers.register(dto);
+  }
 
   @Post('register/entrepreneur')
   @UseGuards(AuthRateLimitGuard)
