@@ -2,14 +2,13 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
+import RegistrationAccountFields from "./registration-account-fields";
 import {
   validateEntrepreneurRegistration,
   type EntrepreneurRegistrationInput,
 } from "@/lib/entrepreneur-registration";
 
 export default function RegisterEntrepreneurForm() {
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmation, setShowConfirmation] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [registered, setRegistered] = useState(false);
@@ -104,100 +103,7 @@ export default function RegisterEntrepreneurForm() {
           placeholder="Ingresá el nombre de tu negocio"
         />
       </div>
-      <div className="registration-name-fields">
-        <div className="registration-field">
-          <label htmlFor="entrepreneur-nombre">Tu nombre personal</label>
-          <input
-            id="entrepreneur-nombre"
-            name="nombre"
-            required
-            maxLength={100}
-            autoComplete="given-name"
-          />
-        </div>
-        <div className="registration-field">
-          <label htmlFor="entrepreneur-apellido">Tus apellidos</label>
-          <input
-            id="entrepreneur-apellido"
-            name="apellido"
-            required
-            maxLength={100}
-            autoComplete="family-name"
-          />
-        </div>
-      </div>
-      <div className="registration-field">
-        <label htmlFor="entrepreneur-correo">Correo electrónico</label>
-        <input
-          id="entrepreneur-correo"
-          name="correo"
-          type="email"
-          required
-          maxLength={150}
-          autoComplete="email"
-          placeholder="negocio@correo.com"
-        />
-      </div>
-      <div className="registration-name-fields">
-        <div className="registration-field">
-          <label htmlFor="entrepreneur-clave">Contraseña</label>
-          <div className="registration-password">
-            <input
-              id="entrepreneur-clave"
-              name="clave"
-              type={showPassword ? "text" : "password"}
-              required
-              minLength={8}
-              maxLength={72}
-              autoComplete="new-password"
-              aria-describedby="entrepreneur-password-help"
-            />
-            <button
-              type="button"
-              className="registration-password-toggle"
-              aria-pressed={showPassword}
-              aria-label={
-                showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
-              }
-              onClick={() => setShowPassword((value) => !value)}
-            >
-              {showPassword ? "Ocultar" : "Mostrar"}
-            </button>
-          </div>
-        </div>
-        <div className="registration-field">
-          <label htmlFor="entrepreneur-confirmacion">
-            Confirmar contraseña
-          </label>
-          <div className="registration-password">
-            <input
-              id="entrepreneur-confirmacion"
-              name="confirmacion"
-              type={showConfirmation ? "text" : "password"}
-              required
-              minLength={8}
-              maxLength={72}
-              autoComplete="new-password"
-            />
-            <button
-              type="button"
-              className="registration-password-toggle"
-              aria-pressed={showConfirmation}
-              aria-label={
-                showConfirmation
-                  ? "Ocultar confirmación de contraseña"
-                  : "Mostrar confirmación de contraseña"
-              }
-              onClick={() => setShowConfirmation((value) => !value)}
-            >
-              {showConfirmation ? "Ocultar" : "Mostrar"}
-            </button>
-          </div>
-        </div>
-      </div>
-      <p id="entrepreneur-password-help" className="registration-help">
-        Usá al menos 8 caracteres y no más de 72 bytes.
-      </p>
+      <RegistrationAccountFields prefix="entrepreneur" />
       <div className="registration-field">
         <label htmlFor="entrepreneur-direccion">Dirección del negocio</label>
         <input

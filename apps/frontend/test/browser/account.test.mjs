@@ -32,6 +32,7 @@ const { NeighborhoodsModule } = backendRequire(
   "./src/modules/neighborhoods/neighborhoods.module.ts",
 );
 const { User } = backendRequire("./src/modules/users/entities/user.entity.ts");
+const { Courier } = backendRequire("./src/modules/couriers/entities/courier.entity.ts");
 const { Store } = backendRequire(
   "./src/modules/stores/entities/store.entity.ts",
 );
@@ -632,6 +633,52 @@ test(
         await ready("/cuenta");
         assert.ok(await browser.evaluate("document.body.innerText.includes('Emprendedor') && document.body.innerText.includes('Ana Persona')"));
         assert.equal(await browser.evaluate("document.cookie.includes('chorotega_session')"), false);
+        await logout();
+      });
+      await t.test("registro repartidor real: transporte, errores, persistencia, perfil y logout", async () => {
+        await browser.navigate(`${origin}/registro`);
+        await ready("/registro");
+        await click('a[href="/registro/repartidor"]');
+        await ready("/registro/repartidor");
+        await browser.wait("!!document.querySelector('#courier-nombre')", "formulario de repartidor");
+        assert.ok(await browser.evaluate("document.querySelector('.registration-kicker').innerText.includes('REPARTIDOR')"));
+        await browser.wait("Array.from(document.querySelectorAll('.entrepreneur-story img')).every(img => img.complete && img.naturalWidth > 0)", "imagenes de registro cargadas");
+        for (const width of [320,390,768,1280]) {
+          await browser.call("Emulation.setDeviceMetricsOverride", {width,height:900,deviceScaleFactor:1,mobile:false});
+          assert.ok(await browser.evaluate("document.documentElement.scrollWidth <= innerWidth"), `sin desbordamiento a ${width}`);
+        }
+        const metrics = await browser.call("Page.getLayoutMetrics");
+        const capture = await browser.call("Page.captureScreenshot", {format:"png",captureBeyondViewport:true,clip:{x:0,y:0,width:1280,height:metrics.cssContentSize.height,scale:1}});
+        const screenshot=resolve(tmpdir(),"chorotega-courier-registration.png");
+        await writeFile(screenshot,Buffer.from(capture.data,"base64"));
+        t.diagnostic(`Registro de repartidor, captura sin datos personales: ${screenshot}`);
+        const fields={nombre:"Luis",apellido:"Persona",correo:"nuevo-courier@example.test",clave:password,confirmacion:"no coincide",telefono:"+506 8888-8888"};
+        for (const [key,value] of Object.entries(fields)) await browser.fill(`#courier-${key}`,value);
+        await browser.evaluate("const select=document.querySelector('#courier-transporte'); select.value='Bicicleta'; select.dispatchEvent(new Event('change',{bubbles:true}))");
+        await click('button[aria-label="Mostrar contraseña"]');
+        assert.equal(await browser.evaluate("document.querySelector('#courier-clave').type"),"text");
+        await browser.evaluate("document.querySelector('form').requestSubmit()");
+        await browser.wait("document.body.innerText.includes('Las contraseñas no coinciden')","confirmacion requerida");
+        assert.equal(await users.countBy({correo:fields.correo}),0);
+        await browser.fill("#courier-confirmacion",password);
+        await browser.fill("#courier-telefono","123");
+        await browser.evaluate("document.querySelector('form').requestSubmit()");
+        await browser.wait("!!document.querySelector('.registration-error') && document.querySelector('.registration-error').innerText.includes('entre 8 y 15')","telefono validado");
+        await browser.fill("#courier-telefono",fields.telefono);
+        await browser.fill("#courier-correo",accounts.REPARTIDOR.correo);
+        await browser.evaluate("document.querySelector('form').requestSubmit()");
+        await browser.wait("document.body.innerText.includes('Ya existe una cuenta')","duplicado visible");
+        assert.equal(await browser.evaluate("!!document.querySelector('.registration-success')"),false);
+        await browser.fill("#courier-correo",fields.correo);
+        await browser.evaluate("document.querySelector('form').requestSubmit(); document.querySelector('form').requestSubmit()");
+        await browser.wait("!!document.querySelector('.registration-success')","registro confirmado");
+        const user=await users.findOneByOrFail({correo:fields.correo});
+        assert.equal(user.rol,"REPARTIDOR"); assert.ok(await bcrypt.compare(password,user.claveHash));
+        const profiles=await ds.getRepository(Courier).findBy({idUsuario:user.idUsuario});
+        assert.equal(profiles.length,1);assert.equal(profiles[0].medioTransporte,"Bicicleta");assert.equal(profiles[0].disponibilidad,"DISPONIBLE");
+        await click('.registration-success a[href="/login"]');await ready("/login");await login(fields.correo);await ready("/cuenta");
+        assert.ok(await browser.evaluate("document.body.innerText.includes('Repartidor') && document.body.innerText.includes('Luis Persona') && document.body.innerText.includes('nuevo-courier@example.test')"));
+        assert.equal(await browser.evaluate("document.cookie.includes('chorotega_session')"),false);
         await logout();
       });
     } finally {

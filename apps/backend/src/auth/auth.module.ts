@@ -9,6 +9,7 @@ import { RolesGuard } from './guards/roles.guard';
 import { CurrentIdentityService } from './current-identity.service';
 import { AuthRateLimitModule } from './rate-limit/auth-rate-limit.module';
 import { EntrepreneurRegistrationService } from './entrepreneur-registration.service';
+import { CourierRegistrationService } from './courier-registration.service';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { EntrepreneurRegistrationService } from './entrepreneur-registration.ser
     JwtAuthGuard,
     RolesGuard,
     EntrepreneurRegistrationService,
+    CourierRegistrationService,
   ],
   exports: [
     AuthRateLimitModule,

@@ -7,7 +7,11 @@ import Image from "next/image";
 export default function RegistrationLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
-  const entrepreneur = usePathname() === "/registro/emprendedor";
+  const pathname = usePathname();
+  const entrepreneur = [
+    "/registro/emprendedor",
+    "/registro/repartidor",
+  ].includes(pathname);
   return (
     <main className="registration-page">
       {entrepreneur ? (
