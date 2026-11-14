@@ -554,7 +554,7 @@ test(
           await login(accounts.CLIENTE.correo);
           await ready("/pedidos");
           await users.update(accounts.CLIENTE.idUsuario, { rol: "REPARTIDOR" });
-          await browser.navigate(`${origin}/`);
+          await browser.navigate(`${origin}/acceso`);
           await ready("/cuenta");
           const expired = await context.app.get(JwtService).signAsync(
             {

@@ -31,7 +31,7 @@ export default function LoginPage() {
       }
 
       setClave("");
-      window.location.replace("/");
+      window.location.replace("/acceso");
     } catch (error) {
       setMensaje(
         error instanceof Error ? error.message : "Ocurrió un error inesperado.",
