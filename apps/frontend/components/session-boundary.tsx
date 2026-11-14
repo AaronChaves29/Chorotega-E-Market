@@ -43,7 +43,7 @@ export default function SessionBoundary({
         current.apellido !== user.apellido ||
         current.correo !== user.correo
       ) {
-        window.location.replace("/");
+        window.location.replace("/acceso");
         return;
       }
       setStatus("ready");

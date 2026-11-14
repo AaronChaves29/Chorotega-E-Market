@@ -243,6 +243,38 @@ test("destinos por rol y enlace MVC usan origen backend sin prefijo REST", () =>
   );
 });
 
+test("recuperación de sesión válida conserva cookie y dirige cada rol a su destino", async () => {
+  session = "test-token";
+  for (const rol of ["CLIENTE", "ADMIN", "EMPRENDEDOR", "REPARTIDOR"]) {
+    global.fetch = async () => Response.json({ ...profile, rol });
+    const response = await load("app/api/auth/session/route.ts").GET(
+      new Request("http://localhost/api/auth/session"),
+    );
+    assert.equal(response.status, 307);
+    assert.equal(
+      new URL(response.headers.get("location")).pathname,
+      rol === "CLIENTE" ? "/pedidos" : "/cuenta",
+    );
+    assert.equal(response.headers.get("set-cookie"), null);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+  }
+});
+
+test("recuperación distingue sesión inválida de indisponibilidad sin bucle a la landing", async () => {
+  session = "test-token";
+  for (const status of [401, 503]) {
+    global.fetch = async () => Response.json({}, { status });
+    const response = await load("app/api/auth/session/route.ts").GET(
+      new Request("http://localhost/api/auth/session"),
+    );
+    assert.equal(
+      new URL(response.headers.get("location")).pathname,
+      status === 401 ? "/login" : "/cuenta",
+    );
+    assert.equal(response.headers.has("set-cookie"), status === 401);
+  }
+});
+
 test("login conserva contrato, cookie HttpOnly y nunca devuelve el JWT al navegador", async () => {
   global.fetch = async () =>
     Response.json({
