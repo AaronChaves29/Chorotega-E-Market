@@ -85,6 +85,9 @@ export default function AccountMenu({
               <Link href="/pedidos" prefetch={false}>
                 Mis pedidos
               </Link>
+              <Link href="/mercado" prefetch={false}>
+                Explorar emprendimientos
+              </Link>
               <Link href="/emprendedores" prefetch={false}>
                 ¿Sos emprendedor?
               </Link>
