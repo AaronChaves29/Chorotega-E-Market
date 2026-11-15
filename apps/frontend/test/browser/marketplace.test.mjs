@@ -176,10 +176,10 @@ test(
           "document.querySelector('form').requestSubmit()",
         );
         await browser.wait(
-          `location.pathname === '${role === "CLIENTE" ? "/pedidos" : "/cuenta"}' && !!document.querySelector('.account-trigger')`,
+          `location.pathname === '${role === "CLIENTE" ? "/mercado" : "/cuenta"}' && !!document.querySelector('.account-trigger')`,
           "login real",
         );
-        await browser.navigate(`${origin}/mercado`);
+        if (role !== "CLIENTE") await browser.navigate(`${origin}/mercado`);
         await settled();
       };
       const sessionCookie = (value) =>
@@ -245,7 +245,7 @@ test(
           );
           assert.equal(
             await browser.evaluate(
-              "Array.from(document.querySelectorAll('[data-store-id] a')).every(a => a.getAttribute('href') === '/pedidos/nuevo')",
+              "Array.from(document.querySelectorAll('[data-store-id]')).every(card => card.querySelector('a').getAttribute('href') === '/tiendas/' + card.dataset.storeId && card.querySelector('a').textContent.includes('Ver tienda'))",
             ),
             true,
           );
@@ -496,16 +496,18 @@ test(
             assert.ok(geometry.font.includes("LandingSerif"));
             assert.equal(geometry.background, "rgb(247, 243, 234)");
             assert.ok(
-              geometry.links.every((href) =>
-                [
-                  "/",
-                  "/mercado",
-                  "/pedidos",
-                  "/pedidos/nuevo",
-                  "/registro",
-                  "/emprendedores",
-                  "#emprendimientos",
-                ].includes(href),
+              geometry.links.every(
+                (href) =>
+                  /^\/tiendas\/\d+$/.test(href) ||
+                  [
+                    "/",
+                    "/mercado",
+                    "/pedidos",
+                    "/pedidos/nuevo",
+                    "/registro",
+                    "/emprendedores",
+                    "#emprendimientos",
+                  ].includes(href),
               ),
             );
             if (width === 1440)
@@ -533,7 +535,7 @@ test(
           },
         );
       await t.test(
-        "navegación de cliente lleva al mercado sin cambiar su destino de login",
+        "cliente vuelve a explorar desde el menú de Mis pedidos",
         async () => {
           await browser.navigate(`${origin}/pedidos`);
           await browser.wait(
@@ -616,7 +618,7 @@ test(
             assert.equal((await titles()).length, 6);
             assert.equal(
               await browser.evaluate(
-                "document.querySelectorAll('[data-store-id] a').length",
+                "document.querySelectorAll('[data-store-id] a[href=\"/pedidos/nuevo\"]').length",
               ),
               0,
             );

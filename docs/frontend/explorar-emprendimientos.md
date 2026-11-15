@@ -15,9 +15,9 @@ Colores: crema `#f7f3ea`, verde `#244f3e`, títulos `#203b30` y vino `#702b3d`. 
 - El listado utiliza `Store` y `PaginatedResponse` existentes. Los nombres, descripciones, direcciones y conteos provienen de NestJS y PostgreSQL.
 - No se agregan datos de muestra a la aplicación. Los registros de las pruebas automatizadas se crean exclusivamente en PostgreSQL temporal.
 - Todas las tiendas carecen de fotografía en el contrato actual; las tarjetas muestran una ilustración con el texto **Sin fotografía**, sin asociar imágenes genéricas a negocios reales.
-- No existen páginas individuales de tienda en este bloque. Para CLIENTE, **Crear un pedido** lleva a `/pedidos/nuevo`; se aclara que la selección de tienda y productos ocurre en ese formulario. No preselecciona automáticamente la tarjeta.
+- La implementación 3 incorpora **Ver tienda** hacia `/tiendas/{idTienda}` y la continuación al formulario de pedidos desde el detalle. Ver [navegación y detalle de tienda](./navegacion-cliente-detalle-tienda.md).
 - Se agrega **Explorar emprendimientos** al menú del cliente, conservando **Mis pedidos** como primer enlace y su navegación por teclado.
-- Otros roles autenticados pueden consultar tiendas conforme al backend existente, pero no reciben la acción de compra reservada a CLIENTE.
+- Otros roles autenticados pueden consultar tiendas y sus detalles conforme al backend existente; la continuación a compra en el detalle está reservada a CLIENTE.
 
 ## Consultas y compatibilidad
 
@@ -57,7 +57,7 @@ Se muestran estados de carga, página vacía, ausencia de coincidencias y error 
 
 Para incorporar categorías comerciales posteriormente se recomienda acordar una taxonomía propia de tiendas, su relación y validación en backend, índices, filtro SQL y contrato documentado. No debe inferirse del nombre del negocio ni de las categorías de sus productos. Las fotografías requieren primero un campo/contrato y un flujo seguro de almacenamiento. Ninguno de estos cambios forma parte de este bloque.
 
-## Verificación local — 14 de noviembre de 2026
+## Verificación de la implementación 2 — 14 de noviembre de 2026
 
 Entorno: Node.js 24.21.0, Chrome local y PostgreSQL 16 temporal mediante Testcontainers. No se conectó a Supabase, Atlas ni servicios de producción.
 

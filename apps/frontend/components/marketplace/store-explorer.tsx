@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import AccountMenu from "@/components/account-menu";
+import MarketplaceHeader from "./marketplace-header";
 import { isStorePage } from "@/lib/store-search";
 import type { CurrentUser } from "@/types/auth";
 import type { PaginatedResponse, Store } from "@/types/catalog";
@@ -112,41 +112,7 @@ export default function StoreExplorer({
       <a className={styles.skipLink} href="#emprendimientos">
         Saltar a los emprendimientos
       </a>
-      <header className={styles.header}>
-        <Link
-          href="/"
-          className={styles.brand}
-          aria-label="Chorotega E-Market, inicio"
-        >
-          <span className={styles.emblem}>
-            <Image
-              src="/registration/chorotega-emblem.png"
-              width={1024}
-              height={1024}
-              alt=""
-            />
-          </span>
-          <span>
-            <strong>Chorotega</strong>
-            <small>E-MARKET</small>
-          </span>
-        </Link>
-        <nav className={styles.navigation} aria-label="Navegación del mercado">
-          <Link href="/mercado" aria-current="page" prefetch={false}>
-            Explorar
-          </Link>
-          {user.rol === "CLIENTE" ? (
-            <Link href="/pedidos" prefetch={false}>
-              Mis pedidos
-            </Link>
-          ) : (
-            <Link href="/cuenta" prefetch={false}>
-              Mi cuenta
-            </Link>
-          )}
-        </nav>
-        <AccountMenu user={user} adminUrl={adminUrl} />
-      </header>
+      <MarketplaceHeader user={user} adminUrl={adminUrl} exploring />
 
       <main className={styles.main}>
         <section className={styles.introduction} aria-labelledby="market-title">
@@ -326,25 +292,17 @@ export default function StoreExplorer({
                             "Este emprendimiento todavía no agregó una descripción."}
                         </p>
                         <p className={styles.address}>{store.direccion}</p>
-                        {user.rol === "CLIENTE" ? (
-                          <Link
-                            href="/pedidos/nuevo"
-                            prefetch={false}
-                            className={styles.purchase}
-                          >
-                            Crear un pedido <span aria-hidden="true">→</span>
-                          </Link>
-                        ) : null}
+                        <Link
+                          href={`/tiendas/${store.idTienda}`}
+                          prefetch={false}
+                          className={styles.purchase}
+                        >
+                          Ver tienda <span aria-hidden="true">→</span>
+                        </Link>
                       </div>
                     </article>
                   ))}
                 </div>
-                {user.rol === "CLIENTE" ? (
-                  <p className={styles.flowNote}>
-                    La tienda y sus productos se seleccionan en el formulario de
-                    nuevo pedido.
-                  </p>
-                ) : null}
               </>
             ) : null}
             {data && data.totalPages > 0 ? (
