@@ -72,6 +72,37 @@ describe('EntrepreneurRegistrationService', () => {
       /hashed-test-marker|authId|private-password/,
     );
   });
+  it('persists canonical commercial contact fields inside the existing transaction', async () => {
+    await service.register({
+      ...dto,
+      telefono: '+506 8888-8888',
+      tienda: {
+        ...dto.tienda,
+        instagramUrl: 'https://instagram.com/local',
+        whatsappComercial: '+506 7777-7777',
+      },
+    });
+    expect(stores.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        instagramUrl: 'https://www.instagram.com/local/',
+        facebookUrl: null,
+        whatsappComercial: '50677777777',
+        telefono: '+506 8888-8888',
+      }),
+    );
+  });
+  it('rejects invalid contact before hashing or opening the transaction, including direct calls', async () => {
+    await expect(
+      service.register({
+        ...dto,
+        tienda: { ...dto.tienda, facebookUrl: 'https://attacker.test/' },
+      }),
+    ).rejects.toThrow('facebookUrl');
+    expect(transaction).not.toHaveBeenCalled();
+    expect(bcrypt.hash).not.toHaveBeenCalled();
+    expect(users.save).not.toHaveBeenCalled();
+    expect(stores.save).not.toHaveBeenCalled();
+  });
   it('rejects existing email before either insert', async () => {
     getOne.mockResolvedValue({ idUsuario: 1 });
     await expect(service.register(dto)).rejects.toBeInstanceOf(

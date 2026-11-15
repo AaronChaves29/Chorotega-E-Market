@@ -60,9 +60,13 @@ Se conserva la estructura verde/crema de dos paneles y se usan emblema y fotogra
 locales descargados del nodo Figma `2023:52729`. Se agregan nombre y apellido
 personales y direccion porque el modelo existente los exige. El horario es opcional.
 
-Logo del negocio y redes sociales no tienen soporte en el modelo ni almacenamiento
-de imagenes. Se muestran como pendientes, sin campos de captura o cargas simuladas.
-No se agregan migraciones, almacenamiento externo, dashboards ni notificaciones.
+El frontend todavía no captura redes sociales ni imágenes. La ampliación backend
+fase A incorpora `instagramUrl`, `facebookUrl` y `whatsappComercial` opcionales dentro
+de `tienda`, con validación, normalización y una migración aditiva. No modifica este
+formulario ni su intermediario; el registro anterior conserva su comportamiento.
+WhatsApp comercial nunca se copia desde `telefono`. Véanse
+[contratos, migración y formatos admitidos](redes-sociales-tiendas.md).
+No se incorpora almacenamiento de imágenes, dashboards ni notificaciones.
 
 ## Verificacion segura
 

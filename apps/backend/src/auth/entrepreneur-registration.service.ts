@@ -1,3 +1,4 @@
+import { normalizeStoreSocialContact } from '../modules/stores/validation/store-social-contact';
 import { ConflictException, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { randomUUID } from 'node:crypto';
@@ -19,6 +20,7 @@ export class EntrepreneurRegistrationService {
   async register(
     dto: RegisterEntrepreneurDto,
   ): Promise<EntrepreneurRegistrationResponseDto> {
+    const social = normalizeStoreSocialContact(dto.tienda);
     const correo = dto.correo.trim().toLowerCase();
     // Do expensive hashing before opening the transaction.
     const claveHash = await bcrypt.hash(dto.clave, 10);
@@ -46,6 +48,9 @@ export class EntrepreneurRegistrationService {
         const store = await stores.save(
           stores.createEntity({
             idEmprendedor: user.idUsuario,
+            instagramUrl: social.instagramUrl ?? null,
+            facebookUrl: social.facebookUrl ?? null,
+            whatsappComercial: social.whatsappComercial ?? null,
             nombre: dto.tienda.nombre.trim(),
             direccion: dto.tienda.direccion.trim(),
             descripcion: dto.tienda.descripcion?.trim() ?? null,

@@ -32,6 +32,9 @@ describe('StoresService', () => {
     descripcion: null,
     telefono: null,
     horario: null,
+    instagramUrl: null,
+    facebookUrl: null,
+    whatsappComercial: null,
     estado: 'ACTIVA',
     fechaCreacion: new Date('2026-01-01T00:00:00Z'),
   };
@@ -86,10 +89,57 @@ describe('StoresService', () => {
       descripcion: null,
       telefono: null,
       horario: null,
+      instagramUrl: null,
+      facebookUrl: null,
+      whatsappComercial: null,
       estado: 'ACTIVA',
     });
     expect(repository.save).toHaveBeenCalledWith(store);
   });
+  it('normalizes explicitly supplied social fields before creating a store', async () => {
+    await service.create(
+      {
+        ...dto,
+        instagramUrl: 'https://instagram.com/local',
+        whatsappComercial: '+506 8888-8888',
+      },
+      actor,
+    );
+    expect(repository.createEntity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        instagramUrl: 'https://www.instagram.com/local/',
+        facebookUrl: null,
+        whatsappComercial: '50688888888',
+      }),
+    );
+  });
+  it('preserves omitted social fields and passes explicit nulls to the authorized SQL update', async () => {
+    repository.updateForActor.mockResolvedValue(store);
+    await service.update(
+      1,
+      { instagramUrl: null, facebookUrl: 'https://facebook.com/local' },
+      actor,
+    );
+    expect(repository.updateForActor).toHaveBeenCalledWith(
+      1,
+      { instagramUrl: null, facebookUrl: 'https://www.facebook.com/local/' },
+      actor,
+    );
+  });
+  it.each(['create', 'update'] as const)(
+    'rejects unsafe contacts even on direct %s calls without persistence',
+    async (method) => {
+      const invalid = { instagramUrl: 'https://attacker.test/' };
+      await expect(
+        method === 'create'
+          ? service.create({ ...dto, ...invalid }, actor)
+          : service.update(1, invalid, actor),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(repository.createEntity).not.toHaveBeenCalled();
+      expect(repository.updateForActor).not.toHaveBeenCalled();
+      expect(repository.save).not.toHaveBeenCalled();
+    },
+  );
   it('rechaza creación con usuario inexistente sin escribir', async () => {
     users.findById.mockResolvedValue(null);
     await expect(service.create(dto, actor)).rejects.toBeInstanceOf(

@@ -1,3 +1,4 @@
+import { StoreSocialContactDto } from './store-social-contact.dto';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsIn,
@@ -11,7 +12,7 @@ import {
   ValidateIf,
 } from 'class-validator';
 
-export class UpdateStoreDto {
+export class UpdateStoreDto extends StoreSocialContactDto {
   @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 2147483647 })
   @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsInt()

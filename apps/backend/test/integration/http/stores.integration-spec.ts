@@ -112,6 +112,9 @@ describe('Tiendas: API real con PostgreSQL', () => {
       fechaCreacion: expect.any(String) as string,
       nombre: 'Alimentos',
       descripcion: null,
+      instagramUrl: null,
+      facebookUrl: null,
+      whatsappComercial: null,
       estado: 'ACTIVA',
     });
     expect(response.headers.location).toBe(`${path}/${store.idTienda}`);
@@ -407,12 +410,15 @@ describe('Tiendas: API real con PostgreSQL', () => {
       'descripcion',
       'direccion',
       'estado',
+      'facebookUrl',
       'fechaCreacion',
       'horario',
       'idEmprendedor',
       'idTienda',
+      'instagramUrl',
       'nombre',
       'telefono',
+      'whatsappComercial',
     ]);
   });
 

@@ -454,6 +454,41 @@ describe('OpenAPI HTTP: contrato generado de las 40 operaciones', () => {
       }
     }
   });
+  it('documents optional commercial contacts, nullable responses and inherited entrepreneur input', () => {
+    const models = document.components?.schemas ?? {};
+    for (const name of [
+      'CreateStoreDto',
+      'UpdateStoreDto',
+      'EntrepreneurStoreDto',
+    ]) {
+      const model = schema(models[name]);
+      for (const field of [
+        'instagramUrl',
+        'facebookUrl',
+        'whatsappComercial',
+      ]) {
+        expect(schema(model.properties?.[field])).toMatchObject({
+          type: 'string',
+          nullable: true,
+        });
+        expect(model.required ?? []).not.toContain(field);
+      }
+    }
+    const response = schema(models.StoreResponseDto);
+    for (const field of ['instagramUrl', 'facebookUrl', 'whatsappComercial']) {
+      expect(schema(response.properties?.[field])).toMatchObject({
+        type: 'string',
+        nullable: true,
+      });
+      expect(response.required).toContain(field);
+    }
+    expect(schema(models.EntrepreneurStoreDto).properties).not.toHaveProperty(
+      'idEmprendedor',
+    );
+    expect(schema(models.EntrepreneurStoreDto).properties).not.toHaveProperty(
+      'telefono',
+    );
+  });
   it('documenta PATCH parcial, campos nullable y contraseña writeOnly', () => {
     const models = document.components?.schemas ?? {};
     for (const name of ['UpdateUserDto', 'UpdateStoreDto', 'UpdateCategoryDto'])

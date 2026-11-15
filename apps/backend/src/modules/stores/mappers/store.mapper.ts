@@ -11,6 +11,9 @@ export class StoreMapper {
       direccion: store.direccion,
       telefono: store.telefono,
       horario: store.horario,
+      instagramUrl: store.instagramUrl ?? null,
+      facebookUrl: store.facebookUrl ?? null,
+      whatsappComercial: store.whatsappComercial ?? null,
       estado: store.estado,
       fechaCreacion: store.fechaCreacion,
     };
