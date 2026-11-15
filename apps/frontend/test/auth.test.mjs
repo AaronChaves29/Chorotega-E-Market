@@ -234,7 +234,7 @@ test("registro intermediario rechaza campos privilegiados antes de consultar bac
 });
 test("destinos por rol y enlace MVC usan origen backend sin prefijo REST", () => {
   const { accountDestination } = load("types/auth.ts");
-  assert.equal(accountDestination("CLIENTE"), "/pedidos");
+  assert.equal(accountDestination("CLIENTE"), "/mercado");
   for (const role of ["ADMIN", "EMPRENDEDOR", "REPARTIDOR"])
     assert.equal(accountDestination(role), "/cuenta");
   assert.equal(
@@ -253,7 +253,7 @@ test("recuperación de sesión válida conserva cookie y dirige cada rol a su de
     assert.equal(response.status, 307);
     assert.equal(
       new URL(response.headers.get("location")).pathname,
-      rol === "CLIENTE" ? "/pedidos" : "/cuenta",
+      rol === "CLIENTE" ? "/mercado" : "/cuenta",
     );
     assert.equal(response.headers.get("set-cookie"), null);
     assert.equal(response.headers.get("cache-control"), "no-store");

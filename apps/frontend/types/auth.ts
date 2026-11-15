@@ -26,6 +26,6 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   REPARTIDOR: "Repartidor",
 };
 
-export function accountDestination(role: UserRole): "/pedidos" | "/cuenta" {
-  return role === "CLIENTE" ? "/pedidos" : "/cuenta";
+export function accountDestination(role: UserRole): "/mercado" | "/cuenta" {
+  return role === "CLIENTE" ? "/mercado" : "/cuenta";
 }

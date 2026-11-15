@@ -103,7 +103,8 @@ test(
         estado: "ACTIVO",
       });
       const port = await freePort();
-      const origin = `http://127.0.0.1:${port}`;
+      // Next usa localhost en los redirects absolutos del route handler local.
+      const origin = `http://localhost:${port}`;
       let logs = "";
       next = spawn(
         process.execPath,
@@ -152,7 +153,7 @@ test(
         );
         if (path !== "/login" && !path.startsWith("/registro"))
           await browser.wait(
-            `!!document.querySelector('.account-header') && !document.querySelector('.session-notice')`,
+            `!!document.querySelector('${path === "/mercado" ? "#market-title" : ".account-header"}') && !document.querySelector('.session-notice')`,
             "perfil visible",
           );
       };
@@ -225,7 +226,7 @@ test(
           assert.equal(user.rol, "CLIENTE");
           assert.ok(await bcrypt.compare(password, user.claveHash));
           await login("nueva@example.test");
-          await ready("/pedidos");
+          await ready("/mercado");
           assert.equal(
             await browser.evaluate(
               "document.querySelector('.account-trigger-name').textContent",
@@ -237,6 +238,53 @@ test(
               "document.cookie.includes('chorotega_session')",
             ),
             false,
+          );
+        },
+      );
+      await t.test(
+        "CLIENTE recupera mercado y accede a pedidos solo desde el menú",
+        async () => {
+          await browser.navigate(`${origin}/api/auth/session`);
+          await ready("/mercado");
+          assert.deepEqual(
+            await browser.evaluate(
+              "Array.from(document.querySelectorAll('nav[aria-label=\"Navegación del mercado\"] a'), a => a.getAttribute('href'))",
+            ),
+            ["/mercado"],
+          );
+          assert.equal(
+            await browser.evaluate(
+              "document.querySelector('nav[aria-label=\"Navegación del mercado\"]').innerText.includes('Mis pedidos')",
+            ),
+            false,
+          );
+          await click(".account-trigger");
+          await browser.wait(
+            "!document.querySelector('.account-dropdown').hidden",
+            "menú visible",
+          );
+          assert.equal(
+            await browser.evaluate(
+              "document.querySelector('.account-dropdown a[href=\"/pedidos\"]').innerText",
+            ),
+            "Mis pedidos",
+          );
+          assert.ok(
+            await browser.evaluate(
+              "!!document.querySelector('.account-dropdown a[href=\"/mercado\"]') && !!document.querySelector('.account-logout')",
+            ),
+          );
+          await click('.account-dropdown a[href="/pedidos"]');
+          await ready("/pedidos");
+          await browser.wait(
+            "document.body.innerText.includes('Todavía no tenés pedidos')",
+            "pedidos reales sin modificar",
+          );
+          assert.equal(
+            await browser.evaluate(
+              "document.querySelector('.account-trigger').getAttribute('aria-expanded')",
+            ),
+            "false",
           );
         },
       );
@@ -503,6 +551,9 @@ test(
         async () => {
           await logout();
           await login(accounts.CLIENTE.correo);
+          await ready("/mercado");
+          await click(".account-trigger");
+          await click('.account-dropdown a[href="/pedidos"]');
           await ready("/pedidos");
           await browser.wait(
             "document.body.innerText.includes('Todavía no tenés pedidos')",
@@ -552,7 +603,7 @@ test(
         "rol vigente y cookie expirada o inválida se revalidan",
         async () => {
           await login(accounts.CLIENTE.correo);
-          await ready("/pedidos");
+          await ready("/mercado");
           await users.update(accounts.CLIENTE.idUsuario, { rol: "REPARTIDOR" });
           await browser.navigate(`${origin}/acceso`);
           await ready("/cuenta");

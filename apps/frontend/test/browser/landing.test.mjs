@@ -55,12 +55,15 @@ test(
         );
         return;
       }
-      if (request.url?.startsWith("/api/v1/orders?")) {
+      if (
+        request.url?.startsWith("/api/v1/orders?") ||
+        request.url?.startsWith("/api/v1/stores?")
+      ) {
         response.end(
           JSON.stringify({
             content: [],
             page: 0,
-            size: 10,
+            size: request.url.startsWith("/api/v1/stores?") ? 6 : 10,
             totalElements: 0,
             totalPages: 0,
           }),
@@ -237,7 +240,7 @@ test(
             await browser.evaluate(
               "document.querySelector('form').requestSubmit()",
             );
-            const path = role === "CLIENTE" ? "/pedidos" : "/cuenta";
+            const path = role === "CLIENTE" ? "/mercado" : "/cuenta";
             await ready(path);
             await browser.wait(
               "!!document.querySelector('.account-trigger') && !document.querySelector('.session-notice')",
