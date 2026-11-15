@@ -1,5 +1,7 @@
 # Implementación 3: navegación del cliente y detalle de tienda
 
+> Evolución posterior: la [implementación 5](carrito-compras.md) sustituye el enlace de compra de las tarjetas por un carrito. El flujo manual y los resultados históricos descritos aquí se conservan.
+
 ## Alcance y referencia
 
 Se implementaron la navegación del cliente y `/tiendas/[id]` en `feature/detalle-tienda-figma`, desde `948f253fb61e20e3941850288e1b10d74c92d6cb`, con PR #137 integrado y [CI de la base aprobado](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/43652492341). Esto no implica aprobación remota de estos cambios locales.

@@ -1,5 +1,6 @@
 "use client";
 
+import { clearStoredCart } from "@/lib/cart";
 import { useState } from "react";
 
 export default function LogoutButton() {
@@ -19,6 +20,7 @@ export default function LogoutButton() {
         throw new Error("No se pudo cerrar sesión.");
       }
 
+      clearStoredCart();
       // Navegación completa: descarta el router cache y los datos de esta cuenta.
       window.location.replace("/login");
     } catch {

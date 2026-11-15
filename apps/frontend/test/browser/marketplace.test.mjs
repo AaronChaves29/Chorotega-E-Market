@@ -551,6 +551,7 @@ test(
                   [
                     "/",
                     "/mercado",
+                    "/carrito",
                     "/pedidos",
                     "/pedidos/nuevo",
                     "/registro",

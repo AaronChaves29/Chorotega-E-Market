@@ -1,3 +1,4 @@
+import { CartProvider } from "@/components/cart/cart-provider";
 import SessionBoundary from "@/components/session-boundary";
 import ProfileUnavailable from "@/components/profile-unavailable";
 import StoreExplorer from "@/components/marketplace/store-explorer";
@@ -10,10 +11,12 @@ export default async function MarketPage() {
   const { user } = result;
   return (
     <SessionBoundary user={user}>
-      <StoreExplorer
-        user={user}
-        adminUrl={user.rol === "ADMIN" ? getAdminLoginUrl() : undefined}
-      />
+      <CartProvider user={user}>
+        <StoreExplorer
+          user={user}
+          adminUrl={user.rol === "ADMIN" ? getAdminLoginUrl() : undefined}
+        />
+      </CartProvider>
     </SessionBoundary>
   );
 }

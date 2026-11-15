@@ -1,3 +1,4 @@
+import CartLink from "@/components/cart/cart-link";
 import Image from "next/image";
 import Link from "next/link";
 import AccountMenu from "@/components/account-menu";
@@ -42,7 +43,10 @@ export default function MarketplaceHeader({
           Explorar
         </Link>
       </nav>
-      <AccountMenu user={user} adminUrl={adminUrl} />
+      <div className={styles.actions}>
+        {user.rol === "CLIENTE" ? <CartLink /> : null}
+        <AccountMenu user={user} adminUrl={adminUrl} />
+      </div>
     </header>
   );
 }

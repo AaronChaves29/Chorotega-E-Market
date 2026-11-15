@@ -1,9 +1,8 @@
+import { randomUUID } from "node:crypto";
+import { CART_SESSION_COOKIE } from "@/lib/cart-session";
 import { NextRequest, NextResponse } from "next/server";
 import { apiRequest } from "@/lib/api-client";
-import type {
-  LoginCredentials,
-  LoginResponse,
-} from "../../../../types/auth";
+import type { LoginCredentials, LoginResponse } from "../../../../types/auth";
 
 export async function POST(request: NextRequest) {
   let credentials: LoginCredentials;
@@ -30,15 +29,17 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { response, data: loginData } =
-      await apiRequest<LoginResponse>("/auth/login", {
+    const { response, data: loginData } = await apiRequest<LoginResponse>(
+      "/auth/login",
+      {
         method: "POST",
         authenticated: false,
         body: {
           correo: credentials.correo,
           clave: credentials.clave,
         },
-      });
+      },
+    );
 
     if (!response.ok) {
       return NextResponse.json(
@@ -56,7 +57,8 @@ export async function POST(request: NextRequest) {
 
     if (
       !data ||
-      typeof data.token !== "string" || !data.token ||
+      typeof data.token !== "string" ||
+      !data.token ||
       data.tipo !== "Bearer" ||
       !Number.isInteger(data.expiraEnSegundos) ||
       data.expiraEnSegundos <= 0
@@ -79,6 +81,13 @@ export async function POST(request: NextRequest) {
       maxAge: data.expiraEnSegundos,
     });
 
+    result.cookies.set(CART_SESSION_COOKIE, randomUUID(), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: data.expiraEnSegundos,
+    });
     return result;
   } catch {
     return NextResponse.json(
