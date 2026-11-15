@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import Image from "next/image";
-import Link from "next/link";
+import AddToCart from "@/components/cart/add-to-cart";
 import {
   isStoreProductPage,
   productPrice,
@@ -197,8 +197,8 @@ export default function StoreProducts({
       </div>
       {canBuy ? (
         <p className={styles.flowNote}>
-          Para comprar, continuá al formulario de pedido y elegí esta tienda y
-          sus productos. No se agregan automáticamente.
+          Agregá productos de esta tienda al carrito y revisá tu pedido antes de
+          confirmar.
         </p>
       ) : null}
       {status === 0 ? (
@@ -278,13 +278,7 @@ export default function StoreProducts({
                     : "Sin existencias"}
                 </p>
                 {canBuy && product.cantidadDisponible > 0 ? (
-                  <Link
-                    className={styles.buy}
-                    href="/pedidos/nuevo"
-                    prefetch={false}
-                  >
-                    Continuar al pedido <span aria-hidden="true">→</span>
-                  </Link>
+                  <AddToCart store={store} product={product} />
                 ) : null}
               </div>
             </article>

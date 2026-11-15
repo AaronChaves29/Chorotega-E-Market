@@ -877,7 +877,16 @@ test(
           );
           await click(`[data-store-id="${shop.idTienda}"] a`);
           await settled();
-          await click(`[data-product-id="${saved[1].idProducto}"] a`);
+          await browser.wait(
+            "!!document.querySelector('[data-add-product]:not(:disabled)')",
+            "carrito habilitado",
+          );
+          await click(`[data-add-product="${saved[1].idProducto}"]`);
+          await browser.wait(
+            "document.querySelector('[data-cart-count]').textContent === '1'",
+            "producto agregado sin alterar compra manual",
+          );
+          await browser.navigate(`${origin}/pedidos/nuevo`);
           await browser.wait(
             "location.pathname === '/pedidos/nuevo' && !!document.querySelector('input[name=store]') && !document.querySelector('.session-notice')",
             "formulario existente",

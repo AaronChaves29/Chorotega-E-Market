@@ -1,3 +1,6 @@
+import { cookies } from "next/headers";
+import { getCurrentUser } from "@/lib/current-user";
+import { CART_SESSION_COOKIE, cartScope } from "@/lib/cart-session";
 
 import { NextRequest, NextResponse } from "next/server";
 import { apiRequest, SESSION_COOKIE } from "@/lib/api-client";
@@ -42,9 +45,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const { response, data, sessionExpired } =
-      await apiRequest<PaginatedOrders>(
-        `/orders?${params.toString()}`,
-      );
+      await apiRequest<PaginatedOrders>(`/orders?${params.toString()}`);
 
     if (sessionExpired) {
       return handleExpiredSession();
@@ -71,6 +72,35 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const expectedScope = request.headers.get("X-Cart-Scope");
+  if (expectedScope !== null) {
+    const identity = await getCurrentUser();
+    if (identity.status !== "authenticated")
+      return NextResponse.json(
+        { message: "No se pudo verificar la sesión." },
+        { status: identity.status === "unauthenticated" ? 401 : 503 },
+      );
+    const jar = await cookies();
+    const token = jar.get(SESSION_COOKIE)?.value;
+    const nonce = jar.get(CART_SESSION_COOKIE)?.value;
+    if (identity.user.rol !== "CLIENTE")
+      return NextResponse.json(
+        { message: "Esta operación requiere el rol CLIENTE." },
+        { status: 403 },
+      );
+    if (
+      !token ||
+      !nonce ||
+      expectedScope !== cartScope(identity.user.idUsuario, nonce, token)
+    )
+      return NextResponse.json(
+        {
+          message:
+            "La sesión del carrito cambió. Revisá tu cuenta antes de continuar.",
+        },
+        { status: 409 },
+      );
+  }
   let body: CreateOrderRequest;
 
   try {
@@ -114,11 +144,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { response, data, sessionExpired } =
-      await apiRequest<unknown>("/orders", {
+    const { response, data, sessionExpired } = await apiRequest<unknown>(
+      "/orders",
+      {
         method: "POST",
         body,
-      });
+      },
+    );
 
     if (sessionExpired) {
       return handleExpiredSession();
