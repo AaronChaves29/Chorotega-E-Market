@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -14,6 +15,16 @@ import type { PaginatedResponse } from "@/types/catalog";
 import styles from "./store-detail.module.css";
 
 const orders = {
+  "fechaPublicacion-DESC": {
+    label: "Novedades",
+    column: "fechaPublicacion",
+    direction: "DESC",
+  },
+  "fechaPublicacion-ASC": {
+    label: "Más antiguos",
+    column: "fechaPublicacion",
+    direction: "ASC",
+  },
   "nombre-ASC": { label: "Nombre: A–Z", column: "nombre", direction: "ASC" },
   "nombre-DESC": { label: "Nombre: Z–A", column: "nombre", direction: "DESC" },
   "precio-ASC": {
@@ -49,6 +60,8 @@ export default function StoreProducts({
   onUnavailable: () => void;
 }) {
   const router = useRouter();
+  const [draft, setDraft] = useState("");
+  const { term, pending } = useDebouncedSearch(draft);
   const [query, setQuery] = useState({
     order: "nombre-ASC" as Order,
     page: 0,
@@ -61,6 +74,7 @@ export default function StoreProducts({
     data?: PaginatedResponse<StoreProduct>;
   }>({ key: "", status: 0 });
   const params = new URLSearchParams({
+    nombre: term,
     page: String(query.page),
     size: "6",
     sortBy: orders[query.order].column,
@@ -68,9 +82,10 @@ export default function StoreProducts({
     soloDisponibles: String(query.available),
   }).toString();
   const key = `${params}:${attempt}`;
-  const status = result.key === key ? result.status : 0;
+  const status = !pending && result.key === key ? result.status : 0;
   const data = status === 200 ? result.data : undefined;
   useEffect(() => {
+    if (pending) return;
     const controller = new AbortController();
     async function load() {
       try {
@@ -109,7 +124,7 @@ export default function StoreProducts({
     }
     void load();
     return () => controller.abort();
-  }, [key, params, store.idTienda, router, onUnavailable]);
+  }, [key, params, store.idTienda, router, onUnavailable, pending]);
 
   return (
     <section
@@ -129,21 +144,21 @@ export default function StoreProducts({
                 : "Productos"}
           </p>
         </div>
-        <label className={styles.stockFilter}>
+        <div className={styles.search} role="search">
+          <label htmlFor="product-name">Buscar en esta tienda</label>
           <input
-            id="available-products"
-            type="checkbox"
-            checked={query.available}
-            onChange={(event) =>
-              setQuery((previous) => ({
-                ...previous,
-                available: event.target.checked,
-                page: 0,
-              }))
-            }
+            id="product-name"
+            type="search"
+            name="nombre"
+            maxLength={150}
+            placeholder="Buscar productos…"
+            value={draft}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              setQuery((previous) => ({ ...previous, page: 0 }));
+            }}
           />
-          Solo con existencias
-        </label>
+        </div>
         <div className={styles.sort}>
           <label htmlFor="product-sort">Ordenar por</label>
           <select
@@ -164,6 +179,21 @@ export default function StoreProducts({
             ))}
           </select>
         </div>
+        <label className={styles.stockFilter}>
+          <input
+            id="available-products"
+            type="checkbox"
+            checked={query.available}
+            onChange={(event) =>
+              setQuery((previous) => ({
+                ...previous,
+                available: event.target.checked,
+                page: 0,
+              }))
+            }
+          />
+          Solo con existencias
+        </label>
       </div>
       {canBuy ? (
         <p className={styles.flowNote}>
@@ -196,9 +226,11 @@ export default function StoreProducts({
         <div className={styles.notice} role="status">
           <h3>No hay productos para mostrar</h3>
           <p>
-            {query.available
-              ? "No hay productos activos con existencias para este filtro."
-              : "Esta tienda no tiene productos activos en esta página."}
+            {term
+              ? "No encontramos coincidencias. Probá con otro nombre o limpiá el buscador."
+              : query.available
+                ? "No hay productos activos con existencias para este filtro."
+                : "Esta tienda no tiene productos activos en esta página."}
           </p>
           {query.page > 0 ? (
             <button

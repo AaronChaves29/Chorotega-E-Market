@@ -178,7 +178,7 @@ test("rechaza filtros inexistentes, cambios de tienda y ordenamiento inseguro", 
   for (const query of [
     "idTienda=8",
     "estado=INACTIVO",
-    "nombre=jarra",
+    "desconocido=jarra",
     "sortBy=claveHash",
     "sortDirection=DROP",
     "soloDisponibles=yes",
@@ -279,4 +279,32 @@ test("precios string conservan céntimos y stock se valida sin inferencias visua
     ),
     false,
   );
+});
+
+test("nombre y fecha se transmiten sin perder el ámbito, y se rechazan duplicados o longitudes excesivas", () => {
+  const query = storeProductParams(
+    new URLSearchParams({
+      nombre: "  CAFÉ 100%_\\  ",
+      sortBy: "fechaPublicacion",
+      sortDirection: "DESC",
+    }),
+    7,
+  );
+  assert.equal(query.get("nombre"), "CAFÉ 100%_\\");
+  assert.equal(query.get("sortBy"), "fechaPublicacion");
+  assert.equal(query.get("idTienda"), "7");
+  assert.equal(query.get("estado"), "ACTIVO");
+  for (const input of ["nombre=a&nombre=b", "nombre=" + "a".repeat(151)])
+    assert.equal(storeProductParams(new URLSearchParams(input), 7), null);
+});
+
+test("fallo de red al consultar productos conserva la sesión y oculta detalles", async () => {
+  global.fetch = async (url) => {
+    if (url.endsWith("/stores/7")) return Response.json(store);
+    throw new Error("private-network-connection");
+  };
+  const response = await products()(request("nombre=Café"), context());
+  assert.equal(response.status, 502);
+  assert.equal(response.headers.get("set-cookie"), null);
+  assert.doesNotMatch(await response.text(), /private-network/);
 });

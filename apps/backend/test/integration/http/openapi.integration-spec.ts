@@ -150,6 +150,7 @@ const queryFields: Record<string, string[]> = {
   ],
   categories: ['page', 'size', 'nombre', 'estado', 'sortBy', 'sortDirection'],
   products: [
+    'nombre',
     'page',
     'size',
     'idTienda',

@@ -153,9 +153,6 @@ test(
         );
       const search = async (name) => {
         await browser.fill("#store-name", name);
-        await browser.evaluate(
-          "document.querySelector('form[role=search]').requestSubmit()",
-        );
         await settled();
       };
       const sort = async (value) => {
@@ -249,6 +246,61 @@ test(
             ),
             true,
           );
+        },
+      );
+      await t.test(
+        "escritura rápida consulta solo el término final, conserva foco y no necesita Enter",
+        async () => {
+          const queries = [];
+          service.search = async (query) => {
+            queries.push(query.nombre);
+            return originalSearch(query);
+          };
+          try {
+            await browser.evaluate(
+              "document.querySelector('#store-name').focus()",
+            );
+            await browser.fill("#store-name", "Al");
+            await browser.fill("#store-name", "Alfa");
+            await browser.fill("#store-name", "  ALFARERÍA  ");
+            assert.deepEqual(queries, []);
+            await settled();
+            assert.deepEqual(queries, ["ALFARERÍA"]);
+            assert.deepEqual(await titles(), names.slice(0, 6));
+            assert.equal(
+              await browser.evaluate("document.activeElement.id"),
+              "store-name",
+            );
+            assert.equal(
+              await browser.evaluate(
+                "!!document.querySelector('form[role=search]')",
+              ),
+              false,
+            );
+          } finally {
+            service.search = originalSearch;
+          }
+          await sort("nombre-DESC");
+          await click(
+            'nav[aria-label="Páginas de emprendimientos"] button:last-child',
+          );
+          await settled();
+          await search("Alfarería Alba");
+          assert.deepEqual(await titles(), ["Alfarería Alba"]);
+          assert.ok(
+            await browser.evaluate(
+              "document.body.innerText.includes('Página 1 de 1')",
+            ),
+          );
+          await search("");
+          assert.equal(
+            await browser.evaluate(
+              "document.querySelector('#store-sort').value",
+            ),
+            "nombre-DESC",
+          );
+          assert.equal((await titles()).length, 6);
+          await sort("nombre-ASC");
         },
       );
       await t.test(
@@ -438,9 +490,6 @@ test(
           };
           try {
             await browser.fill("#store-name", "Alfarería");
-            await browser.evaluate(
-              "document.querySelector('form[role=search]').requestSubmit()",
-            );
             await browser.wait(
               "document.querySelector('#emprendimientos').getAttribute('aria-busy') === 'true'",
               "loading",
@@ -590,9 +639,6 @@ test(
           });
           try {
             await browser.fill("#store-name", "Alfarería");
-            await browser.evaluate(
-              "document.querySelector('form[role=search]').requestSubmit()",
-            );
             await browser.wait(
               "location.pathname === '/login' && !!document.querySelector('#correo')",
               "cuenta revocada",

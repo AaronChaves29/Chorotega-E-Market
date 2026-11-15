@@ -36,13 +36,14 @@ Se muestran nombre, descripción, dirección, estado activo y teléfono/horario 
 
 La consulta está fijada por el ID de la ruta y `estado=ACTIVO`. No muestra productos de otras tiendas, INACTIVO ni AGOTADO. Los productos ACTIVO con cantidad cero se muestran como **Sin existencias**, sin acción de compra.
 
-| Parámetro         | Valores                                                                                  |
-| ----------------- | ---------------------------------------------------------------------------------------- |
-| `page`            | Entero no negativo desde cero.                                                           |
-| `size`            | 1–100; la página utiliza 6.                                                              |
-| `sortBy`          | `nombre`, `precio`, `idProducto`.                                                        |
-| `sortDirection`   | `ASC`, `DESC`; conserva el desempate del backend por ID.                                 |
-| `soloDisponibles` | `true` envía `disponible=true`; `false` omite ese filtro para incluir activos sin stock. |
+| Parámetro         | Valores                                                                                   |
+| ----------------- | ----------------------------------------------------------------------------------------- |
+| `nombre`          | Fragmento literal opcional, máximo 150 caracteres; la interfaz elimina espacios externos. |
+| `page`            | Entero no negativo desde cero.                                                            |
+| `size`            | 1–100; la página utiliza 6.                                                               |
+| `sortBy`          | `nombre`, `precio`, `idProducto`, `fechaPublicacion`.                                     |
+| `sortDirection`   | `ASC`, `DESC`; conserva el desempate del backend por ID.                                  |
+| `soloDisponibles` | `true` envía `disponible=true`; `false` omite ese filtro para incluir activos sin stock.  |
 
 Valores predeterminados: página 0, tamaño 6, nombre ASC, todos los productos ACTIVO. Se rechazan parámetros desconocidos o repetidos; el cliente no puede cambiar `idTienda` ni `estado` mediante query. El backend realiza filtrado, conteo, ordenamiento y paginación en PostgreSQL, sin filtrar ni ordenar páginas en memoria.
 
@@ -67,7 +68,7 @@ Diferencias intencionales:
 - No se asignan las fotografías de cerámica del ejemplo a tiendas/productos reales: ambos contratos carecen de imágenes. Las alternativas están identificadas como **Sin fotografía**.
 - Nombre, descripción, precio, cantidad, dirección, teléfono, horario y conteos proceden de datos; no se fija «Artesanías Chorotega», una categoría comercial ni seis productos.
 - Se omiten redes sociales, favoritos, notificaciones y carrito sin soporte funcional. El botón continúa al pedido; no simula agregar al carrito.
-- No hay búsqueda de productos por nombre ni orden «Novedades»: `ProductSearchQueryDto` no ofrece nombre como filtro ni fecha como columna de orden. Se ofrece el filtro real de existencias y órdenes admitidos, sin búsqueda parcial en memoria.
+- La implementación 3 no incluía búsqueda por nombre ni «Novedades». La [implementación 4](busquedas-en-vivo.md) añade ambos mediante consultas reales de PostgreSQL, conservando el filtro de existencias.
 - Se agrega información de contacto y disponibilidad que aporta el backend. La altura depende de los textos reales.
 - Móvil/tablet son adaptaciones del PNG de escritorio. No se afirma igualdad automática píxel a píxel.
 
