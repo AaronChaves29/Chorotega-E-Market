@@ -22,6 +22,7 @@ import { Store } from '../../stores/entities/store.entity';
 import { User } from '../../users/entities/user.entity';
 import { Product } from '../entities/product.entity';
 import { ProductsRepository } from './products.repository';
+import { ProductSearchQueryDto } from '../dto/product-search-query.dto';
 
 // Genera SQL con los metadatos reales sin abrir una conexión a PostgreSQL.
 class MetadataDataSource extends DataSource {
@@ -68,6 +69,36 @@ describe('ProductsRepository: consultas fijas', () => {
         return Promise.resolve(result);
       });
   }
+
+  it.each(['ASC', 'DESC'] as const)(
+    'busca nombre literal parametrizado y ordena fecha %s con desempate',
+    async (sortDirection) => {
+      jest
+        .spyOn(SelectQueryBuilder.prototype, 'getManyAndCount')
+        .mockImplementation(function (this: SelectQueryBuilder<Product>) {
+          [sql, parameters] = this.getQueryAndParameters();
+          return Promise.resolve<[Product[], number]>([[], 0]);
+        });
+      await repository.search(
+        Object.assign(new ProductSearchQueryDto(), {
+          nombre: "Cerámica 100%_\\'",
+          idTienda: 7,
+          estado: 'ACTIVO',
+          sortBy: 'fechaPublicacion',
+          sortDirection,
+          page: 1,
+          size: 6,
+        }),
+      );
+      expect(sql).toContain('"producto"."nombre" ILIKE $1');
+      expect(sql).not.toContain('Cerámica');
+      expect(parameters).toEqual(["%Cerámica 100\\%\\_\\\\'%", 7, 'ACTIVO']);
+      expect(sql).toContain(
+        `ORDER BY "producto"."fecha_publicacion" ${sortDirection}, "producto"."id_producto" ${sortDirection}`,
+      );
+      expect(sql).toContain('LIMIT 6 OFFSET 6');
+    },
+  );
 
   it('bloquea los productos solicitados con parámetros y orden por ID', async () => {
     const execute = captureQuery([]);

@@ -126,6 +126,16 @@ test(
         "Grano",
         "Hoja",
       ];
+      const dates = [
+        "2026-08-08",
+        "2026-08-03",
+        "2026-08-09",
+        "2026-08-03",
+        "2026-08-01",
+        "2026-08-05",
+        "2026-08-07",
+        "2026-08-03",
+      ];
       const prices = [
         "10000.11",
         "2000.12",
@@ -142,6 +152,7 @@ test(
             idTienda: shop.idTienda,
             idCategoria: category.idCategoria,
             nombre: names[i],
+            fechaPublicacion: new Date(`${dates[i]}T12:00:00Z`),
             descripcion:
               i === 0
                 ? "<img src=x onerror=alert(1)>"
@@ -432,6 +443,119 @@ test(
         },
       );
       await t.test(
+        "productos en vivo: debounce, foco, tildes, espacios, limpieza y orden conservado",
+        async () => {
+          await sort("precio-DESC");
+          await click(
+            'nav[aria-label="Páginas de productos"] button:last-child',
+          );
+          await settled();
+          const queries = [];
+          service.search = async (query) => {
+            queries.push({
+              nombre: query.nombre,
+              page: query.page,
+              sortBy: query.sortBy,
+              sortDirection: query.sortDirection,
+            });
+            return originalSearch(query);
+          };
+          try {
+            await browser.evaluate(
+              "document.querySelector('#product-name').focus()",
+            );
+            await browser.fill("#product-name", "CE");
+            await browser.fill("#product-name", "CERÁ");
+            await browser.fill("#product-name", "  CERÁMICA  ");
+            assert.deepEqual(queries, []);
+            await settled();
+            assert.deepEqual(queries, [
+              {
+                nombre: "CERÁMICA",
+                page: 0,
+                sortBy: "precio",
+                sortDirection: "DESC",
+              },
+            ]);
+            assert.deepEqual(await titleList(), ["Cerámica"]);
+            assert.equal(
+              await browser.evaluate("document.activeElement.id"),
+              "product-name",
+            );
+            await browser.fill("#product-name", "No existe");
+            await settled();
+            assert.deepEqual(await titleList(), []);
+            await browser.fill("#product-name", "");
+            await settled();
+            assert.equal(
+              await browser.evaluate(
+                "document.querySelector('#product-sort').value",
+              ),
+              "precio-DESC",
+            );
+            assert.equal((await titleList()).length, 6);
+          } finally {
+            service.search = originalSearch;
+          }
+          await sort("nombre-ASC");
+        },
+      );
+      await t.test(
+        "búsqueda literal de %/_ y barra inversa en PostgreSQL",
+        async () => {
+          const literal = "Flor 100%_\\real";
+          await products.update(saved[5].idProducto, { nombre: literal });
+          try {
+            await browser.fill("#product-name", "%_\\");
+            await settled();
+            assert.deepEqual(await titleList(), [literal]);
+          } finally {
+            await products.update(saved[5].idProducto, { nombre: names[5] });
+            await browser.fill("#product-name", "");
+            await settled();
+          }
+        },
+      );
+      await t.test(
+        "Novedades y Más antiguos usan fechas reales con desempate y paginación",
+        async () => {
+          await sort("fechaPublicacion-DESC");
+          assert.deepEqual(await titleList(), [
+            "Cerámica",
+            "Aroma",
+            "Grano",
+            "Flor",
+            "Hoja",
+            "Diseño",
+          ]);
+          await click(
+            'nav[aria-label="Páginas de productos"] button:last-child',
+          );
+          await settled();
+          assert.deepEqual(await titleList(), ["Barro", "Estrella"]);
+          await sort("fechaPublicacion-ASC");
+          assert.deepEqual(await titleList(), [
+            "Estrella",
+            "Barro",
+            "Diseño",
+            "Hoja",
+            "Flor",
+            "Grano",
+          ]);
+          await browser.fill("#product-name", "a");
+          await settled();
+          assert.equal(
+            await browser.evaluate(
+              "document.querySelector('#product-sort').value",
+            ),
+            "fechaPublicacion-ASC",
+          );
+          await browser.fill("#product-name", "");
+          await settled();
+          await sort("nombre-ASC");
+        },
+      );
+      await t.test(
         "filtro de existencias se ejecuta en PostgreSQL y reinicia página",
         async () => {
           await click(
@@ -552,7 +676,7 @@ test(
             `idTienda=${inactive.idTienda}`,
             "sortBy=claveHash",
             "sortDirection=DROP",
-            "nombre=Aroma",
+            "desconocido=Aroma",
             "soloDisponibles=yes",
           ])
             assert.equal(
@@ -627,7 +751,7 @@ test(
         },
       );
       await t.test(
-        "carga y respuesta anterior cancelada no sobrescriben el orden vigente",
+        "carga y cancelación inmediata impiden que una búsqueda anterior sobrescriba la nueva",
         async () => {
           await openShop();
           let started = false,
@@ -639,7 +763,7 @@ test(
             release = resolve;
           });
           service.search = async (query) => {
-            if (query.sortBy === "precio" && query.sortDirection === "ASC") {
+            if (query.nombre === "Barro") {
               started = true;
               await waiting;
               try {
@@ -650,32 +774,42 @@ test(
             }
             return originalSearch(query);
           };
+          await browser.evaluate(`(() => {
+            window.searchFetch = window.fetch;
+            window.searchAborted = false;
+            window.fetch = (url, options) => {
+              if (String(url).includes('nombre=Barro')) options.signal.addEventListener('abort', () => { window.searchAborted = true; }, {once:true});
+              return window.searchFetch(url, options);
+            };
+          })()`);
           try {
-            await browser.evaluate(
-              "(() => {const select=document.querySelector('#product-sort');select.value='precio-ASC';select.dispatchEvent(new Event('change',{bubbles:true}));})()",
-            );
+            await browser.fill("#product-name", "Barro");
             await browser.wait(
               "document.querySelector('#shop-products').getAttribute('aria-busy') === 'true'",
               "loading",
             );
             await until(() => started, "consulta antigua en NestJS");
-            await sort("nombre-DESC");
-            assert.deepEqual(
-              await titleList(),
-              names.slice().reverse().slice(0, 6),
+            await browser.fill("#product-name", "Cerámica");
+            assert.equal(
+              await browser.evaluate("window.searchAborted"),
+              true,
+              "AbortController cancela antes del nuevo debounce",
             );
+            await settled();
+            assert.deepEqual(await titleList(), ["Cerámica"]);
             release();
             await done;
-            assert.deepEqual(
-              await titleList(),
-              names.slice().reverse().slice(0, 6),
-            );
+            assert.deepEqual(await titleList(), ["Cerámica"]);
           } finally {
             release();
             release = undefined;
             service.search = originalSearch;
+            await browser.evaluate(
+              "window.fetch = window.searchFetch; delete window.searchFetch; delete window.searchAborted",
+            );
           }
-          await sort("nombre-ASC");
+          await browser.fill("#product-name", "");
+          await settled();
         },
       );
 

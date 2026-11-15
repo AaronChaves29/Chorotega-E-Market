@@ -22,6 +22,7 @@ import { ProductCategorySpecification } from '../specifications/product-category
 import type { PaginationResult } from '../../../common/pagination/pagination-result';
 import type { ProductSearchQueryDto } from '../dto/product-search-query.dto';
 import { ProductStateSpecification } from '../specifications/product-state.specification';
+import { ProductNameSpecification } from '../specifications/product-name.specification';
 
 export type NewProductData = Pick<
   Product,
@@ -166,6 +167,8 @@ export class ProductsRepository extends TypeOrmBaseRepository<
     filters: ProductSearchQueryDto,
   ): Promise<PaginationResult<Product>> {
     const specifications: ProductSpecification[] = [];
+    if (filters.nombre !== undefined)
+      specifications.push(new ProductNameSpecification(filters.nombre));
     if (filters.idTienda !== undefined)
       specifications.push(new ProductStoreSpecification(filters.idTienda));
     if (filters.idCategoria !== undefined)
@@ -186,6 +189,7 @@ export class ProductsRepository extends TypeOrmBaseRepository<
       precio: 'producto.precio',
       cantidadDisponible: 'producto.cantidadDisponible',
       estado: 'producto.estado',
+      fechaPublicacion: 'producto.fechaPublicacion',
     } as const;
     query.orderBy(columns[filters.sortBy], filters.sortDirection);
     if (filters.sortBy !== 'idProducto')

@@ -57,6 +57,7 @@ export function storeProductParams(
     "sortBy",
     "sortDirection",
     "soloDisponibles",
+    "nombre",
   ];
   if (
     [...input.keys()].some((key) => !allowed.includes(key)) ||
@@ -67,6 +68,7 @@ export function storeProductParams(
   const sizeText = input.get("size") ?? "6";
   const page = Number(pageText),
     size = Number(sizeText);
+  const nombre = input.get("nombre") ?? "";
   const sortBy = input.get("sortBy") ?? "nombre";
   const sortDirection = input.get("sortDirection") ?? "ASC";
   const available = input.get("soloDisponibles") ?? "false";
@@ -80,7 +82,8 @@ export function storeProductParams(
     size < 1 ||
     size > 100 ||
     !Number.isSafeInteger(page * size) ||
-    !["nombre", "precio", "idProducto"].includes(sortBy) ||
+    nombre.length > 150 ||
+    !["nombre", "precio", "idProducto", "fechaPublicacion"].includes(sortBy) ||
     !["ASC", "DESC"].includes(sortDirection) ||
     !["true", "false"].includes(available)
   )
@@ -94,6 +97,7 @@ export function storeProductParams(
     sortDirection,
   });
   if (available === "true") params.set("disponible", "true");
+  if (nombre.trim()) params.set("nombre", nombre.trim());
   return params;
 }
 

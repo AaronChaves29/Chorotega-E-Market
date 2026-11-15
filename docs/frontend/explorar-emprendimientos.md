@@ -51,7 +51,7 @@ Se muestran estados de carga, página vacía, ausencia de coincidencias y error 
 - Se omiten filtros por categoría y ubicación: el backend no clasifica tiendas por actividad ni tiene una ubicación estructurada utilizable como filtro. La dirección libre no se presenta como una clasificación geográfica.
 - La barra lateral muestra el alcance real **Tiendas activas**, la búsqueda aplicada y limpieza de filtros.
 - No se incluyen favoritos, notificaciones ni carrito inexistentes. Se conserva el menú de cuenta existente con la identidad autenticada.
-- El buscador incorpora un botón explícito **Buscar**, y admite envío con Enter.
+- La implementación 2 incorporó envío mediante **Buscar** o Enter. La [implementación 4](busquedas-en-vivo.md) lo sustituye por búsqueda automática con debounce de 300 ms, sin perder el foco y conservando el orden al limpiar.
 - Las tarjetas muestran datos reales, estado activo y dirección; no las seis copias editoriales del ejemplo ni una categoría no respaldada por datos.
 - Se incorpora paginación real. La altura de las tarjetas depende de sus textos, y las variantes móviles son adaptaciones del PNG de escritorio. No se afirma equivalencia píxel a píxel.
 

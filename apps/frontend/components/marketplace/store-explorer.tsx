@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import MarketplaceHeader from "./marketplace-header";
 import { isStorePage } from "@/lib/store-search";
 import type { CurrentUser } from "@/types/auth";
@@ -48,8 +49,8 @@ export default function StoreExplorer({
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState("");
+  const { term, pending } = useDebouncedSearch(draft);
   const [query, setQuery] = useState({
-    nombre: "",
     order: "nombre-ASC" as Order,
     page: 0,
   });
@@ -62,17 +63,18 @@ export default function StoreExplorer({
   const params = new URLSearchParams({
     page: String(query.page),
     size: "6",
-    nombre: query.nombre,
+    nombre: term,
     sortBy: orders[query.order].sortBy,
     sortDirection: orders[query.order].sortDirection,
   }).toString();
   const key = `${params}:${attempt}`;
-  const current = result.key === key;
+  const current = !pending && result.key === key;
   const data = current ? result.data : null;
   const error = current && result.error;
   const loading = !current;
 
   useEffect(() => {
+    if (pending) return;
     const controller = new AbortController();
     async function load() {
       try {
@@ -100,11 +102,11 @@ export default function StoreExplorer({
     }
     void load();
     return () => controller.abort();
-  }, [params, key, router]);
+  }, [params, key, router, pending]);
 
   function clear() {
     setDraft("");
-    setQuery({ nombre: "", order: "nombre-ASC", page: 0 });
+    setQuery((previous) => ({ ...previous, page: 0 }));
   }
 
   return (
@@ -143,18 +145,7 @@ export default function StoreExplorer({
         </section>
 
         <div className={styles.toolbar}>
-          <form
-            className={styles.search}
-            role="search"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setQuery((previous) => ({
-                ...previous,
-                nombre: draft.trim(),
-                page: 0,
-              }));
-            }}
-          >
+          <div className={styles.search} role="search">
             <label htmlFor="store-name" className={styles.srOnly}>
               Buscar emprendimientos por nombre
             </label>
@@ -165,10 +156,12 @@ export default function StoreExplorer({
               maxLength={150}
               placeholder="Buscar emprendimientos…"
               value={draft}
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={(event) => {
+                setDraft(event.target.value);
+                setQuery((previous) => ({ ...previous, page: 0 }));
+              }}
             />
-            <button type="submit">Buscar</button>
-          </form>
+          </div>
           <div className={styles.sort}>
             <label htmlFor="store-sort">Ordenar por</label>
             <select
@@ -198,7 +191,7 @@ export default function StoreExplorer({
             <p className={styles.badge}>Tiendas activas</p>
             <p className={styles.filterLabel}>Nombre del negocio</p>
             <p className={styles.filterValue}>
-              {query.nombre || "Todos los nombres"}
+              {draft.trim() || "Todos los nombres"}
             </p>
             <p className={styles.filterHelp}>
               Usá el buscador para encontrar un emprendimiento por su nombre.
