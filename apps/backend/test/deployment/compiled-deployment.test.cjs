@@ -99,7 +99,7 @@ for (const entry of ['migrate', 'start-render']) {
   });
 }
 
-test('el artefacto carga cuatro migraciones JS y sus nueve entidades sin herramientas de desarrollo', () => {
+test('el artefacto carga cinco migraciones JS y sus nueve entidades sin herramientas de desarrollo', () => {
   const result = spawnSync(
     process.execPath,
     [
@@ -112,7 +112,8 @@ test('el artefacto carga cuatro migraciones JS y sus nueve entidades sin herrami
       await source.buildMetadatas();
       assert.equal(source.isInitialized, false);
       assert.equal(source.entityMetadatas.length, 9);
-      assert.equal(source.migrations.length, 4);
+      assert.equal(source.migrations.length, 5);
+      assert.equal(source.migrations[4].constructor.name, 'AddStoreSocialContact1794772600000');
       assert.equal(source.options.synchronize, false);
       assert.equal(source.options.migrationsRun, false);
       assert.equal(source.options.ssl.rejectUnauthorized, true);

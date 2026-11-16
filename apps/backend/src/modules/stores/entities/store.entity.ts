@@ -53,6 +53,30 @@ export class Store {
   @Column({ type: 'varchar', length: 20, nullable: true })
   telefono!: string | null;
 
+  @Column({
+    name: 'instagram_url',
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
+  instagramUrl!: string | null;
+
+  @Column({
+    name: 'facebook_url',
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
+  facebookUrl!: string | null;
+
+  @Column({
+    name: 'whatsapp_comercial',
+    type: 'varchar',
+    length: 16,
+    nullable: true,
+  })
+  whatsappComercial!: string | null;
+
   @Column({ type: 'varchar', length: 150, nullable: true })
   horario!: string | null;
 

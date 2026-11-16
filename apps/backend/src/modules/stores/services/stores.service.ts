@@ -1,3 +1,4 @@
+import { normalizeStoreSocialContact } from '../validation/store-social-contact';
 import type { AuthenticatedUser } from '../../../auth/interfaces/authenticated-user.interface';
 import { assertCatalogWriter } from '../../../common/security/catalog-write-access';
 import {
@@ -55,7 +56,11 @@ export class StoresService {
     const ownerId =
       actor.rol === 'EMPRENDEDOR' ? actor.idUsuario : dto.idEmprendedor;
     await this.requireUser(ownerId, actor.rol === 'ADMIN');
+    const social = normalizeStoreSocialContact(dto);
     const store = this.storesRepository.createEntity({
+      instagramUrl: social.instagramUrl ?? null,
+      facebookUrl: social.facebookUrl ?? null,
+      whatsappComercial: social.whatsappComercial ?? null,
       idEmprendedor: ownerId,
       direccion: dto.direccion,
       telefono: dto.telefono ?? null,
@@ -86,7 +91,8 @@ export class StoresService {
       throw new ForbiddenException(
         'No se permite transferir la propiedad de una tienda.',
       );
-    const data: Partial<Omit<StoreData, 'idEmprendedor'>> = {};
+    const data: Partial<Omit<StoreData, 'idEmprendedor'>> =
+      normalizeStoreSocialContact(dto);
     if (dto.direccion !== undefined) data.direccion = dto.direccion;
     if (dto.telefono !== undefined) data.telefono = dto.telefono;
     if (dto.horario !== undefined) data.horario = dto.horario;

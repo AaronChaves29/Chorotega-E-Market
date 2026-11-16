@@ -118,8 +118,66 @@ describe('Entrepreneur registration: HTTP and ephemeral PostgreSQL transaction',
     await request(server()).post(path).send(minimal).expect(201);
     expect(
       await source().getRepository(Store).findOneByOrFail({ idTienda: 1 }),
-    ).toMatchObject({ descripcion: null, horario: null, telefono: null });
+    ).toMatchObject({
+      descripcion: null,
+      horario: null,
+      telefono: null,
+      instagramUrl: null,
+      facebookUrl: null,
+      whatsappComercial: null,
+    });
   });
+  it('persists canonical contacts independently of personal phone and returns them through the mapper', async () => {
+    const body = input();
+    const response = await request(server())
+      .post(path)
+      .send({
+        ...body,
+        tienda: {
+          ...body.tienda,
+          instagramUrl: 'https://instagram.com/local/',
+          facebookUrl: 'https://facebook.com/profile.php?id=123456',
+          whatsappComercial: '+506 7777-7777',
+        },
+      })
+      .expect(201);
+    expect(response.body).toMatchObject({
+      tienda: {
+        instagramUrl: 'https://www.instagram.com/local/',
+        facebookUrl: 'https://www.facebook.com/profile.php?id=123456',
+        whatsappComercial: '50677777777',
+        telefono: body.telefono,
+      },
+    });
+    expect(
+      await source().getRepository(Store).findOneByOrFail({ idTienda: 1 }),
+    ).toMatchObject({ whatsappComercial: '50677777777' });
+  });
+  it('does not copy the personal phone to commercial WhatsApp', async () => {
+    await request(server()).post(path).send(input()).expect(201);
+    expect(
+      await source().getRepository(Store).findOneByOrFail({ idTienda: 1 }),
+    ).toMatchObject({ telefono: '+506 8888-8888', whatsappComercial: null });
+  });
+  it.each([
+    { instagramUrl: 'https://instagram.com/p/123/' },
+    { facebookUrl: 'https://facebook.com/l.php?u=evil' },
+    { whatsappComercial: '0050688888888' },
+  ])(
+    'rejects invalid nested contacts without creating either record %#',
+    async (contacts) => {
+      const body = input();
+      const response = await request(server())
+        .post(path)
+        .send({ ...body, tienda: { ...body.tienda, ...contacts } })
+        .expect(400);
+      expect(response.headers['content-type']).toMatch(
+        /application\/problem\+json/,
+      );
+      expect(await source().getRepository(User).count()).toBe(0);
+      expect(await source().getRepository(Store).count()).toBe(0);
+    },
+  );
   it('rejects a duplicate client email without changing its role or creating a store', async () => {
     const body = input();
     await request(server())
@@ -163,7 +221,14 @@ describe('Entrepreneur registration: HTTP and ephemeral PostgreSQL transaction',
       `CREATE TRIGGER fail_entrepreneur_store AFTER INSERT ON tienda FOR EACH ROW EXECUTE FUNCTION fail_entrepreneur_store()`,
     );
     const body = input();
-    const response = await request(server()).post(path).send(body).expect(500);
+    const withContacts = {
+      ...body,
+      tienda: { ...body.tienda, instagramUrl: 'https://instagram.com/local/' },
+    };
+    const response = await request(server())
+      .post(path)
+      .send(withContacts)
+      .expect(500);
     expect(response.text).not.toMatch(
       /private-store-failure|INSERT|clave|driverError|stack/,
     );

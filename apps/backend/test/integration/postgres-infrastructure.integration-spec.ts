@@ -43,6 +43,7 @@ describe('Infraestructura PostgreSQL con Testcontainers', () => {
         { name: 'AlignTimestampDefaults1788998400000' },
         { name: 'AddPasswordHashToUser1791352458237' },
         { name: 'AddProductVersion1793296800000' },
+        { name: 'AddStoreSocialContact1794772600000' },
       ]);
       expect(await dataSource.showMigrations()).toBe(false);
       return database;
