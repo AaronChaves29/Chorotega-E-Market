@@ -144,6 +144,13 @@ export default function StoreManager() {
                   <div className={styles.actions}>
                     <Link
                       className={styles.button}
+                      href={`/mi-negocio/tiendas/${store.idTienda}/productos`}
+                      prefetch={false}
+                    >
+                      Gestionar productos
+                    </Link>
+                    <Link
+                      className={styles.button}
                       href={`/mi-negocio/tiendas/${store.idTienda}/editar`}
                       prefetch={false}
                     >
