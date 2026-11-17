@@ -100,6 +100,11 @@ export default function AccountMenu({
           {user.rol === "ADMIN" && adminUrl ? (
             <a href={adminUrl}>Panel administrativo</a>
           ) : null}
+          {user.rol === "EMPRENDEDOR" ? (
+            <Link href="/mi-negocio/tiendas" prefetch={false}>
+              Mi negocio
+            </Link>
+          ) : null}
         </nav>
         <LogoutButton />
       </div>
