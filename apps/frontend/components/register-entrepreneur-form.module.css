@@ -1,0 +1,31 @@
+.socialSection {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 18px;
+  min-width: 0;
+  border: 1px solid #d4d8cf;
+  border-radius: 12px;
+  background: #f7f3ea;
+}
+.socialSection legend {
+  padding: 0 6px;
+  color: #203b30;
+  font-size: 14px;
+  font-weight: 700;
+}
+.intro {
+  margin: 0;
+  color: #244f3e;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.fieldError {
+  margin: 0;
+  color: #702b3d;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.socialSection input[aria-invalid="true"] {
+  border-color: #702b3d;
+}

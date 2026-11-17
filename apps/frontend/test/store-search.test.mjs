@@ -191,6 +191,9 @@ test("valida páginas vacías y datos reales antes de renderizar; rechaza contra
     nombre: "<script>texto</script>",
     descripcion: null,
     direccion: "Nicoya",
+    instagramUrl: null,
+    facebookUrl: null,
+    whatsappComercial: null,
     estado: "ACTIVA",
   };
   assert.equal(

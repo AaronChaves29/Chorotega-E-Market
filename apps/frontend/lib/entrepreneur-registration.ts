@@ -1,3 +1,4 @@
+import { socialContactErrors } from "./store-social-contact";
 import { validateRegistrationContact } from "./registration-validation";
 export type EntrepreneurRegistrationInput = {
   nombre: string;
@@ -10,6 +11,9 @@ export type EntrepreneurRegistrationInput = {
     direccion: string;
     descripcion?: string | null;
     horario?: string | null;
+    instagramUrl?: string | null;
+    facebookUrl?: string | null;
+    whatsappComercial?: string | null;
   };
 };
 
@@ -44,7 +48,16 @@ export function validateEntrepreneurRegistration(value: unknown): string[] {
   const store = input.tienda as Record<string, unknown>;
   if (
     Object.keys(store).some(
-      (key) => !["nombre", "direccion", "descripcion", "horario"].includes(key),
+      (key) =>
+        ![
+          "nombre",
+          "direccion",
+          "descripcion",
+          "horario",
+          "instagramUrl",
+          "facebookUrl",
+          "whatsappComercial",
+        ].includes(key),
     )
   )
     errors.push("El negocio contiene campos no permitidos.");
@@ -65,5 +78,6 @@ export function validateEntrepreneurRegistration(value: unknown): string[] {
         `${field === "descripcion" ? "La descripción" : "El horario"} no debe superar ${max} caracteres.`,
       );
   }
+  errors.push(...Object.values(socialContactErrors(store)));
   return errors;
 }

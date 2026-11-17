@@ -46,6 +46,9 @@ const store = {
   direccion: "Nicoya",
   telefono: null,
   horario: null,
+  instagramUrl: null,
+  facebookUrl: null,
+  whatsappComercial: null,
   estado: "ACTIVA",
 };
 const product = {

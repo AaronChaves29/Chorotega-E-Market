@@ -10,6 +10,7 @@ import {
   type StoreDetail,
 } from "@/lib/store-detail";
 import type { CurrentUser } from "@/types/auth";
+import StoreSocialLinks from "./store-social-links";
 import StoreProducts from "./store-products";
 import styles from "./store-detail.module.css";
 
@@ -155,6 +156,7 @@ export default function StoreDetailView({
                   </div>
                 ) : null}
               </dl>
+              <StoreSocialLinks store={store} />
             </div>
             <span className={styles.emblem}>
               <Image

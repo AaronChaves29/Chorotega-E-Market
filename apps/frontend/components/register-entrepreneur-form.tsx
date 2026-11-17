@@ -2,6 +2,12 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
+import {
+  socialContactErrors,
+  socialFields,
+  type SocialFieldErrors,
+} from "@/lib/store-social-contact";
+import styles from "./register-entrepreneur-form.module.css";
 import RegistrationAccountFields from "./registration-account-fields";
 import {
   validateEntrepreneurRegistration,
@@ -11,6 +17,7 @@ import {
 export default function RegisterEntrepreneurForm() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<SocialFieldErrors>({});
   const [registered, setRegistered] = useState(false);
   const submitting = useRef(false);
 
@@ -32,13 +39,30 @@ export default function RegisterEntrepreneurForm() {
         direccion: text("direccion").trim(),
         descripcion: text("descripcion").trim(),
         horario: text("horario").trim(),
+        ...Object.fromEntries(
+          socialFields.flatMap((field) => {
+            const value = text(field).trim();
+            return value ? [[field, value]] : [];
+          }),
+        ),
       },
     };
     const validation = validateEntrepreneurRegistration(body);
     if (body.clave !== text("confirmacion"))
       validation.push("Las contraseñas no coinciden.");
-    setErrors(validation);
-    if (validation.length) return;
+    const contactErrors = socialContactErrors(body.tienda);
+    setFieldErrors(contactErrors);
+    setErrors(
+      validation.filter(
+        (message) => !Object.values(contactErrors).includes(message),
+      ),
+    );
+    if (validation.length) {
+      const first = socialFields.find((field) => contactErrors[field]);
+      if (first)
+        (form.elements.namedItem(first) as HTMLInputElement | null)?.focus();
+      return;
+    }
     submitting.current = true;
     setLoading(true);
     try {
@@ -156,11 +180,77 @@ export default function RegisterEntrepreneurForm() {
           placeholder="Ejemplo: lunes a viernes, 8 a. m. a 5 p. m."
         />
       </div>
+      <fieldset
+        className={styles.socialSection}
+        aria-describedby="entrepreneur-social-help"
+      >
+        <legend>Redes sociales y contacto comercial</legend>
+        <p id="entrepreneur-social-help" className={styles.intro}>
+          Opcional. Registrá solo los contactos comerciales que querés publicar.
+          Se mostrarán en la página de tu tienda a usuarios autenticados. El
+          WhatsApp comercial es independiente de tu teléfono personal.
+        </p>
+        {socialFields.map((field) => {
+          const label =
+            field === "instagramUrl"
+              ? "Instagram"
+              : field === "facebookUrl"
+                ? "Facebook"
+                : "WhatsApp comercial";
+          const help =
+            field === "instagramUrl"
+              ? "Perfil HTTPS de Instagram, sin publicaciones ni parámetros."
+              : field === "facebookUrl"
+                ? "Perfil HTTPS por nombre o profile.php?id=numérico, sin parámetros adicionales."
+                : "Incluí el código de país. No ingresés una URL ni un número local sin código.";
+          return (
+            <div className="registration-field" key={field}>
+              <label htmlFor={`entrepreneur-${field}`}>
+                {label}{" "}
+                <span className="registration-optional">(opcional)</span>
+              </label>
+              <input
+                id={`entrepreneur-${field}`}
+                name={field}
+                type={field === "whatsappComercial" ? "tel" : "text"}
+                inputMode={field === "whatsappComercial" ? "tel" : "url"}
+                maxLength={field === "whatsappComercial" ? 64 : 500}
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                placeholder={
+                  field === "instagramUrl"
+                    ? "https://www.instagram.com/tu_negocio/"
+                    : field === "facebookUrl"
+                      ? "https://www.facebook.com/TuNegocio/"
+                      : "+506 8888-8888"
+                }
+                aria-invalid={fieldErrors[field] ? true : undefined}
+                aria-describedby={`entrepreneur-${field}-help${fieldErrors[field] ? ` entrepreneur-${field}-error` : ""}`}
+              />
+              <p
+                id={`entrepreneur-${field}-help`}
+                className="registration-help"
+              >
+                {help}
+              </p>
+              {fieldErrors[field] ? (
+                <p
+                  id={`entrepreneur-${field}-error`}
+                  className={styles.fieldError}
+                  role="alert"
+                >
+                  {fieldErrors[field]}
+                </p>
+              ) : null}
+            </div>
+          );
+        })}
+      </fieldset>
       <aside className="registration-pending" aria-label="Funciones pendientes">
-        <strong>Logo del negocio y redes sociales</strong>
+        <strong>Logo del negocio</strong>
         <p>
-          Pendientes de integración. No se solicitan ni se guardan en este
-          registro.
+          Pendiente de integración. No se solicitan imágenes en este registro.
         </p>
       </aside>
       {errors.length > 0 ? (

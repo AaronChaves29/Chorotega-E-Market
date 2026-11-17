@@ -8,6 +8,9 @@ export type StoreDetail = Pick<
   | "direccion"
   | "telefono"
   | "horario"
+  | "instagramUrl"
+  | "facebookUrl"
+  | "whatsappComercial"
   | "estado"
 >;
 export type StoreProduct = Pick<
@@ -42,6 +45,11 @@ export function isStoreDetail(value: unknown): value is StoreDetail {
     (store.descripcion === null || typeof store.descripcion === "string") &&
     (store.telefono === null || typeof store.telefono === "string") &&
     (store.horario === null || typeof store.horario === "string") &&
+    ["instagramUrl", "facebookUrl", "whatsappComercial"].every(
+      (field) =>
+        store[field as keyof StoreDetail] === null ||
+        typeof store[field as keyof StoreDetail] === "string",
+    ) &&
     ["ACTIVA", "INACTIVA"].includes(String(store.estado))
   );
 }

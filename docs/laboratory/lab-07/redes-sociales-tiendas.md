@@ -151,7 +151,11 @@ validación impide ambas inserciones. Si falla el INSERT de tienda se revierte
 el usuario; se verifica con un trigger temporal de prueba, no mediante errores
 simulados del repositorio.
 
-## Frontend y trabajo pendiente
+## Frontend al cerrar la fase A (estado histórico)
+
+La [fase 6B](../../frontend/redes-sociales-tiendas.md) amplía posteriormente el
+registro y el detalle con contactos. Los párrafos siguientes describen el límite
+original de esta fase backend; no representan el estado frontend de la fase 6B.
 
 La fase A no modifica Next.js. El registro existente sin contactos sigue
 funcionando. Su intermediario mantiene una whitelist que todavía **rechaza**

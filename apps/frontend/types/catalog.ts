@@ -6,6 +6,9 @@ export interface Store {
   direccion: string;
   telefono: string | null;
   horario: string | null;
+  instagramUrl: string | null;
+  facebookUrl: string | null;
+  whatsappComercial: string | null;
   estado: "ACTIVA" | "INACTIVA";
   fechaCreacion: string;
 }

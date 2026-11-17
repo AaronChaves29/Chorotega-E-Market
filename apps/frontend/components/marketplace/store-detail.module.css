@@ -379,3 +379,42 @@
     gap: 12px;
   }
 }
+
+.socialLinks {
+  margin-top: 24px;
+  min-width: 0;
+}
+.socialHeading {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 12px !important;
+  line-height: 1.5;
+}
+.socialList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.socialLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #f7f3ea80;
+  border-radius: 10px;
+  color: #f7f3ea !important;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.socialLink svg {
+  flex-shrink: 0;
+}
+.socialLink:hover {
+  background: #f7f3ea18;
+}
+.socialLink:focus-visible {
+  outline: 3px solid #f7f3ea;
+  outline-offset: 3px;
+}
