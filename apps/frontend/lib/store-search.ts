@@ -62,6 +62,11 @@ export function isStorePage(value: unknown): value is PaginatedResponse<Store> {
         typeof item.nombre === "string" &&
         typeof item.direccion === "string" &&
         (item.descripcion === null || typeof item.descripcion === "string") &&
+        ["instagramUrl", "facebookUrl", "whatsappComercial"].every(
+          (field) =>
+            item[field as keyof Store] === null ||
+            typeof item[field as keyof Store] === "string",
+        ) &&
         item.estado === "ACTIVA"
       );
     })

@@ -1,4 +1,5 @@
 import "server-only";
+import { safeStoreSocialContacts } from "@/lib/store-social-contact";
 import { NextResponse } from "next/server";
 import { apiRequest, SESSION_COOKIE } from "@/lib/api-client";
 import { isStoreDetail, type StoreDetail } from "@/lib/store-detail";
@@ -51,6 +52,7 @@ export async function activeStore(
       direccion,
       telefono,
       horario,
+      ...safeStoreSocialContacts(data),
       estado,
     },
   };

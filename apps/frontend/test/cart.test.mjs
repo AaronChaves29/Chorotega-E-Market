@@ -217,6 +217,9 @@ test("revisión BFF consulta tienda y productos reales, parametriza ID y proyect
         direccion: "Nicoya",
         telefono: null,
         horario: null,
+        instagramUrl: null,
+        facebookUrl: null,
+        whatsappComercial: null,
         estado: "ACTIVA",
         secret: "private",
       });
@@ -241,6 +244,9 @@ test("revisión BFF marca producto ajeno o inactivo no disponible y oculta error
         direccion: "Nicoya",
         telefono: null,
         horario: null,
+        instagramUrl: null,
+        facebookUrl: null,
+        whatsappComercial: null,
         estado: "ACTIVA",
       });
     return mode === "other"

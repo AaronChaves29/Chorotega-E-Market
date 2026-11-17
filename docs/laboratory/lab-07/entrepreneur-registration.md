@@ -60,13 +60,15 @@ Se conserva la estructura verde/crema de dos paneles y se usan emblema y fotogra
 locales descargados del nodo Figma `2023:52729`. Se agregan nombre y apellido
 personales y direccion porque el modelo existente los exige. El horario es opcional.
 
-El frontend todavía no captura redes sociales ni imágenes. La ampliación backend
-fase A incorpora `instagramUrl`, `facebookUrl` y `whatsappComercial` opcionales dentro
-de `tienda`, con validación, normalización y una migración aditiva. No modifica este
-formulario ni su intermediario; el registro anterior conserva su comportamiento.
-WhatsApp comercial nunca se copia desde `telefono`. Véanse
-[contratos, migración y formatos admitidos](redes-sociales-tiendas.md).
-No se incorpora almacenamiento de imágenes, dashboards ni notificaciones.
+La fase 6B añade Instagram, Facebook y WhatsApp comercial opcionales al formulario,
+con validación por campo y aviso de publicación para usuarios autenticados.
+Los campos vacíos se omiten y WhatsApp nunca se copia desde `telefono`.
+El intermediario acepta los tres campos dentro de `tienda`; NestJS conserva la
+validación definitiva y la persistencia transaccional de la fase A.
+Véanse los [contratos y migración](redes-sociales-tiendas.md) y la
+[integración frontend y pruebas de la fase 6B](../../frontend/redes-sociales-tiendas.md).
+Las imágenes del negocio y la edición de tiendas siguen pendientes; no se
+incorporan dashboards ni notificaciones.
 
 ## Verificacion segura
 

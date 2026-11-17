@@ -162,10 +162,29 @@ test(
         await settled();
       };
       const login = async (role = "CLIENTE") => {
-        await browser.navigate(`${origin}/login`);
+        // Reuse the current login document instead of matching its old DOM
+        // while a second navigation replaces it.
+        if (await browser.evaluate("location.pathname !== '/login'"))
+          await browser.navigate(`${origin}/login`);
         await browser.wait(
-          "location.pathname === '/login' && !!document.querySelector('#correo')",
-          "login",
+          "location.pathname === '/login' && document.readyState === 'complete' && !!document.querySelector('form.login-form #correo') && !!document.querySelector('.login-password-toggle')",
+          "formulario de login cargado",
+        );
+        assert.equal(
+          await browser.evaluate("document.querySelector('#clave').type"),
+          "password",
+        );
+        // SSR fields alone do not prove hydration. Observe React updating the
+        // existing visibility control before entering either credential.
+        await click('.login-password-toggle[aria-label="Mostrar contraseña"]');
+        await browser.wait(
+          "document.querySelector('#clave')?.type === 'text' && !!document.querySelector('.login-password-toggle[aria-label=\"Ocultar contraseña\"][aria-pressed=\"true\"]')",
+          "React muestra la contraseña",
+        );
+        await click('.login-password-toggle[aria-label="Ocultar contraseña"]');
+        await browser.wait(
+          "document.querySelector('#clave')?.type === 'password' && !!document.querySelector('.login-password-toggle[aria-label=\"Mostrar contraseña\"][aria-pressed=\"false\"]')",
+          "React oculta la contraseña",
         );
         await browser.fill("#correo", accounts[role].correo);
         await browser.fill("#clave", password);
