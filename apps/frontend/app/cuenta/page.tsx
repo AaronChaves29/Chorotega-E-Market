@@ -55,6 +55,15 @@ export default async function AccountPage() {
                 </p>
               </>
             ) : null}
+            {user.rol === "EMPRENDEDOR" ? (
+              <Link
+                className="account-action"
+                href="/mi-negocio/tiendas"
+                prefetch={false}
+              >
+                Gestionar mi negocio
+              </Link>
+            ) : null}
           </section>
         </div>
       </main>
