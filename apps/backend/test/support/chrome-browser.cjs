@@ -2,6 +2,89 @@ const { spawn, spawnSync } = require('node:child_process');
 const { existsSync, mkdtempSync, realpathSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
+const { performance } = require('node:perf_hooks');
+
+const preflightDiagnostics = new WeakMap();
+const preflightCauses = new Set([
+  'timeout',
+  'execution_error',
+  'nonzero_exit',
+  'unrecognized_version',
+  'unknown_result',
+  'binary_missing',
+  'binary_unreadable',
+  'unexpected',
+]);
+const preflightSignals = new Set([
+  'SIGTERM',
+  'SIGKILL',
+  'SIGABRT',
+  'SIGSEGV',
+  'SIGINT',
+]);
+const preflightErrorCodes = new Set([
+  'ETIMEDOUT',
+  'ENOENT',
+  'EACCES',
+  'EPERM',
+  'EAGAIN',
+  'ENOMEM',
+  'E2BIG',
+  'ENOBUFS',
+  'ERR_CHILD_PROCESS_STDIO_MAXBUFFER',
+]);
+
+function preflightFailure(
+  cause,
+  { result, error, durationMs = 0, versionRecognized = false } = {},
+) {
+  let status,
+    signal,
+    stdout,
+    stderr,
+    code = 'none';
+  try {
+    status = result?.status;
+    signal = result?.signal;
+    stdout = result?.stdout;
+    stderr = result?.stderr;
+    const executionError = error ?? result?.error;
+    if (executionError) {
+      const candidateCode = executionError.code;
+      code = preflightErrorCodes.has(candidateCode) ? candidateCode : 'unknown';
+    }
+  } catch {
+    code = 'unknown';
+  }
+  const duration = Math.round(durationMs);
+  const diagnostic = Object.freeze({
+    event: 'chrome_preflight_failed',
+    cause: preflightCauses.has(cause) ? cause : 'unexpected',
+    exit:
+      Number.isInteger(status) && status >= -2147483648 && status <= 4294967295
+        ? status
+        : 'unknown',
+    signal: preflightSignals.has(signal) ? signal : 'none',
+    node_code: code,
+    duration_ms:
+      Number.isSafeInteger(duration) && duration >= 0 ? duration : 'unknown',
+    stdout_present:
+      (typeof stdout === 'string' || Buffer.isBuffer(stdout)) &&
+      stdout.length > 0,
+    version_recognized: versionRecognized === true,
+    class: chromeFailureClass(
+      typeof stderr === 'string'
+        ? stderr.slice(0, 8192)
+        : Buffer.isBuffer(stderr)
+          ? stderr.subarray(0, 8192).toString('utf8')
+          : '',
+    ),
+  });
+  // No original exception or process output is attached to the thrown error.
+  const failure = new Error(JSON.stringify(diagnostic));
+  preflightDiagnostics.set(failure, diagnostic);
+  return failure;
+}
 
 const knownLocations = [
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -40,15 +123,18 @@ function inspectChrome({
   execute = spawnSync,
   realpath = realpathSync,
 } = {}) {
-  const candidates = [
-    ...(env.CHROME_BIN ? [env.CHROME_BIN] : knownLocations),
-  ].filter(Boolean);
-  const binary = candidates.find((path) => exists(path));
-  if (!binary)
-    throw new Error(
-      'Se requiere Chrome/Chromium local o CHROME_BIN para test:browser.',
-    );
+  let binary;
+  try {
+    const candidates = [
+      ...(env.CHROME_BIN ? [env.CHROME_BIN] : knownLocations),
+    ].filter(Boolean);
+    binary = candidates.find((path) => exists(path));
+  } catch (error) {
+    throw preflightFailure('unexpected', { error });
+  }
+  if (!binary) throw preflightFailure('binary_missing');
   let result;
+  const started = performance.now();
   try {
     result = execute(binary, ['--version'], {
       encoding: 'utf8',
@@ -56,22 +142,56 @@ function inspectChrome({
       maxBuffer: 8192,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-  } catch {
-    throw new Error('Chrome preflight cause=version_spawn_failed');
+  } catch (error) {
+    let cause = 'execution_error';
+    try {
+      if (error?.code === 'ETIMEDOUT') cause = 'timeout';
+    } catch {
+      cause = 'unexpected';
+    }
+    throw preflightFailure(cause, {
+      error,
+      durationMs: performance.now() - started,
+    });
   }
-  const version =
-    /^(?:Google Chrome(?: for Testing)?|Chromium) (\d+\.\d+\.\d+\.\d+)\b/m.exec(
-      result.stdout ?? '',
-    )?.[1];
-  if (result.error || result.status !== 0 || !version)
-    throw new Error(
-      `Chrome preflight cause=version_failed class=${chromeFailureClass(String(result.stderr ?? '').slice(0, 8192))}`,
-    );
+  const durationMs = performance.now() - started;
+  let version;
+  try {
+    version =
+      /^(?:Google Chrome(?: for Testing)?|Chromium) (\d+\.\d+\.\d+\.\d+)\b/m.exec(
+        result.stdout ?? '',
+      )?.[1];
+    if (result.error || result.status !== 0 || !version) {
+      const cause =
+        result.error?.code === 'ETIMEDOUT'
+          ? 'timeout'
+          : result.error || preflightSignals.has(result.signal)
+            ? 'execution_error'
+            : Number.isInteger(result.status) && result.status !== 0
+              ? 'nonzero_exit'
+              : result.status === 0 && !version
+                ? 'unrecognized_version'
+                : 'unknown_result';
+      throw preflightFailure(cause, {
+        result,
+        durationMs,
+        versionRecognized: !!version,
+      });
+    }
+  } catch (error) {
+    if (preflightDiagnostics.has(error)) throw error;
+    throw preflightFailure('unknown_result', { result, durationMs });
+  }
   let resolved;
   try {
     resolved = realpath(binary);
-  } catch {
-    throw new Error('Chrome preflight cause=binary_unreadable');
+  } catch (error) {
+    throw preflightFailure('binary_unreadable', {
+      result,
+      error,
+      durationMs,
+      versionRecognized: true,
+    });
   }
   // Only known system locations and numeric versions may reach CI logs.
   const allowed = [
@@ -349,14 +469,10 @@ if (require.main === module && process.argv[2] === '--check') {
     inspectChrome();
   } catch (error) {
     // Fail closed if an unexpected exception escapes the controlled preflight.
-    const message = String(error.message);
-    console.error(
-      /^(?:Se requiere Chrome\/Chromium local o CHROME_BIN para test:browser\.|Chrome preflight cause=(?:version_spawn_failed|binary_unreadable)|Chrome preflight cause=version_failed class=(?:sandbox|shared_memory|missing_library|devtools_pipe|permission|unknown))$/.test(
-        message,
-      )
-        ? message
-        : 'Chrome preflight cause=unexpected',
-    );
+    const failure = preflightDiagnostics.has(error)
+      ? error
+      : preflightFailure('unexpected', { error });
+    console.error(JSON.stringify(preflightDiagnostics.get(failure)));
     process.exitCode = 1;
   }
 }
