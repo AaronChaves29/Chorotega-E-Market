@@ -64,6 +64,15 @@ export default async function AccountPage() {
                 Gestionar mi negocio
               </Link>
             ) : null}
+            {user.rol === "REPARTIDOR" ? (
+              <Link
+                className="account-action"
+                href="/mis-entregas"
+                prefetch={false}
+              >
+                Mis entregas
+              </Link>
+            ) : null}
           </section>
         </div>
       </main>

@@ -32,7 +32,9 @@ const { NeighborhoodsModule } = backendRequire(
   "./src/modules/neighborhoods/neighborhoods.module.ts",
 );
 const { User } = backendRequire("./src/modules/users/entities/user.entity.ts");
-const { Courier } = backendRequire("./src/modules/couriers/entities/courier.entity.ts");
+const { Courier } = backendRequire(
+  "./src/modules/couriers/entities/courier.entity.ts",
+);
 const { Store } = backendRequire(
   "./src/modules/stores/entities/store.entity.ts",
 );
@@ -176,16 +178,23 @@ test(
         await ready("/login");
       };
 
-      await t.test("intermediarios reales rechazan consultas sin cookie", async () => {
-        for (const path of ["/api/stores", "/api/products?idTienda=1", "/api/neighborhoods"]) {
-          const response = await fetch(`${origin}${path}`);
-          assert.equal(response.status, 401);
-          assert.equal(response.headers.get("cache-control"), "no-store");
-          const body = await response.json();
-          assert.equal(body.token, undefined);
-          assert.equal(body.content, undefined);
-        }
-      });
+      await t.test(
+        "intermediarios reales rechazan consultas sin cookie",
+        async () => {
+          for (const path of [
+            "/api/stores",
+            "/api/products?idTienda=1",
+            "/api/neighborhoods",
+          ]) {
+            const response = await fetch(`${origin}${path}`);
+            assert.equal(response.status, 401);
+            assert.equal(response.headers.get("cache-control"), "no-store");
+            const body = await response.json();
+            assert.equal(body.token, undefined);
+            assert.equal(body.content, undefined);
+          }
+        },
+      );
 
       await t.test(
         "registro real, confirmación, validación y login con nombre persistido",
@@ -582,9 +591,21 @@ test(
             await click(".account-trigger");
             assert.equal(
               await browser.evaluate(
-                "Array.from(document.querySelectorAll('.account-dropdown a')).some(a => /Mis productos|Mi tienda|Mis entregas|Mis pedidos/.test(a.textContent))",
+                "Array.from(document.querySelectorAll('.account-dropdown a')).some(a => /Mis productos|Mi tienda|Mis pedidos/.test(a.textContent))",
               ),
               false,
+            );
+            assert.equal(
+              await browser.evaluate(
+                "!!document.querySelector('.account-dropdown a[href=\"/mis-entregas\"]')",
+              ),
+              role === "REPARTIDOR",
+            );
+            assert.equal(
+              await browser.evaluate(
+                "!!document.querySelector('.account-card a[href=\"/mis-entregas\"]')",
+              ),
+              role === "REPARTIDOR",
             );
             if (role === "ADMIN")
               assert.equal(
@@ -634,104 +655,295 @@ test(
           }
         },
       );
-      await t.test("registro emprendedor real: seleccion, validaciones, persistencia, perfil y logout", async () => {
-        await browser.navigate(`${origin}/registro`);
-        await ready("/registro");
-        assert.ok(await browser.evaluate("!!document.querySelector('a[href=\"/registro/emprendedor\"]')"));
-        await click('a[href="/registro/emprendedor"]');
-        await ready("/registro/emprendedor");
-        await browser.wait("!!document.querySelector('#entrepreneur-negocio')", "formulario de negocio");
-        await browser.wait("Array.from(document.querySelectorAll('.entrepreneur-story img')).every(img => img.complete && img.naturalWidth > 0)", "recursos locales de Figma cargados");
-        for (const width of [320, 390, 768, 1280]) {
-          await browser.call("Emulation.setDeviceMetricsOverride", { width, height: 900, deviceScaleFactor: 1, mobile: false });
-          assert.ok(await browser.evaluate("document.documentElement.scrollWidth <= innerWidth"), `registro sin desbordamiento en ${width}`);
-        }
-        const metrics = await browser.call("Page.getLayoutMetrics");
-        const capture = await browser.call("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: { x: 0, y: 0, width: 1280, height: metrics.cssContentSize.height, scale: 1 } });
-        const screenshot = resolve(tmpdir(), "chorotega-entrepreneur-registration.png");
-        await writeFile(screenshot, Buffer.from(capture.data, "base64"));
-        t.diagnostic(`Registro de negocio, captura sin datos personales: ${screenshot}`);
-        const fields = { negocio: "Ceramica de Ana", nombre: "Ana", apellido: "Persona", correo: "emprendedora-nueva@example.test", clave: password, confirmacion: "no coincide", direccion: "Nicoya, local de prueba", descripcion: "Artesanias", telefono: "+506 8888-8888", horario: "Lunes a viernes" };
-        for (const [field, value] of Object.entries(fields)) await browser.fill(`#entrepreneur-${field}`, value);
-        await click('button[aria-label="Mostrar contraseña"]');
-        assert.equal(await browser.evaluate("document.querySelector('#entrepreneur-clave').type"), "text");
-        await browser.evaluate("document.querySelector('form').requestSubmit()");
-        await browser.wait("document.body.innerText.includes('Las contraseñas no coinciden')", "confirmacion de negocio rechazada");
-        assert.equal(await users.countBy({ correo: fields.correo }), 0);
-        await browser.fill("#entrepreneur-confirmacion", password);
-        await browser.fill("#entrepreneur-telefono", "abc");
-        await browser.evaluate("document.querySelector('form').requestSubmit()");
-        await browser.wait("document.body.innerText.includes('entre 8 y 15')", "telefono validado");
-        await browser.fill("#entrepreneur-telefono", fields.telefono);
-        // Backend error remains an error in the form, never a success screen.
-        await browser.fill("#entrepreneur-correo", accounts.EMPRENDEDOR.correo);
-        await browser.evaluate("document.querySelector('form').requestSubmit()");
-        await browser.wait("document.body.innerText.includes('Ya existe una cuenta')", "duplicado visible");
-        assert.equal(await browser.evaluate("!!document.querySelector('.registration-success')"), false);
-        await browser.fill("#entrepreneur-correo", fields.correo);
-        await browser.evaluate("document.querySelector('form').requestSubmit(); document.querySelector('form').requestSubmit()");
-        await browser.wait("!!document.querySelector('.registration-success')", "registro de negocio confirmado");
-        const entrepreneur = await users.findOneByOrFail({ correo: fields.correo });
-        assert.equal(entrepreneur.rol, "EMPRENDEDOR");
-        assert.ok(await bcrypt.compare(password, entrepreneur.claveHash));
-        const stores = await ds.getRepository(Store).findBy({ idEmprendedor: entrepreneur.idUsuario });
-        assert.equal(stores.length, 1);
-        assert.equal(stores[0].nombre, fields.negocio);
-        assert.equal(stores[0].direccion, fields.direccion);
-        await click('.registration-success a[href="/login"]');
-        await ready("/login");
-        await login(fields.correo);
-        await ready("/cuenta");
-        assert.ok(await browser.evaluate("document.body.innerText.includes('Emprendedor') && document.body.innerText.includes('Ana Persona')"));
-        assert.equal(await browser.evaluate("document.cookie.includes('chorotega_session')"), false);
-        await logout();
-      });
-      await t.test("registro repartidor real: transporte, errores, persistencia, perfil y logout", async () => {
-        await browser.navigate(`${origin}/registro`);
-        await ready("/registro");
-        await click('a[href="/registro/repartidor"]');
-        await ready("/registro/repartidor");
-        await browser.wait("!!document.querySelector('#courier-nombre')", "formulario de repartidor");
-        assert.ok(await browser.evaluate("document.querySelector('.registration-kicker').innerText.includes('REPARTIDOR')"));
-        await browser.wait("Array.from(document.querySelectorAll('.entrepreneur-story img')).every(img => img.complete && img.naturalWidth > 0)", "imagenes de registro cargadas");
-        for (const width of [320,390,768,1280]) {
-          await browser.call("Emulation.setDeviceMetricsOverride", {width,height:900,deviceScaleFactor:1,mobile:false});
-          assert.ok(await browser.evaluate("document.documentElement.scrollWidth <= innerWidth"), `sin desbordamiento a ${width}`);
-        }
-        const metrics = await browser.call("Page.getLayoutMetrics");
-        const capture = await browser.call("Page.captureScreenshot", {format:"png",captureBeyondViewport:true,clip:{x:0,y:0,width:1280,height:metrics.cssContentSize.height,scale:1}});
-        const screenshot=resolve(tmpdir(),"chorotega-courier-registration.png");
-        await writeFile(screenshot,Buffer.from(capture.data,"base64"));
-        t.diagnostic(`Registro de repartidor, captura sin datos personales: ${screenshot}`);
-        const fields={nombre:"Luis",apellido:"Persona",correo:"nuevo-courier@example.test",clave:password,confirmacion:"no coincide",telefono:"+506 8888-8888"};
-        for (const [key,value] of Object.entries(fields)) await browser.fill(`#courier-${key}`,value);
-        await browser.evaluate("const select=document.querySelector('#courier-transporte'); select.value='Bicicleta'; select.dispatchEvent(new Event('change',{bubbles:true}))");
-        await click('button[aria-label="Mostrar contraseña"]');
-        assert.equal(await browser.evaluate("document.querySelector('#courier-clave').type"),"text");
-        await browser.evaluate("document.querySelector('form').requestSubmit()");
-        await browser.wait("document.body.innerText.includes('Las contraseñas no coinciden')","confirmacion requerida");
-        assert.equal(await users.countBy({correo:fields.correo}),0);
-        await browser.fill("#courier-confirmacion",password);
-        await browser.fill("#courier-telefono","123");
-        await browser.evaluate("document.querySelector('form').requestSubmit()");
-        await browser.wait("!!document.querySelector('.registration-error') && document.querySelector('.registration-error').innerText.includes('entre 8 y 15')","telefono validado");
-        await browser.fill("#courier-telefono",fields.telefono);
-        await browser.fill("#courier-correo",accounts.REPARTIDOR.correo);
-        await browser.evaluate("document.querySelector('form').requestSubmit()");
-        await browser.wait("document.body.innerText.includes('Ya existe una cuenta')","duplicado visible");
-        assert.equal(await browser.evaluate("!!document.querySelector('.registration-success')"),false);
-        await browser.fill("#courier-correo",fields.correo);
-        await browser.evaluate("document.querySelector('form').requestSubmit(); document.querySelector('form').requestSubmit()");
-        await browser.wait("!!document.querySelector('.registration-success')","registro confirmado");
-        const user=await users.findOneByOrFail({correo:fields.correo});
-        assert.equal(user.rol,"REPARTIDOR"); assert.ok(await bcrypt.compare(password,user.claveHash));
-        const profiles=await ds.getRepository(Courier).findBy({idUsuario:user.idUsuario});
-        assert.equal(profiles.length,1);assert.equal(profiles[0].medioTransporte,"Bicicleta");assert.equal(profiles[0].disponibilidad,"DISPONIBLE");
-        await click('.registration-success a[href="/login"]');await ready("/login");await login(fields.correo);await ready("/cuenta");
-        assert.ok(await browser.evaluate("document.body.innerText.includes('Repartidor') && document.body.innerText.includes('Luis Persona') && document.body.innerText.includes('nuevo-courier@example.test')"));
-        assert.equal(await browser.evaluate("document.cookie.includes('chorotega_session')"),false);
-        await logout();
-      });
+      await t.test(
+        "registro emprendedor real: seleccion, validaciones, persistencia, perfil y logout",
+        async () => {
+          await browser.navigate(`${origin}/registro`);
+          await ready("/registro");
+          assert.ok(
+            await browser.evaluate(
+              "!!document.querySelector('a[href=\"/registro/emprendedor\"]')",
+            ),
+          );
+          await click('a[href="/registro/emprendedor"]');
+          await ready("/registro/emprendedor");
+          await browser.wait(
+            "!!document.querySelector('#entrepreneur-negocio')",
+            "formulario de negocio",
+          );
+          await browser.wait(
+            "Array.from(document.querySelectorAll('.entrepreneur-story img')).every(img => img.complete && img.naturalWidth > 0)",
+            "recursos locales de Figma cargados",
+          );
+          for (const width of [320, 390, 768, 1280]) {
+            await browser.call("Emulation.setDeviceMetricsOverride", {
+              width,
+              height: 900,
+              deviceScaleFactor: 1,
+              mobile: false,
+            });
+            assert.ok(
+              await browser.evaluate(
+                "document.documentElement.scrollWidth <= innerWidth",
+              ),
+              `registro sin desbordamiento en ${width}`,
+            );
+          }
+          const metrics = await browser.call("Page.getLayoutMetrics");
+          const capture = await browser.call("Page.captureScreenshot", {
+            format: "png",
+            captureBeyondViewport: true,
+            clip: {
+              x: 0,
+              y: 0,
+              width: 1280,
+              height: metrics.cssContentSize.height,
+              scale: 1,
+            },
+          });
+          const screenshot = resolve(
+            tmpdir(),
+            "chorotega-entrepreneur-registration.png",
+          );
+          await writeFile(screenshot, Buffer.from(capture.data, "base64"));
+          t.diagnostic(
+            `Registro de negocio, captura sin datos personales: ${screenshot}`,
+          );
+          const fields = {
+            negocio: "Ceramica de Ana",
+            nombre: "Ana",
+            apellido: "Persona",
+            correo: "emprendedora-nueva@example.test",
+            clave: password,
+            confirmacion: "no coincide",
+            direccion: "Nicoya, local de prueba",
+            descripcion: "Artesanias",
+            telefono: "+506 8888-8888",
+            horario: "Lunes a viernes",
+          };
+          for (const [field, value] of Object.entries(fields))
+            await browser.fill(`#entrepreneur-${field}`, value);
+          await click('button[aria-label="Mostrar contraseña"]');
+          assert.equal(
+            await browser.evaluate(
+              "document.querySelector('#entrepreneur-clave').type",
+            ),
+            "text",
+          );
+          await browser.evaluate(
+            "document.querySelector('form').requestSubmit()",
+          );
+          await browser.wait(
+            "document.body.innerText.includes('Las contraseñas no coinciden')",
+            "confirmacion de negocio rechazada",
+          );
+          assert.equal(await users.countBy({ correo: fields.correo }), 0);
+          await browser.fill("#entrepreneur-confirmacion", password);
+          await browser.fill("#entrepreneur-telefono", "abc");
+          await browser.evaluate(
+            "document.querySelector('form').requestSubmit()",
+          );
+          await browser.wait(
+            "document.body.innerText.includes('entre 8 y 15')",
+            "telefono validado",
+          );
+          await browser.fill("#entrepreneur-telefono", fields.telefono);
+          // Backend error remains an error in the form, never a success screen.
+          await browser.fill(
+            "#entrepreneur-correo",
+            accounts.EMPRENDEDOR.correo,
+          );
+          await browser.evaluate(
+            "document.querySelector('form').requestSubmit()",
+          );
+          await browser.wait(
+            "document.body.innerText.includes('Ya existe una cuenta')",
+            "duplicado visible",
+          );
+          assert.equal(
+            await browser.evaluate(
+              "!!document.querySelector('.registration-success')",
+            ),
+            false,
+          );
+          await browser.fill("#entrepreneur-correo", fields.correo);
+          await browser.evaluate(
+            "document.querySelector('form').requestSubmit(); document.querySelector('form').requestSubmit()",
+          );
+          await browser.wait(
+            "!!document.querySelector('.registration-success')",
+            "registro de negocio confirmado",
+          );
+          const entrepreneur = await users.findOneByOrFail({
+            correo: fields.correo,
+          });
+          assert.equal(entrepreneur.rol, "EMPRENDEDOR");
+          assert.ok(await bcrypt.compare(password, entrepreneur.claveHash));
+          const stores = await ds
+            .getRepository(Store)
+            .findBy({ idEmprendedor: entrepreneur.idUsuario });
+          assert.equal(stores.length, 1);
+          assert.equal(stores[0].nombre, fields.negocio);
+          assert.equal(stores[0].direccion, fields.direccion);
+          await click('.registration-success a[href="/login"]');
+          await ready("/login");
+          await login(fields.correo);
+          await ready("/cuenta");
+          assert.ok(
+            await browser.evaluate(
+              "document.body.innerText.includes('Emprendedor') && document.body.innerText.includes('Ana Persona')",
+            ),
+          );
+          assert.equal(
+            await browser.evaluate(
+              "document.cookie.includes('chorotega_session')",
+            ),
+            false,
+          );
+          await logout();
+        },
+      );
+      await t.test(
+        "registro repartidor real: transporte, errores, persistencia, perfil y logout",
+        async () => {
+          await browser.navigate(`${origin}/registro`);
+          await ready("/registro");
+          await click('a[href="/registro/repartidor"]');
+          await ready("/registro/repartidor");
+          await browser.wait(
+            "!!document.querySelector('#courier-nombre')",
+            "formulario de repartidor",
+          );
+          assert.ok(
+            await browser.evaluate(
+              "document.querySelector('.registration-kicker').innerText.includes('REPARTIDOR')",
+            ),
+          );
+          await browser.wait(
+            "Array.from(document.querySelectorAll('.entrepreneur-story img')).every(img => img.complete && img.naturalWidth > 0)",
+            "imagenes de registro cargadas",
+          );
+          for (const width of [320, 390, 768, 1280]) {
+            await browser.call("Emulation.setDeviceMetricsOverride", {
+              width,
+              height: 900,
+              deviceScaleFactor: 1,
+              mobile: false,
+            });
+            assert.ok(
+              await browser.evaluate(
+                "document.documentElement.scrollWidth <= innerWidth",
+              ),
+              `sin desbordamiento a ${width}`,
+            );
+          }
+          const metrics = await browser.call("Page.getLayoutMetrics");
+          const capture = await browser.call("Page.captureScreenshot", {
+            format: "png",
+            captureBeyondViewport: true,
+            clip: {
+              x: 0,
+              y: 0,
+              width: 1280,
+              height: metrics.cssContentSize.height,
+              scale: 1,
+            },
+          });
+          const screenshot = resolve(
+            tmpdir(),
+            "chorotega-courier-registration.png",
+          );
+          await writeFile(screenshot, Buffer.from(capture.data, "base64"));
+          t.diagnostic(
+            `Registro de repartidor, captura sin datos personales: ${screenshot}`,
+          );
+          const fields = {
+            nombre: "Luis",
+            apellido: "Persona",
+            correo: "nuevo-courier@example.test",
+            clave: password,
+            confirmacion: "no coincide",
+            telefono: "+506 8888-8888",
+          };
+          for (const [key, value] of Object.entries(fields))
+            await browser.fill(`#courier-${key}`, value);
+          await browser.evaluate(
+            "const select=document.querySelector('#courier-transporte'); select.value='Bicicleta'; select.dispatchEvent(new Event('change',{bubbles:true}))",
+          );
+          await click('button[aria-label="Mostrar contraseña"]');
+          assert.equal(
+            await browser.evaluate(
+              "document.querySelector('#courier-clave').type",
+            ),
+            "text",
+          );
+          await browser.evaluate(
+            "document.querySelector('form').requestSubmit()",
+          );
+          await browser.wait(
+            "document.body.innerText.includes('Las contraseñas no coinciden')",
+            "confirmacion requerida",
+          );
+          assert.equal(await users.countBy({ correo: fields.correo }), 0);
+          await browser.fill("#courier-confirmacion", password);
+          await browser.fill("#courier-telefono", "123");
+          await browser.evaluate(
+            "document.querySelector('form').requestSubmit()",
+          );
+          await browser.wait(
+            "!!document.querySelector('.registration-error') && document.querySelector('.registration-error').innerText.includes('entre 8 y 15')",
+            "telefono validado",
+          );
+          await browser.fill("#courier-telefono", fields.telefono);
+          await browser.fill("#courier-correo", accounts.REPARTIDOR.correo);
+          await browser.evaluate(
+            "document.querySelector('form').requestSubmit()",
+          );
+          await browser.wait(
+            "document.body.innerText.includes('Ya existe una cuenta')",
+            "duplicado visible",
+          );
+          assert.equal(
+            await browser.evaluate(
+              "!!document.querySelector('.registration-success')",
+            ),
+            false,
+          );
+          await browser.fill("#courier-correo", fields.correo);
+          await browser.evaluate(
+            "document.querySelector('form').requestSubmit(); document.querySelector('form').requestSubmit()",
+          );
+          await browser.wait(
+            "!!document.querySelector('.registration-success')",
+            "registro confirmado",
+          );
+          const user = await users.findOneByOrFail({ correo: fields.correo });
+          assert.equal(user.rol, "REPARTIDOR");
+          assert.ok(await bcrypt.compare(password, user.claveHash));
+          const profiles = await ds
+            .getRepository(Courier)
+            .findBy({ idUsuario: user.idUsuario });
+          assert.equal(profiles.length, 1);
+          assert.equal(profiles[0].medioTransporte, "Bicicleta");
+          assert.equal(profiles[0].disponibilidad, "DISPONIBLE");
+          await click('.registration-success a[href="/login"]');
+          await ready("/login");
+          await login(fields.correo);
+          await ready("/cuenta");
+          assert.ok(
+            await browser.evaluate(
+              "document.body.innerText.includes('Repartidor') && document.body.innerText.includes('Luis Persona') && document.body.innerText.includes('nuevo-courier@example.test')",
+            ),
+          );
+          assert.equal(
+            await browser.evaluate(
+              "document.cookie.includes('chorotega_session')",
+            ),
+            false,
+          );
+          await logout();
+        },
+      );
     } finally {
       await browser?.close();
       if (next && next.exitCode === null) {

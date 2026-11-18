@@ -628,12 +628,18 @@ test(
           await go("/carrito/confirmar");
           await delivery();
           await evaluate(
-            "window.checkoutFetch=window.fetch;window.fetch=async(url,options)=>{const r=await window.checkoutFetch(url,options);if(url==='/api/orders'&&options?.method==='POST')throw new TypeError('Synthetic local response loss');return r;}",
+            "window.checkoutFetch=window.fetch;window.checkoutResponseStatus=null;window.fetch=async(url,options)=>{const r=await window.checkoutFetch(url,options);if(url==='/api/orders'&&options?.method==='POST'){window.checkoutResponseStatus=r.status;throw new TypeError('Synthetic local response loss');}return r;}",
           );
           await click("[data-cart-continue]");
           await browser.wait(
             "document.body.innerText.includes('Resultado de compra pendiente')",
             "resultado ambiguo bloqueado",
+          );
+          // The pending heading also appears while the POST is still in flight.
+          // Wait for the real creation response before asserting its committed rows.
+          await browser.wait(
+            "window.checkoutResponseStatus === 201",
+            "POST real confirmado antes de simular la respuesta perdida",
           );
           assert.equal(await orders.count(), 2);
           assert.equal(await count(), "1");

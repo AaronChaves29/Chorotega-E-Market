@@ -105,6 +105,11 @@ export default function AccountMenu({
               Mi negocio
             </Link>
           ) : null}
+          {user.rol === "REPARTIDOR" ? (
+            <Link href="/mis-entregas" prefetch={false}>
+              Mis entregas
+            </Link>
+          ) : null}
         </nav>
         <LogoutButton />
       </div>
