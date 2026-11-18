@@ -17,6 +17,10 @@ import { ProductsService } from '../modules/products/products.service';
 import { StoresService } from '../modules/stores/services/stores.service';
 import { configureHttp } from '../common/http/configure-http';
 import { configureOpenApi } from '../common/http/configure-openapi';
+import { AdminDeliveriesController } from './admin-deliveries.controller';
+import { DeliveriesService } from '../modules/deliveries/services/deliveries.service';
+import { CouriersService } from '../modules/couriers/services/couriers.service';
+import { InvalidOrderStateException } from '../modules/deliveries/exceptions/invalid-order-state.exception';
 import { AdminAuthController } from './admin-auth.controller';
 import { AdminCatalogController } from './admin-catalog.controller';
 import { AdminSessionService, ADMIN_COOKIE } from './admin-session.service';
@@ -38,6 +42,21 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
   const users = { findByEmail: jest.fn(), findAuthenticationById: jest.fn() };
   const products = { search: jest.fn(), create: jest.fn() };
   const stores = { search: jest.fn(), create: jest.fn() };
+  const deliveries = {
+    searchVisible: jest.fn(),
+    findVisibleById: jest.fn(),
+    assignDelivery: jest.fn(),
+    cancelDelivery: jest.fn(),
+  };
+  const couriers = { findAll: jest.fn() };
+  const delivery = {
+    idEntrega: 9,
+    idPedido: 4,
+    idRepartidor: 2,
+    estado: 'ASIGNADA',
+    fechaAsignacion: new Date('2026-11-17T12:00:00Z'),
+    fechaEntrega: null,
+  };
   let hash: string;
   beforeAll(async () => {
     hash = await bcrypt.hash(password, 4);
@@ -52,7 +71,11 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
         }),
         JwtModule.register({ secret, signOptions: { expiresIn: 3600 } }),
       ],
-      controllers: [AdminAuthController, AdminCatalogController],
+      controllers: [
+        AdminAuthController,
+        AdminCatalogController,
+        AdminDeliveriesController,
+      ],
       providers: [
         AuthService,
         CurrentIdentityService,
@@ -63,6 +86,8 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
         { provide: UsersRepository, useValue: users },
         { provide: ProductsService, useValue: products },
         { provide: StoresService, useValue: stores },
+        { provide: DeliveriesService, useValue: deliveries },
+        { provide: CouriersService, useValue: couriers },
       ],
     })
       .overrideProvider(AUTH_RATE_LIMIT_OPTIONS)
@@ -100,6 +125,20 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
     stores.search.mockResolvedValue(page);
     products.create.mockResolvedValue({ idProducto: 1 });
     stores.create.mockResolvedValue({ idTienda: 1 });
+    deliveries.searchVisible.mockResolvedValue(page);
+    deliveries.findVisibleById.mockResolvedValue(delivery);
+    deliveries.assignDelivery.mockResolvedValue(delivery);
+    deliveries.cancelDelivery.mockResolvedValue({
+      ...delivery,
+      estado: 'CANCELADA',
+    });
+    couriers.findAll.mockResolvedValue([
+      {
+        idRepartidor: 2,
+        medioTransporte: '<script>private</script>',
+        disponibilidad: 'DISPONIBLE',
+      },
+    ]);
   });
   afterAll(async () => {
     await app?.close();
@@ -146,6 +185,9 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
     '/admin/stores',
     '/admin/products/new',
     '/admin/stores/new',
+    '/admin/deliveries',
+    '/admin/deliveries/new',
+    '/admin/deliveries/9',
   ])('sin sesión redirige %s al acceso sin devolver datos', async (path) => {
     await request(app.getHttpServer())
       .get(path)
@@ -517,9 +559,206 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
         .get('/admin/products')
         .set('Cookie', `${ADMIN_COOKIE}=${value}`)
         .expect(403);
+      for (const path of [
+        '/admin/deliveries',
+        '/admin/deliveries/new',
+        '/admin/deliveries/9',
+      ])
+        await request(app.getHttpServer())
+          .get(path)
+          .set('Cookie', `${ADMIN_COOKIE}=${value}`)
+          .expect(403);
+      for (const path of ['/admin/deliveries', '/admin/deliveries/9/cancel'])
+        await request(app.getHttpServer())
+          .post(path)
+          .set('Cookie', `${ADMIN_COOKIE}=${value}`)
+          .type('form')
+          .send({})
+          .expect(403);
+      expect(deliveries.searchVisible).not.toHaveBeenCalled();
+      expect(deliveries.findVisibleById).not.toHaveBeenCalled();
+      expect(deliveries.assignDelivery).not.toHaveBeenCalled();
+      expect(deliveries.cancelDelivery).not.toHaveBeenCalled();
       expect(products.search).not.toHaveBeenCalled();
     },
   );
+
+  it('entregas: lecturas utilizan alcance ADMIN y conservan filtros, fechas y orden en paginación', async () => {
+    const { agent } = await loggedIn();
+    deliveries.searchVisible.mockResolvedValue({
+      content: [delivery],
+      page: 1,
+      size: 1,
+      totalElements: 3,
+      totalPages: 3,
+    });
+    const result = await agent
+      .get(
+        '/admin/deliveries?page=1&size=1&estado=ASIGNADA&idPedido=4&idRepartidor=2&fechaDesde=2026-11-01T00:00:00Z&sortBy=idEntrega&sortDirection=ASC',
+      )
+      .expect(200);
+    expect(deliveries.searchVisible).toHaveBeenCalledWith(
+      expect.objectContaining({
+        page: 1,
+        idPedido: 4,
+        idRepartidor: 2,
+        fechaDesde: new Date('2026-11-01T00:00:00Z'),
+      }),
+      expect.objectContaining({ rol: 'ADMIN' }),
+    );
+    expect(result.text).toContain('estado&#x3D;ASIGNADA');
+    expect(result.text).toContain('sortBy&#x3D;idEntrega');
+    expect(result.text).toContain('page&#x3D;2');
+    expect(result.text).toContain('2026-11-17T12:00:00.000Z');
+    await agent.get('/admin/deliveries/9').expect(200);
+    expect(deliveries.findVisibleById).toHaveBeenCalledWith(
+      9,
+      expect.objectContaining({ rol: 'ADMIN' }),
+    );
+  });
+  it('entregas: filtros vacíos de formulario nativo conservan los defaults', async () => {
+    const { agent } = await loggedIn();
+    await agent
+      .get(
+        '/admin/deliveries?estado=&idPedido=&idRepartidor=&fechaDesde=&fechaHasta=',
+      )
+      .expect(200);
+    expect(deliveries.searchVisible).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 0, size: 20 }),
+      expect.anything(),
+    );
+  });
+  it.each([
+    'idPedido=-1',
+    'size=101',
+    'estado=OTRO',
+    'fechaDesde=invalida',
+    'extra=1',
+    'idPedido=1&idPedido=2',
+    '_csrf=extra',
+  ])('entregas: rechaza consulta inválida %s', async (query) => {
+    const { agent } = await loggedIn();
+    await agent.get(`/admin/deliveries?${query}`).expect(400);
+    expect(deliveries.searchVisible).not.toHaveBeenCalled();
+  });
+  it.each(['0', '-1', '1abc', '2147483648'])(
+    'entregas: rechaza ID de ruta %s',
+    async (id) => {
+      const { agent } = await loggedIn();
+      await agent.get(`/admin/deliveries/${id}`).expect(400);
+      expect(deliveries.findVisibleById).not.toHaveBeenCalled();
+    },
+  );
+  it('entregas: errores por campo, valores escapados y ausencia de escritura', async () => {
+    const { agent, token } = await loggedIn();
+    const result = await agent
+      .post('/admin/deliveries')
+      .type('form')
+      .send({
+        _csrf: token,
+        idPedido: '<script>x</script>',
+        idRepartidor: '2',
+        extra: '1',
+      })
+      .expect(400);
+    expect(result.text).toContain('error-idPedido');
+    expect(result.text).toContain('&lt;script&gt;');
+    expect(result.text).toContain('selected');
+    expect(result.text).toContain('campos no permitidos');
+    expect(result.text).not.toContain('<script>');
+    expect(deliveries.assignDelivery).not.toHaveBeenCalled();
+  });
+  it('entregas: PRG hacia recurso y navegación sin repetir asignación', async () => {
+    const { agent, token } = await loggedIn();
+    await agent
+      .post('/admin/deliveries')
+      .type('form')
+      .send({ _csrf: token, idPedido: '4', idRepartidor: '2' })
+      .expect(303)
+      .expect('Location', '/admin/deliveries/9');
+    await agent.get('/admin/deliveries/9').expect(200);
+    await agent.get('/admin/deliveries/9').expect(200);
+    expect(deliveries.assignDelivery).toHaveBeenCalledTimes(1);
+    expect(deliveries.assignDelivery).toHaveBeenCalledWith(
+      expect.objectContaining({ idPedido: 4, idRepartidor: 2 }),
+    );
+  });
+  it('entregas: traduce excepción del dominio sin mostrar su mensaje original', async () => {
+    const { agent, token } = await loggedIn();
+    deliveries.assignDelivery.mockRejectedValueOnce(
+      new InvalidOrderStateException('private-state'),
+    );
+    const result = await agent
+      .post('/admin/deliveries')
+      .type('form')
+      .send({ _csrf: token, idPedido: '4', idRepartidor: '2' })
+      .expect(409);
+    expect(result.text).not.toContain('private-state');
+    expect(result.text).toContain('conflicto');
+  });
+  it.each(['assign', 'cancel'])(
+    'entregas: fallo inesperado %s seguro y consulta de recuperación sin reenvío',
+    async (operation) => {
+      const { agent, token } = await loggedIn();
+      const method =
+        operation === 'assign'
+          ? deliveries.assignDelivery
+          : deliveries.cancelDelivery;
+      method.mockRejectedValueOnce(
+        new Error('SELECT private-password postgres://secret'),
+      );
+      const result = await agent
+        .post(
+          operation === 'assign'
+            ? '/admin/deliveries'
+            : '/admin/deliveries/9/cancel',
+        )
+        .type('form')
+        .send(
+          operation === 'assign'
+            ? { _csrf: token, idPedido: '4', idRepartidor: '2' }
+            : { _csrf: token },
+        )
+        .expect(500);
+      expect(result.text).not.toMatch(
+        /SELECT|private-password|postgres:|stack/,
+      );
+      expect(result.text).toContain('Consultar estado vigente');
+      expect(result.text).not.toContain('Asignar entrega</button>');
+      expect(result.text).not.toContain('Confirmar cancelación</button>');
+      expect(method).toHaveBeenCalledTimes(1);
+    },
+  );
+  it.each(['ASIGNADA', 'EN_CAMINO', 'ENTREGADA', 'CANCELADA'])(
+    'entregas: confirmación solo en estado %s',
+    async (estado) => {
+      const { agent } = await loggedIn();
+      deliveries.findVisibleById.mockResolvedValueOnce({ ...delivery, estado });
+      const result = await agent.get('/admin/deliveries/9').expect(200);
+      expect(result.text.includes('Confirmar cancelación')).toBe(
+        estado === 'ASIGNADA',
+      );
+    },
+  );
+  it.each(['/admin/deliveries', '/admin/deliveries/9/cancel'])(
+    'entregas: CSRF ausente, inválido y ajeno en %s',
+    async (url) => {
+      const { agent, token } = await loggedIn();
+      const other = await loggedIn();
+      for (const body of [{}, { _csrf: 'invalid' }, { _csrf: other.token }])
+        await agent.post(url).type('form').send(body).expect(403);
+      if (url.endsWith('/cancel')) {
+        await agent
+          .post(url)
+          .type('form')
+          .send({ _csrf: token, extra: '1' })
+          .expect(400);
+        expect(deliveries.cancelDelivery).not.toHaveBeenCalled();
+      }
+      expect(deliveries.assignDelivery).not.toHaveBeenCalled();
+    },
+  );
+
   it('no registra rutas administrativas bajo api/v1 ni operaciones en Swagger', async () => {
     await request(app.getHttpServer())
       .get('/api/v1/admin/products')

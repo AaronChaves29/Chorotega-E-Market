@@ -38,6 +38,7 @@
       }
       nav {
         display: flex;
+        flex-wrap: wrap;
         gap: 1rem;
         align-items: center;
       }
@@ -50,12 +51,14 @@
     </style></head>
   <body><nav aria-label='Administración'><a
         href='/admin/products'
-      >Productos</a><a href='/admin/stores'>Tiendas</a><form
-        method='post'
-        action='/admin/logout'
-      ><input type='hidden' name='_csrf' value='{{csrf}}' /><button
-          type='submit'
-        >Cerrar sesión</button></form></nav><main><h1>Crear tienda</h1>
+      >Productos</a><a href='/admin/stores'>Tiendas</a><a
+        href='/admin/deliveries'
+      >Entregas</a><form method='post' action='/admin/logout'><input
+          type='hidden'
+          name='_csrf'
+          value='{{csrf}}'
+        /><button type='submit'>Cerrar sesión</button></form></nav><main><h1
+      >Crear tienda</h1>
       {{#if errors._form}}<p
           class='error'
           role='alert'
