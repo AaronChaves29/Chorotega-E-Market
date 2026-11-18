@@ -1,15 +1,93 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useBusinessData } from "@/hooks/use-business-data";
 import {
   projectCourierDelivery,
+  projectCourierDeliveryDestination,
   deliveryDate,
   deliveryLabels,
   type CourierDelivery,
+  type CourierDeliveryDestination,
 } from "@/lib/courier-deliveries";
 import styles from "@/components/business/business.module.css";
 import detailStyles from "@/components/business/orders.module.css";
+
+function DeliveryDestination({ id }: { id: number }) {
+  const [attempt, setAttempt] = useState(0);
+  const [result, setResult] = useState<{
+    attempt: number;
+    status: number;
+    data: CourierDeliveryDestination | null;
+  }>();
+  const current = result?.attempt === attempt ? result : undefined;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    async function load() {
+      try {
+        const response = await fetch(`/api/mis-entregas/${id}/destino`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!active) return;
+        if (response.status === 401) {
+          window.location.replace("/login?sesion=vencida");
+          return;
+        }
+        const data = response.ok
+          ? projectCourierDeliveryDestination(await response.json())
+          : null;
+        if (active)
+          setResult({
+            attempt,
+            status: data && response.status === 200 ? 200 : 502,
+            data,
+          });
+      } catch {
+        if (active) setResult({ attempt, status: 502, data: null });
+      }
+    }
+    void load();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [id, attempt]);
+
+  return (
+    <section aria-labelledby="delivery-destination-title">
+      <h3 id="delivery-destination-title">Dirección de entrega</h3>
+      {!current ? (
+        <p role="status">Consultando el destino…</p>
+      ) : current.status === 200 && current.data ? (
+        <dl className={styles.details} data-delivery-destination>
+          <div>
+            <dt>Dirección</dt>
+            <dd>{current.data.direccionEntrega}</dd>
+          </div>
+          <div>
+            <dt>Barrio</dt>
+            <dd>{current.data.nombreBarrio}</dd>
+          </div>
+        </dl>
+      ) : (
+        <div role="alert">
+          <p className={styles.error}>
+            No fue posible consultar el destino de esta entrega.
+          </p>
+          <button
+            className={styles.secondary}
+            onClick={() => setAttempt((value) => value + 1)}
+          >
+            Reintentar consulta del destino
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
 
 function DeliveryActions({
   initial,
@@ -159,10 +237,9 @@ function DeliveryActions({
           </div>
         ) : null}
       </dl>
-      <p className={styles.help}>
-        El contrato de entregas todavía no incluye dirección, contacto ni
-        productos del pedido. Este panel no consulta esos datos.
-      </p>
+      {delivery.estado === "ASIGNADA" || delivery.estado === "EN_CAMINO" ? (
+        <DeliveryDestination id={delivery.idEntrega} />
+      ) : null}
       {message ? (
         <p
           role="status"

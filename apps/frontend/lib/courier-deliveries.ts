@@ -21,6 +21,12 @@ export type CourierDelivery = {
   fechaAsignacion: string;
   fechaEntrega: string | null;
 };
+export type CourierDeliveryDestination = {
+  idEntrega: number;
+  idPedido: number;
+  direccionEntrega: string;
+  nombreBarrio: string;
+};
 const timestamp = (v: unknown): v is string =>
   typeof v === "string" &&
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v) &&
@@ -48,6 +54,30 @@ export function projectCourierDelivery(value: unknown): CourierDelivery | null {
     estado: d.estado,
     fechaAsignacion: d.fechaAsignacion,
     fechaEntrega: d.fechaEntrega,
+  };
+}
+
+export function projectCourierDeliveryDestination(
+  value: unknown,
+): CourierDeliveryDestination | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const destination = value as Partial<CourierDeliveryDestination>;
+  if (
+    !validId(destination.idEntrega) ||
+    !validId(destination.idPedido) ||
+    typeof destination.direccionEntrega !== "string" ||
+    destination.direccionEntrega.trim().length === 0 ||
+    destination.direccionEntrega.length > 255 ||
+    typeof destination.nombreBarrio !== "string" ||
+    destination.nombreBarrio.trim().length === 0 ||
+    destination.nombreBarrio.length > 100
+  )
+    return null;
+  return {
+    idEntrega: destination.idEntrega,
+    idPedido: destination.idPedido,
+    direccionEntrega: destination.direccionEntrega,
+    nombreBarrio: destination.nombreBarrio,
   };
 }
 

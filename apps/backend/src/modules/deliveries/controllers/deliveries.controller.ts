@@ -12,6 +12,7 @@ import {
 } from '../../../common/http/openapi-contract';
 import {
   Body,
+  BadRequestException,
   Controller,
   Get,
   HttpCode,
@@ -31,6 +32,7 @@ import { RolesGuard } from '../../../auth/guards/roles.guard';
 import { Roles } from '../../../auth/decorators/roles.decorator';
 import { AssignDeliveryDto } from '../dtos/assign-delivery.dto';
 import { DeliveryResponseDto } from '../dtos/delivery-response.dto';
+import { DeliveryDestinationResponseDto } from '../dtos/delivery-destination-response.dto';
 import { DeliverySearchQueryDto } from '../dtos/delivery-search-query.dto';
 import { DeliveriesService } from '../services/deliveries.service';
 import type { Request } from 'express';
@@ -41,6 +43,17 @@ import { rethrowDeliveryHttpError } from '../http/delivery-http-error';
 type AuthenticatedRequest = Request & {
   user: AuthenticatedUser;
 };
+
+function positiveDeliveryId(value: string): number {
+  const id = Number(value);
+  if (
+    !/^[1-9]\d*$/.test(value) ||
+    !Number.isSafeInteger(id) ||
+    id > 2_147_483_647
+  )
+    throw new BadRequestException('El identificador de entrega no es válido.');
+  return id;
+}
 
 @ApiTags('deliveries')
 @ApiBearerAuth('bearer')
@@ -213,6 +226,36 @@ export class DeliveriesController {
   ): Promise<DeliveryResponseDto> {
     return this.deliveriesService
       .findVisibleById(idEntrega, request.user)
+      .catch(rethrowDeliveryHttpError);
+  }
+
+  @ApiOperation({
+    summary: 'Consultar el destino de una entrega propia',
+    description:
+      'Roles: REPARTIDOR. Solo muestra dirección y barrio de entregas propias en estado ASIGNADA o EN_CAMINO.',
+  })
+  @ApiParam({
+    name: 'id',
+    schema: { type: 'integer', minimum: 1 },
+    description: 'Identificador de la entrega.',
+  })
+  @ApiResponse({
+    status: 200,
+    type: DeliveryDestinationResponseDto,
+    description: 'Destino mínimo de una entrega visible para el repartidor.',
+  })
+  @ApiProblemResponses([400, 401, 403, 404, 500])
+  @Get(':id/destination')
+  @Roles('REPARTIDOR')
+  findCourierDestination(
+    @Param('id') rawIdEntrega: string,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<DeliveryDestinationResponseDto> {
+    return this.deliveriesService
+      .findCourierDestination(
+        positiveDeliveryId(rawIdEntrega),
+        request.user.idUsuario,
+      )
       .catch(rethrowDeliveryHttpError);
   }
 }

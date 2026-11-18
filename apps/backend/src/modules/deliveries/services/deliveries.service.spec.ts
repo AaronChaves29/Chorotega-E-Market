@@ -48,6 +48,7 @@ describe('DeliveriesService', () => {
     deliveriesRepository = {
       findById: jest.fn(),
       findActiveByOrderId: jest.fn(),
+      findCourierDestination: jest.fn(),
       save: jest.fn(),
     } as unknown as jest.Mocked<DeliveriesRepository>;
 
@@ -860,5 +861,34 @@ describe('DeliveriesService', () => {
     );
 
     expect(deliveriesRepository.findById.mock.calls).toEqual([[999]]);
+  });
+
+  describe('findCourierDestination', () => {
+    it('devuelve únicamente el destino consultado para el usuario autenticado', async () => {
+      const destination = {
+        idEntrega: 7,
+        idPedido: 9,
+        direccionEntrega: 'Centro de Nicoya',
+        nombreBarrio: 'Barrio Centro',
+      };
+      deliveriesRepository.findCourierDestination.mockResolvedValue(
+        destination,
+      );
+
+      await expect(service.findCourierDestination(7, 42)).resolves.toBe(
+        destination,
+      );
+      expect(deliveriesRepository.findCourierDestination.mock.calls).toEqual([
+        [7, 42],
+      ]);
+    });
+
+    it('oculta entregas inexistentes, ajenas o sin destino disponible', async () => {
+      deliveriesRepository.findCourierDestination.mockResolvedValue(null);
+
+      await expect(
+        service.findCourierDestination(7, 42),
+      ).rejects.toBeInstanceOf(DeliveryNotFoundException);
+    });
   });
 });

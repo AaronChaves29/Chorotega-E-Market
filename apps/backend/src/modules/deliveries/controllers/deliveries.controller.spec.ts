@@ -20,6 +20,7 @@ describe('DeliveriesController', () => {
     cancelDelivery: jest.fn(),
     searchVisible: jest.fn(),
     findVisibleById: jest.fn(),
+    findCourierDestination: jest.fn(),
   };
 
   const jwtAuthGuard = {
@@ -200,4 +201,33 @@ describe('DeliveriesController', () => {
       authenticatedRequest.user,
     );
   });
+
+  it('delega la consulta del destino usando el usuario autenticado', async () => {
+    const destination = {
+      idEntrega: 1,
+      idPedido: 10,
+      direccionEntrega: 'Centro de Nicoya',
+      nombreBarrio: 'Barrio Centro',
+    };
+    deliveriesService.findCourierDestination.mockResolvedValue(destination);
+
+    await expect(
+      controller.findCourierDestination('1', authenticatedRequest as never),
+    ).resolves.toBe(destination);
+
+    expect(deliveriesService.findCourierDestination).toHaveBeenCalledWith(
+      1,
+      authenticatedRequest.user.idUsuario,
+    );
+  });
+
+  it.each(['0', '-1', '1.2', '2147483648', 'invalid'])(
+    'rechaza identificador de entrega inválido: %s',
+    (id) => {
+      expect(() =>
+        controller.findCourierDestination(id, authenticatedRequest as never),
+      ).toThrow('El identificador de entrega no es válido.');
+      expect(deliveriesService.findCourierDestination).not.toHaveBeenCalled();
+    },
+  );
 });
