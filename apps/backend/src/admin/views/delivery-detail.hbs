@@ -1,0 +1,141 @@
+<html lang='es'><head><meta charset='utf-8' /><meta
+      name='viewport'
+      content='width=device-width, initial-scale=1'
+    /><title>Detalle de entrega</title><style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 70rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        color: #172d24;
+      }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: center;
+        margin-bottom: 2rem;
+      }
+      nav form {
+        margin-left: auto;
+      }
+      a {
+        color: #174b37;
+        overflow-wrap: anywhere;
+      }
+      input,
+      select,
+      button {
+        font: inherit;
+        max-width: 100%;
+        padding: 0.5rem;
+      }
+      label {
+        display: block;
+        margin-top: 0.8rem;
+      }
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.8rem;
+        align-items: end;
+      }
+      .filters label {
+        min-width: 0;
+        flex: 1 1 12rem;
+      }
+      .filters input,
+      .filters select {
+        display: block;
+        width: 100%;
+      }
+      .table-scroll {
+        overflow-x: auto;
+        max-width: 100%;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        padding: 0.6rem;
+        text-align: left;
+        border-bottom: 1px solid #ccc;
+      }
+      .pagination {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-top: 1rem;
+      }
+      .error {
+        color: #8c2036;
+        overflow-wrap: anywhere;
+      }
+      main form:not(.filters) {
+        max-width: 36rem;
+      }
+      main form:not(.filters) input,
+      main form:not(.filters) select {
+        display: block;
+        width: 100%;
+      }
+      main form button {
+        margin-top: 1rem;
+      }
+      dt {
+        font-weight: bold;
+        margin-top: 1rem;
+      }
+      dd {
+        margin-left: 0;
+        overflow-wrap: anywhere;
+      }
+      summary {
+        cursor: pointer;
+        padding: 0.75rem 0;
+      }
+      @media (max-width: 480px) {
+        body {
+          margin: 1rem auto;
+        }
+        h1 {
+          font-size: 1.6rem;
+        }
+        nav {
+          gap: 0.7rem;
+        }
+        nav form {
+          margin-left: 0;
+          width: 100%;
+        }
+      }
+    </style></head><body><nav aria-label='Administración'><a
+        href='/admin/products'
+      >Productos</a><a href='/admin/stores'>Tiendas</a><a
+        href='/admin/deliveries'
+      >Entregas</a><form method='post' action='/admin/logout'><input
+          type='hidden'
+          name='_csrf'
+          value='{{csrf}}'
+        /><button type='submit'>Cerrar sesión</button></form></nav><main><h1
+      >Entrega {{delivery.idEntrega}}</h1><a href='/admin/deliveries'>Volver a
+        entregas</a><dl><dt>Pedido</dt><dd>{{delivery.idPedido}}</dd><dt
+        >Repartidor</dt><dd>{{delivery.idRepartidor}}</dd><dt>Estado</dt><dd
+        >{{delivery.estado}}</dd><dt>Fecha de asignación (UTC)</dt><dd
+        >{{delivery.fechaAsignacion}}</dd><dt>Fecha de entrega (UTC)</dt><dd
+        >{{delivery.fechaEntrega}}</dd></dl>
+      {{#if delivery.canCancel}}<details id='cancel-confirmation'><summary
+          >Cancelar entrega</summary><p>¿Confirma cancelar esta entrega
+            asignada? Se liberará el repartidor. No se cambiará directamente el
+            estado del pedido.</p><form
+            method='post'
+            action='/admin/deliveries/{{delivery.idEntrega}}/cancel'
+          ><input type='hidden' name='_csrf' value='{{csrf}}' /><button
+              type='submit'
+            >Confirmar cancelación</button></form></details>{{else}}<p>Esta
+          entrega no se puede cancelar en su estado actual.</p>{{/if}}</main></body></html>
