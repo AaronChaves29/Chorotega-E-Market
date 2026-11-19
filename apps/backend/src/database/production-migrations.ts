@@ -1,3 +1,4 @@
+import { AddOrderAuditOutbox1795082400000 } from './migrations/1795082400000-AddOrderAuditOutbox';
 import 'reflect-metadata';
 import {
   DataSource,
@@ -50,6 +51,7 @@ export function createProductionMigrationDataSource(
       AddPasswordHashToUser1791352458237,
       AddProductVersion1793296800000,
       AddStoreSocialContact1794772600000,
+      AddOrderAuditOutbox1795082400000,
     ],
     logger: migrationLogger,
     logging: false,

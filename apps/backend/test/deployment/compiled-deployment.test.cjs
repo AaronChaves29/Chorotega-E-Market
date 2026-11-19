@@ -112,8 +112,9 @@ test('el artefacto carga cinco migraciones JS y sus nueve entidades sin herramie
       await source.buildMetadatas();
       assert.equal(source.isInitialized, false);
       assert.equal(source.entityMetadatas.length, 9);
-      assert.equal(source.migrations.length, 5);
+      assert.equal(source.migrations.length, 6);
       assert.equal(source.migrations[4].constructor.name, 'AddStoreSocialContact1794772600000');
+      assert.equal(source.migrations[5].constructor.name, 'AddOrderAuditOutbox1795082400000');
       assert.equal(source.options.synchronize, false);
       assert.equal(source.options.migrationsRun, false);
       assert.equal(source.options.ssl.rejectUnauthorized, true);

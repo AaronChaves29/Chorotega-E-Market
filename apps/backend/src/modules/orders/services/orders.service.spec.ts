@@ -72,6 +72,11 @@ describe('OrdersService: crear y confirmar', () => {
     };
     let detailId = 0;
     repositories = {
+      audit: {
+        write: jest
+          .fn<OrderTransactionRepositories['audit']['write']>()
+          .mockResolvedValue(undefined),
+      },
       users: {
         findById: jest
           .fn<OrderTransactionRepositories['users']['findById']>()

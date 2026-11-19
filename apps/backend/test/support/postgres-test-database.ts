@@ -1,3 +1,4 @@
+import { AddOrderAuditOutbox1795082400000 } from '../../src/database/migrations/1795082400000-AddOrderAuditOutbox';
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
 import {
@@ -93,6 +94,7 @@ export async function startPostgresTestDatabase(): Promise<PostgresTestDatabase>
         AddPasswordHashToUser1791352458237,
         AddProductVersion1793296800000,
         AddStoreSocialContact1794772600000,
+        AddOrderAuditOutbox1795082400000,
       ],
       extra: { connectionTimeoutMillis: 10_000 },
     });

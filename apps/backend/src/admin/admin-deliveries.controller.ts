@@ -181,7 +181,7 @@ export class AdminDeliveriesController {
       return this.form(request, response, 400, values, errors);
     let delivery: DeliveryResponseDto;
     try {
-      delivery = await this.deliveries.assignDelivery(dto);
+      delivery = await this.deliveries.assignDelivery(dto, request.user);
     } catch (error) {
       const result = failure(error);
       if (result.status !== 500)
@@ -226,7 +226,7 @@ export class AdminDeliveriesController {
     if (Object.keys(input).some((key) => key !== '_csrf'))
       throw new BadRequestException();
     try {
-      await this.deliveries.cancelDelivery(id);
+      await this.deliveries.cancelDelivery(id, request.user);
     } catch (error) {
       const result = failure(error);
       return response.status(result.status).render('delivery-result', {

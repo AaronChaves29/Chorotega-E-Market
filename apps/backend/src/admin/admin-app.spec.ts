@@ -1,3 +1,4 @@
+import { OrderAuditPublisher } from '../modules/order-audits/outbox/order-audit-publisher';
 import { Test } from '@nestjs/testing';
 import { getDataSourceToken } from '@nestjs/typeorm';
 import type { INestApplication } from '@nestjs/common';
@@ -73,6 +74,8 @@ describe('AppModule completo: resolución y contratos sin conexiones externas', 
     const module = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(getDataSourceToken())
       .useValue(source)
+      .overrideProvider(OrderAuditPublisher)
+      .useValue({})
       .overrideProvider(MongoDatabaseService)
       .useValue(mongo)
       .compile();

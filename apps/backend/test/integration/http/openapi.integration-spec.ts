@@ -730,10 +730,13 @@ describe('OpenAPI HTTP: contrato generado de las 42 operaciones', () => {
     const prepared = await makeOrder(),
       cancellable = await makeOrder();
     const deliveriesService = context.app.get(DeliveriesService);
-    const assigned = await deliveriesService.assignDelivery({
-      idPedido: cancellable.idPedido,
-      idRepartidor: otherCourier.idRepartidor,
-    });
+    const assigned = await deliveriesService.assignDelivery(
+      {
+        idPedido: cancellable.idPedido,
+        idRepartidor: otherCourier.idRepartidor,
+      },
+      { idUsuario: 1, sub: 'admin@example.test', rol: 'ADMIN' },
+    );
     const collection = readFileSync(
       resolve(__dirname, '../../../../../docs/laboratory/lab-05/api.http'),
       'utf8',

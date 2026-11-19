@@ -86,10 +86,11 @@ export class DeliveriesController {
   @HttpCode(HttpStatus.CREATED)
   async assignDelivery(
     @Body() dto: AssignDeliveryDto,
+    @Req() request: AuthenticatedRequest,
     @Res({ passthrough: true }) response: Response,
   ): Promise<DeliveryResponseDto> {
     const delivery = await this.deliveriesService
-      .assignDelivery(dto)
+      .assignDelivery(dto, request.user)
       .catch(rethrowDeliveryHttpError);
 
     response.location(`/api/v1/deliveries/${delivery.idEntrega}`);
@@ -177,9 +178,10 @@ export class DeliveriesController {
   @HttpCode(HttpStatus.OK)
   cancelDelivery(
     @Param('id', ParseIntPipe) idEntrega: number,
+    @Req() request: AuthenticatedRequest,
   ): Promise<DeliveryResponseDto> {
     return this.deliveriesService
-      .cancelDelivery(idEntrega)
+      .cancelDelivery(idEntrega, request.user)
       .catch(rethrowDeliveryHttpError);
   }
 
