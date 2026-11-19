@@ -110,6 +110,15 @@ esa implementación para ACTIVO. AvailableProductSpecification conserva su
 comportamiento predeterminado positivo y permite consultar cero existencias.
 Las pruebas anteriores de SQL y consultas reales siguen verificando compatibilidad.
 
+### Ampliación compatible: búsqueda en vivo (implementación 4)
+
+`nombre` es opcional, de tipo string y hasta 150 caracteres. Aplica un fragmento
+literal mediante `ILIKE` parametrizado; `%`, `_` y `\` no actúan como comodines.
+Es combinable con los filtros anteriores y no modifica los valores predeterminados.
+`fechaPublicacion DESC` expresa novedades reales, con desempate por ID en la misma
+dirección; también se admite ASC. No se añaden migraciones ni cambios de escritura.
+Detalles y validaciones: [búsquedas en vivo](../../frontend/busquedas-en-vivo.md).
+
 ## Paginación y orden
 
 Se conserva el contrato `{ content, page, size, totalElements, totalPages }`:
@@ -117,7 +126,7 @@ Se conserva el contrato `{ content, page, size, totalElements, totalPages }`:
 Specifications, orden, skip/take y getManyAndCount en PostgreSQL; no pagina ni
 filtra en memoria. Los totales corresponden al conjunto filtrado completo.
 
-`sortBy` permite idProducto, nombre, precio, cantidadDisponible y estado;
+`sortBy` permite idProducto, nombre, precio, cantidadDisponible, estado y fechaPublicacion;
 `sortDirection` acepta ASC/DESC. El valor predeterminado es idProducto ASC.
 Los otros campos desempatan por ID en la misma dirección. El nombre público de
 existencias es `cantidadDisponible`, igual que en el modelo. Un mapa interno

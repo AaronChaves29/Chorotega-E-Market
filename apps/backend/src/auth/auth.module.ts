@@ -8,6 +8,8 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { CurrentIdentityService } from './current-identity.service';
 import { AuthRateLimitModule } from './rate-limit/auth-rate-limit.module';
+import { EntrepreneurRegistrationService } from './entrepreneur-registration.service';
+import { CourierRegistrationService } from './courier-registration.service';
 
 @Module({
   imports: [
@@ -26,7 +28,14 @@ import { AuthRateLimitModule } from './rate-limit/auth-rate-limit.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, CurrentIdentityService, JwtAuthGuard, RolesGuard],
+  providers: [
+    AuthService,
+    CurrentIdentityService,
+    JwtAuthGuard,
+    RolesGuard,
+    EntrepreneurRegistrationService,
+    CourierRegistrationService,
+  ],
   exports: [
     AuthRateLimitModule,
     AuthService,

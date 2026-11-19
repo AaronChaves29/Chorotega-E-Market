@@ -27,15 +27,35 @@ export class UsersRepository extends TypeOrmBaseRepository<
   }
 
   async findByEmail(correo: string): Promise<User | null> {
-    return this.repository.findOne({
-      where: { correo },
-    });
+    // También admite cuentas anteriores guardadas con mayúsculas.
+    return this.repository
+      .createQueryBuilder('usuario')
+      .where('LOWER(usuario.correo) = :correo', {
+        correo: correo.trim().toLowerCase(),
+      })
+      .getOne();
   }
 
   findAuthenticationById(id: number): Promise<UserAuthenticationData | null> {
     return this.repository.findOne({
       where: this.whereId(id),
       select: { idUsuario: true, correo: true, rol: true, estado: true },
+    });
+  }
+
+  findProfileById(id: number): Promise<User | null> {
+    return this.repository.findOne({
+      where: this.whereId(id),
+      select: {
+        idUsuario: true,
+        nombre: true,
+        apellido: true,
+        correo: true,
+        telefono: true,
+        rol: true,
+        estado: true,
+        fechaCreacion: true,
+      },
     });
   }
 

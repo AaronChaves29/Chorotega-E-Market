@@ -99,7 +99,7 @@ for (const entry of ['migrate', 'start-render']) {
   });
 }
 
-test('el artefacto carga cuatro migraciones JS y sus nueve entidades sin herramientas de desarrollo', () => {
+test('el artefacto carga seis migraciones JS y sus nueve entidades sin herramientas de desarrollo', () => {
   const result = spawnSync(
     process.execPath,
     [
@@ -112,10 +112,20 @@ test('el artefacto carga cuatro migraciones JS y sus nueve entidades sin herrami
       await source.buildMetadatas();
       assert.equal(source.isInitialized, false);
       assert.equal(source.entityMetadatas.length, 9);
-      assert.equal(source.migrations.length, 4);
+      assert.equal(source.migrations.length, 6);
+      assert.equal(source.migrations[4].constructor.name, 'AddStoreSocialContact1794772600000');
+      assert.equal(source.migrations[5].constructor.name, 'AddOrderAuditOutbox1795082400000');
       assert.equal(source.options.synchronize, false);
       assert.equal(source.options.migrationsRun, false);
       assert.equal(source.options.ssl.rejectUnauthorized, true);
+      for (const [path, symbol] of [
+        ['./dist/modules/order-audits/outbox/order-audit-writer.js', 'writeOrderAudit'],
+        ['./dist/modules/order-audits/outbox/outbox-store.js', 'OutboxStore'],
+        ['./dist/modules/order-audits/outbox/order-audit-publisher.js', 'OrderAuditPublisher'],
+        ['./dist/modules/order-audits/repositories/order-audits.repository.js', 'OrderAuditsRepository'],
+        ['./dist/modules/order-audits/provision-order-audits.js', 'provisionOrderAudits'],
+        ['./dist/deployment/provision-order-audits.js', 'provision'],
+      ]) assert.equal(typeof require(path)[symbol], 'function');
       assert.equal(Object.keys(require.cache).some(path => /node_modules[\\\\/](ts-node|typescript|@nestjs[\\\\/]cli)[\\\\/]/.test(path)), false);
     })().catch(() => { process.exitCode = 1; });
   `,

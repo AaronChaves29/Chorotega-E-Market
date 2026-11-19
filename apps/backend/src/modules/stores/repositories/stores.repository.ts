@@ -16,7 +16,8 @@ export type StoreData = Pick<
   | 'telefono'
   | 'horario'
   | 'estado'
->;
+> &
+  Partial<Pick<Store, 'instagramUrl' | 'facebookUrl' | 'whatsappComercial'>>;
 
 @Injectable()
 export class StoresRepository extends TypeOrmBaseRepository<

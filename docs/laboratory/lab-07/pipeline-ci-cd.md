@@ -1,5 +1,13 @@
 # S1 — CI/CD, incidencia productiva y recuperación
 
+## Estado vigente: preparación del release del 19 de noviembre
+
+El job productivo vuelve a estar bloqueado mediante `false &&`. Las referencias
+a activación en secciones anteriores son históricas. La corrección actual de
+ACL del outbox, health protegido, alias por API y requisitos externos está en
+[Preparación de despliegue seguro](preparacion-despliegue-seguro.md).
+No se ha ejecutado un despliegue ni se autoriza producción por documentar estas pruebas.
+
 ## Contexto de deploy: run 41944599501 — corrección preparada, sin desplegar
 
 Revisión del 4 de noviembre de 2026, rama

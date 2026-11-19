@@ -39,6 +39,8 @@ import { CategoryResponseDto } from '../dtos/category-response.dto';
 import { CategorySearchQueryDto } from '../dtos/category-search-query.dto';
 
 @ApiTags('categories')
+@ApiBearerAuth('bearer')
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('categories')
 export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
@@ -46,10 +48,10 @@ export class CategoriesController {
   @ApiOperation({
     summary: 'Listar categorías',
     description:
-      'Acceso público. Paginación en PostgreSQL, filtros combinables, columnas de orden controladas y desempate por identificador.',
+      'Cuenta activa autenticada. Paginación en PostgreSQL, filtros combinables, columnas de orden controladas y desempate por identificador.',
   })
   @ApiPageResponse(CategoryResponseDto)
-  @ApiProblemResponses([400, 500])
+  @ApiProblemResponses([400, 401, 500])
   @Get()
   findAll(
     @Query() query: CategorySearchQueryDto,
@@ -59,7 +61,7 @@ export class CategoriesController {
 
   @ApiOperation({
     summary: 'Consultar categorías por ID',
-    description: 'Acceso público.',
+    description: 'Cuenta activa autenticada.',
   })
   @ApiParam({
     name: 'id',
@@ -72,7 +74,7 @@ export class CategoriesController {
     isArray: false,
     description: 'Respuesta pública mediante DTO.',
   })
-  @ApiProblemResponses([400, 404, 500])
+  @ApiProblemResponses([400, 401, 404, 500])
   @Get(':id')
   findById(
     @Param('id', ParseIntPipe) id: number,
@@ -98,8 +100,6 @@ export class CategoriesController {
     },
   })
   @ApiProblemResponses([400, 401, 403, 409, 500])
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -131,8 +131,6 @@ export class CategoriesController {
     description: 'Respuesta pública mediante DTO.',
   })
   @ApiProblemResponses([400, 401, 403, 404, 409, 500])
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   @Patch(':id')
   update(
@@ -157,8 +155,6 @@ export class CategoriesController {
     description: 'Eliminación correcta; sin cuerpo.',
   })
   @ApiProblemResponses([400, 401, 403, 404, 409, 500])
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)

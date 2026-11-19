@@ -1,9 +1,10 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Order, OrderState, PaginatedOrders } from "@/types/orders";
+import OrderCancellation from "@/components/order-cancellation";
+import { costaRicaDateTime } from "@/lib/date-time";
 
 const PAGE_SIZE = 10;
 
@@ -46,10 +47,7 @@ function formatDate(value: string): string {
     return value;
   }
 
-  return new Intl.DateTimeFormat("es-CR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return costaRicaDateTime(value);
 }
 
 export default function OrdersList() {
@@ -60,7 +58,6 @@ export default function OrdersList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-
 
   useEffect(() => {
     const controller = new AbortController();
@@ -95,9 +92,7 @@ export default function OrdersList() {
 
         setData(null);
         setError(
-          err instanceof Error
-            ? err.message
-            : "Ocurrió un error inesperado.",
+          err instanceof Error ? err.message : "Ocurrió un error inesperado.",
         );
         setLoading(false);
       }
@@ -140,7 +135,9 @@ export default function OrdersList() {
     return (
       <div className="orders-message orders-empty">
         <h2>
-          {page === 0 ? "Todavía no tenés pedidos" : "No hay pedidos en esta página"}
+          {page === 0
+            ? "Todavía no tenés pedidos"
+            : "No hay pedidos en esta página"}
         </h2>
         <p>
           {page === 0
@@ -174,13 +171,9 @@ export default function OrdersList() {
         {data.content.map((order: Order) => (
           <article key={order.idPedido} className="order-card">
             <div className="order-card-header">
-              <h2>
-                Pedido #{order.idPedido}
-              </h2>
+              <h2>Pedido #{order.idPedido}</h2>
 
-              <span
-                className={`orders-status ${STATE_STYLES[order.estado]}`}
-              >
+              <span className={`orders-status ${STATE_STYLES[order.estado]}`}>
                 {STATE_LABELS[order.estado]}
               </span>
             </div>
@@ -188,33 +181,29 @@ export default function OrdersList() {
             <dl className="order-details">
               <div className="order-detail">
                 <dt>Fecha</dt>
-                <dd>
-                  {formatDate(order.fechaCreacion)}
-                </dd>
+                <dd>{formatDate(order.fechaCreacion)}</dd>
               </div>
 
               <div className="order-detail">
                 <dt>Total</dt>
-                <dd className="order-total">
-                  {formatMoney(order.total)}
-                </dd>
+                <dd className="order-total">{formatMoney(order.total)}</dd>
               </div>
 
               <div className="order-detail order-detail-address">
                 <dt>Dirección de entrega</dt>
-                <dd>
-                  {order.direccionEntrega}
-                </dd>
+                <dd>{order.direccionEntrega}</dd>
               </div>
             </dl>
+            <OrderCancellation
+              id={order.idPedido}
+              state={order.estado}
+              onChanged={() => setRetryCount((value) => value + 1)}
+            />
           </article>
         ))}
       </div>
 
-      <nav
-        aria-label="Paginación de pedidos"
-        className="orders-pagination"
-      >
+      <nav aria-label="Paginación de pedidos" className="orders-pagination">
         <button
           type="button"
           disabled={page === 0}

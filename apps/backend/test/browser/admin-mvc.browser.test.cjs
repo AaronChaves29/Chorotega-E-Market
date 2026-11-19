@@ -1,3 +1,6 @@
+const {
+  AddOrderAuditOutbox1795082400000,
+} = require('../../dist/database/migrations/1795082400000-AddOrderAuditOutbox.js');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { randomBytes, randomUUID } = require('node:crypto');
@@ -27,6 +30,9 @@ const {
 const {
   AddProductVersion1793296800000,
 } = require('../../dist/database/migrations/1793296800000-AddProductVersion.js');
+const {
+  AddStoreSocialContact1794772600000,
+} = require('../../dist/database/migrations/1794772600000-AddStoreSocialContact.js');
 const { User } = require('../../dist/modules/users/entities/user.entity.js');
 const { Store } = require('../../dist/modules/stores/entities/store.entity.js');
 const {
@@ -61,6 +67,8 @@ test(
           AlignTimestampDefaults1788998400000,
           AddPasswordHashToUser1791352458237,
           AddProductVersion1793296800000,
+          AddStoreSocialContact1794772600000,
+          AddOrderAuditOutbox1795082400000,
         ],
         logging: false,
       });

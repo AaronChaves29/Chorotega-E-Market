@@ -54,9 +54,12 @@ function add(
 }
 add('post', 'auth/login', [201, 400, 401, 429, 500]);
 add('post', 'auth/register', [201, 400, 409, 429, 500]);
+add('post', 'auth/register/entrepreneur', [201, 400, 409, 429, 500]);
+add('post', 'auth/register/courier', [201, 400, 409, 429, 500]);
+add('get', 'auth/me', [200, 401, 500], true);
 for (const resource of ['stores', 'categories', 'products']) {
-  add('get', resource, [200, 400, 500]);
-  add('get', resource + '/{id}', [200, 400, 404, 500]);
+  add('get', resource, [200, 400, 401, 500], true);
+  add('get', resource + '/{id}', [200, 400, 401, 404, 500], true);
   add(
     'post',
     resource,
@@ -83,6 +86,8 @@ add('patch', 'users/{id}', [200, 400, 401, 403, 404, 500], true);
 add('get', 'orders', [200, 400, 401, 403, 500], true);
 add('get', 'orders/{id}', [200, 400, 401, 403, 404, 500], true);
 add('post', 'orders', [201, 400, 401, 403, 404, 409, 422, 500], true);
+add('patch', 'orders/{id}/cancel', [200, 400, 401, 403, 404, 409, 500], true);
+add('patch', 'orders/{id}/prepare', [200, 400, 401, 403, 404, 409, 500], true);
 add('get', 'orders/{id}/details', [200, 400, 401, 403, 404, 500], true);
 add(
   'get',
@@ -92,6 +97,7 @@ add(
 );
 add('get', 'deliveries', [200, 400, 401, 403, 500], true);
 add('get', 'deliveries/{id}', [200, 400, 401, 403, 404, 500], true);
+add('get', 'deliveries/{id}/destination', [200, 400, 401, 403, 404, 500], true);
 add('post', 'deliveries', [201, 400, 401, 403, 404, 409, 422, 500], true);
 for (const action of ['start', 'complete', 'cancel'])
   add(
@@ -101,8 +107,20 @@ for (const action of ['start', 'complete', 'cancel'])
     true,
   );
 for (const resource of ['neighborhoods', 'couriers']) {
-  add('get', resource, [200, 500]);
-  add('get', resource + '/{id}', [200, 400, 404, 500]);
+  add(
+    'get',
+    resource,
+    resource === 'couriers' ? [200, 401, 403, 500] : [200, 401, 500],
+    true,
+  );
+  add(
+    'get',
+    resource + '/{id}',
+    resource === 'couriers'
+      ? [200, 400, 401, 403, 404, 500]
+      : [200, 400, 401, 404, 500],
+    true,
+  );
 }
 expected.push({
   method: 'get',
@@ -134,6 +152,7 @@ const queryFields: Record<string, string[]> = {
   ],
   categories: ['page', 'size', 'nombre', 'estado', 'sortBy', 'sortDirection'],
   products: [
+    'nombre',
     'page',
     'size',
     'idTienda',
@@ -178,7 +197,7 @@ const responseModels: Record<string, string> = {
   couriers: 'CourierResponseDto',
 };
 
-describe('OpenAPI HTTP: contrato generado de las 36 operaciones', () => {
+describe('OpenAPI HTTP: contrato generado de las 42 operaciones', () => {
   let context: Awaited<ReturnType<typeof createHttpTestApp>> | undefined;
   let document: OpenAPIObject;
   const previousSecret = process.env.JWT_SECRET;
@@ -255,7 +274,7 @@ describe('OpenAPI HTTP: contrato generado de las 36 operaciones', () => {
       version: '1.0.0',
     });
   });
-  it('contiene exactamente las 36 rutas y métodos esperados, sin duplicaciones', () => {
+  it('contiene exactamente las 42 operaciones de ruta y método esperadas, sin duplicaciones', () => {
     const actual = Object.entries(document.paths).flatMap(([path, item]) =>
       Object.keys(item)
         .filter((method) => ['get', 'post', 'patch', 'delete'].includes(method))
@@ -264,11 +283,14 @@ describe('OpenAPI HTTP: contrato generado de las 36 operaciones', () => {
     expect(actual.sort()).toEqual(
       expected.map((x) => `${x.method} ${x.path}`).sort(),
     );
-    expect(actual).toHaveLength(36);
+    expect(actual).toHaveLength(42);
     expect(document.paths).not.toHaveProperty('/api/v1/api/v1/couriers');
     expect(document.paths).not.toHaveProperty('/api/v1/api/v1/neighborhoods');
     expect(document.paths['/api/v1/users'].post).toBeUndefined();
     expect(document.paths['/api/v1/users/{id}'].delete).toBeUndefined();
+    expect(
+      Object.keys(document.paths).some((path) => path.includes('/admin')),
+    ).toBe(false);
   });
   it.each(expected)(
     '$method $path tiene respuestas, parámetros y seguridad correctos',
@@ -326,7 +348,12 @@ describe('OpenAPI HTTP: contrato generado de las 36 operaciones', () => {
       }
       if (
         entry.statuses.includes(201) &&
-        !['/api/v1/auth/login', '/api/v1/auth/register'].includes(entry.path)
+        ![
+          '/api/v1/auth/login',
+          '/api/v1/auth/register',
+          '/api/v1/auth/register/entrepreneur',
+          '/api/v1/auth/register/courier',
+        ].includes(entry.path)
       ) {
         const r = op.responses['201'];
         if (!r || '$ref' in r) throw new Error('Respuesta inesperada');
@@ -334,6 +361,46 @@ describe('OpenAPI HTTP: contrato generado de las 36 operaciones', () => {
       }
     },
   );
+  it('documenta el destino protegido con un parámetro ID y únicamente sus cuatro campos públicos', () => {
+    const op = operation('/api/v1/deliveries/{id}/destination', 'get');
+    expect(op.security).toEqual([{ bearer: [] }]);
+    expect(op.parameters).toContainEqual(
+      expect.objectContaining({
+        name: 'id',
+        in: 'path',
+        required: true,
+        schema: { type: 'integer', minimum: 1 },
+      }),
+    );
+    const response = op.responses['200'];
+    if (!response || '$ref' in response)
+      throw new Error('Respuesta inesperada');
+    expect(response.content?.['application/json'].schema).toEqual({
+      $ref: '#/components/schemas/DeliveryDestinationResponseDto',
+    });
+    const model = schema(
+      document.components?.schemas?.DeliveryDestinationResponseDto,
+    );
+    const fields = [
+      'idEntrega',
+      'idPedido',
+      'direccionEntrega',
+      'nombreBarrio',
+    ].sort();
+    expect(Object.keys(model.properties ?? {}).sort()).toEqual(fields);
+    expect([...(model.required ?? [])].sort()).toEqual(fields);
+    expect(schema(model.properties?.idEntrega).type).toBe('integer');
+    expect(schema(model.properties?.idPedido).type).toBe('integer');
+    expect(schema(model.properties?.direccionEntrega)).toMatchObject({
+      type: 'string',
+      maxLength: 255,
+    });
+    expect(schema(model.properties?.nombreBarrio)).toMatchObject({
+      type: 'string',
+      maxLength: 100,
+    });
+  });
+
   it('todos los $ref del JSON apuntan a componentes existentes', () => {
     function check(value: unknown) {
       if (!value || typeof value !== 'object') return;
@@ -372,7 +439,17 @@ describe('OpenAPI HTTP: contrato generado de las 36 operaciones', () => {
       ].sort(),
     );
     expect(JSON.stringify(models)).not.toMatch(
-      /authId|claveHash|clave_hash|driverError|"repartidor"|"pedido"|"detalles"/,
+      /authId|claveHash|clave_hash|driverError|"pedido"|"detalles"/,
+    );
+    // Explicit registration DTO, not the raw User.repartidor relation.
+    expect(
+      schema(models.CourierRegistrationResponseDto).properties,
+    ).toMatchObject({
+      usuario: { $ref: '#/components/schemas/UserResponseDto' },
+      repartidor: { $ref: '#/components/schemas/CourierResponseDto' },
+    });
+    expect(schema(models.UserResponseDto).properties).not.toHaveProperty(
+      'repartidor',
     );
     for (const name of [
       'User',
@@ -421,6 +498,41 @@ describe('OpenAPI HTTP: contrato generado de las 36 operaciones', () => {
         expect(model.required ?? []).not.toContain(field);
       }
     }
+  });
+  it('documents optional commercial contacts, nullable responses and inherited entrepreneur input', () => {
+    const models = document.components?.schemas ?? {};
+    for (const name of [
+      'CreateStoreDto',
+      'UpdateStoreDto',
+      'EntrepreneurStoreDto',
+    ]) {
+      const model = schema(models[name]);
+      for (const field of [
+        'instagramUrl',
+        'facebookUrl',
+        'whatsappComercial',
+      ]) {
+        expect(schema(model.properties?.[field])).toMatchObject({
+          type: 'string',
+          nullable: true,
+        });
+        expect(model.required ?? []).not.toContain(field);
+      }
+    }
+    const response = schema(models.StoreResponseDto);
+    for (const field of ['instagramUrl', 'facebookUrl', 'whatsappComercial']) {
+      expect(schema(response.properties?.[field])).toMatchObject({
+        type: 'string',
+        nullable: true,
+      });
+      expect(response.required).toContain(field);
+    }
+    expect(schema(models.EntrepreneurStoreDto).properties).not.toHaveProperty(
+      'idEmprendedor',
+    );
+    expect(schema(models.EntrepreneurStoreDto).properties).not.toHaveProperty(
+      'telefono',
+    );
   });
   it('documenta PATCH parcial, campos nullable y contraseña writeOnly', () => {
     const models = document.components?.schemas ?? {};
@@ -520,7 +632,7 @@ describe('OpenAPI HTTP: contrato generado de las 36 operaciones', () => {
           .replace(/\?.*$/, '')
           .replace(/\{\{detailId\}\}/g, '{detailId}')
           .replace(
-            /\{\{(?:userId|storeId|categoryId|productId|orderId|deliveryId|cancellableDeliveryId|neighborhoodId|courierId)\}\}/g,
+            /\{\{(?:userId|storeId|categoryId|productId|orderId|cancellableOrderId|deliveryId|cancellableDeliveryId|neighborhoodId|courierId)\}\}/g,
             '{id}',
           );
         return `${m[1].toLowerCase()} ${path}`;
@@ -618,10 +730,13 @@ describe('OpenAPI HTTP: contrato generado de las 36 operaciones', () => {
     const prepared = await makeOrder(),
       cancellable = await makeOrder();
     const deliveriesService = context.app.get(DeliveriesService);
-    const assigned = await deliveriesService.assignDelivery({
-      idPedido: cancellable.idPedido,
-      idRepartidor: otherCourier.idRepartidor,
-    });
+    const assigned = await deliveriesService.assignDelivery(
+      {
+        idPedido: cancellable.idPedido,
+        idRepartidor: otherCourier.idRepartidor,
+      },
+      { idUsuario: 1, sub: 'admin@example.test', rol: 'ADMIN' },
+    );
     const collection = readFileSync(
       resolve(__dirname, '../../../../../docs/laboratory/lab-05/api.http'),
       'utf8',
@@ -710,7 +825,9 @@ describe('OpenAPI HTTP: contrato generado de las 36 operaciones', () => {
         expect(response.headers.location).toEqual(expect.any(String));
       executed.push(name);
     }
-    expect(executed).toHaveLength(45);
+    expect(executed).toHaveLength(54);
+    expect(responses.cancelOrder).toMatchObject({ estado: 'CANCELADO' });
+    expect(responses.cancelledOrder).toEqual(responses.cancelOrder);
     expect(
       await orders.findOneByOrFail({ idPedido: prepared.idPedido }),
     ).toMatchObject({ estado: 'ENTREGADO' });

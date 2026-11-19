@@ -1,41 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
-import { apiRequest } from "@/lib/api-client";
-
-const PAGE_SIZE = 20;
+import { apiRequest, SESSION_COOKIE } from "@/lib/api-client";
+import { storeSearchParams } from "@/lib/store-search";
 
 export async function GET(request: NextRequest) {
-  const pageParam = request.nextUrl.searchParams.get("page") ?? "0";
-  const page = Number(pageParam);
-
-  if (
-    !Number.isSafeInteger(page) ||
-    page < 0 ||
-    !/^\d+$/.test(pageParam)
-  ) {
+  const params = storeSearchParams(request.nextUrl.searchParams);
+  if (!params) {
     return NextResponse.json(
-      { message: "El número de página no es válido." },
-      { status: 400 },
+      { message: "Los parámetros de búsqueda no son válidos." },
+      { status: 400, headers: { "Cache-Control": "no-store" } },
     );
   }
 
-  const params = new URLSearchParams({
-    page: String(page),
-    size: String(PAGE_SIZE),
-    estado: "ACTIVA",
-    sortBy: "nombre",
-    sortDirection: "ASC",
-  });
-
   try {
-    const { response, data } = await apiRequest<unknown>(
+    const { response, data, sessionExpired } = await apiRequest<unknown>(
       `/stores?${params.toString()}`,
-      { authenticated: false },
     );
+
+    if (sessionExpired) {
+      const result = NextResponse.json(
+        {
+          message: "Tu sesión venció o no es válida. Iniciá sesión nuevamente.",
+        },
+        { status: 401, headers: { "Cache-Control": "no-store" } },
+      );
+      result.cookies.delete(SESSION_COOKIE);
+      return result;
+    }
 
     if (!response.ok) {
       return NextResponse.json(
         { message: "No fue posible consultar las tiendas." },
-        { status: response.status },
+        { status: response.status, headers: { "Cache-Control": "no-store" } },
       );
     }
 
@@ -47,7 +42,7 @@ export async function GET(request: NextRequest) {
   } catch {
     return NextResponse.json(
       { message: "No fue posible conectar con el servidor." },
-      { status: 502 },
+      { status: 502, headers: { "Cache-Control": "no-store" } },
     );
   }
 }

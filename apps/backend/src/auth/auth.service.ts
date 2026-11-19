@@ -7,7 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'node:crypto';
-import { QueryFailedError } from 'typeorm';
+import { rethrowRegistrationError } from './registration-error';
 import { UsersRepository } from '../modules/users/repositories/users.repository';
 import { User } from '../modules/users/entities/user.entity';
 import { UserMapper } from '../modules/users/mappers/user.mapper';
@@ -46,12 +46,24 @@ export class AuthService {
     try {
       return UserMapper.toResponseDto(await this.usersRepository.save(user));
     } catch (error) {
-      this.rethrowDuplicateEmail(error);
+      rethrowRegistrationError(error);
     }
   }
 
   async login(dto: LoginDto): Promise<LoginResponseDto> {
     return this.issueCredentials(await this.authenticateCredentials(dto));
+  }
+
+  async profile(idUsuario: number): Promise<UserResponseDto> {
+    const user = await this.usersRepository.findProfileById(idUsuario);
+    if (
+      !user ||
+      user.estado !== 'ACTIVO' ||
+      !['ADMIN', 'CLIENTE', 'EMPRENDEDOR', 'REPARTIDOR'].includes(user.rol)
+    ) {
+      throw new UnauthorizedException('Token inválido o expirado.');
+    }
+    return UserMapper.toResponseDto(user);
   }
 
   async loginAdmin(dto: LoginDto): Promise<LoginResponseDto> {
@@ -61,7 +73,9 @@ export class AuthService {
   }
 
   private async authenticateCredentials(dto: LoginDto): Promise<User> {
-    const user = await this.usersRepository.findByEmail(dto.correo);
+    const user = await this.usersRepository.findByEmail(
+      dto.correo.trim().toLowerCase(),
+    );
 
     if (!user || !user.claveHash) {
       new JsonLogger().security('login_failed');
@@ -90,24 +104,5 @@ export class AuthService {
       tipo: 'Bearer',
       expiraEnSegundos: 3600,
     };
-  }
-
-  private rethrowDuplicateEmail(error: unknown): never {
-    if (error instanceof QueryFailedError) {
-      const driver: unknown = error.driverError;
-      if (
-        typeof driver === 'object' &&
-        driver !== null &&
-        'code' in driver &&
-        'constraint' in driver &&
-        driver.code === '23505' &&
-        driver.constraint === 'usuario_correo_key'
-      ) {
-        throw new ConflictException(
-          'Ya existe una cuenta con ese correo electrónico.',
-        );
-      }
-    }
-    throw error;
   }
 }

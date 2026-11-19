@@ -1,17 +1,32 @@
-import { ApiTags, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard';
+import {
+  ApiBearerAuth,
+  ApiTags,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { ApiProblemResponses } from '../../../common/http/openapi-contract';
-import { Controller, Get, Param, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  UseGuards,
+} from '@nestjs/common';
 import { NeighborhoodResponseDto } from '../dtos/neighborhood-response.dto';
 import { NeighborhoodsService } from '../services/neighborhoods.service';
 
 @ApiTags('neighborhoods')
+@ApiBearerAuth('bearer')
+@UseGuards(JwtAuthGuard)
 @Controller('neighborhoods')
 export class NeighborhoodsController {
   constructor(private readonly neighborhoodsService: NeighborhoodsService) {}
 
   @ApiOperation({
     summary: 'Listar barrios',
-    description: 'Acceso público.',
+    description: 'Cuenta activa autenticada.',
   })
   @ApiResponse({
     status: 200,
@@ -19,7 +34,7 @@ export class NeighborhoodsController {
     isArray: true,
     description: 'Respuesta pública mediante DTO.',
   })
-  @ApiProblemResponses([500])
+  @ApiProblemResponses([401, 500])
   @Get()
   findAll(): Promise<NeighborhoodResponseDto[]> {
     return this.neighborhoodsService.findAll();
@@ -27,7 +42,7 @@ export class NeighborhoodsController {
 
   @ApiOperation({
     summary: 'Consultar barrios por ID',
-    description: 'Acceso público.',
+    description: 'Cuenta activa autenticada.',
   })
   @ApiParam({
     name: 'id',
@@ -40,7 +55,7 @@ export class NeighborhoodsController {
     isArray: false,
     description: 'Respuesta pública mediante DTO.',
   })
-  @ApiProblemResponses([400, 404, 500])
+  @ApiProblemResponses([400, 401, 404, 500])
   @Get(':id')
   findById(
     @Param('id', ParseIntPipe) idBarrio: number,

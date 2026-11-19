@@ -1,3 +1,4 @@
+import { OrderAuditPublisher } from '../modules/order-audits/outbox/order-audit-publisher';
 import { Test } from '@nestjs/testing';
 import { getDataSourceToken } from '@nestjs/typeorm';
 import type { INestApplication } from '@nestjs/common';
@@ -73,6 +74,8 @@ describe('AppModule completo: resolución y contratos sin conexiones externas', 
     const module = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(getDataSourceToken())
       .useValue(source)
+      .overrideProvider(OrderAuditPublisher)
+      .useValue({})
       .overrideProvider(MongoDatabaseService)
       .useValue(mongo)
       .compile();
@@ -92,7 +95,7 @@ describe('AppModule completo: resolución y contratos sin conexiones externas', 
       }
     }
   });
-  it('resuelve todos los módulos y sirve el acceso MVC y Swagger con las 36 operaciones REST', async () => {
+  it('resuelve todos los módulos y sirve el acceso MVC y Swagger con las 42 operaciones REST', async () => {
     if (!app) throw new Error('Aplicación no inicializada');
     await request(app.getHttpServer())
       .get('/admin/login')
@@ -105,6 +108,10 @@ describe('AppModule completo: resolución y contratos sin conexiones externas', 
       paths: Record<string, Record<string, unknown>>;
     };
     expect(document.paths['/api/v1/auth/register']?.post).toBeDefined();
+    expect(
+      document.paths['/api/v1/deliveries/{id}/destination']?.get,
+    ).toBeDefined();
+    expect(document.paths['/api/v1/orders/{id}/cancel']?.patch).toBeDefined();
     const methods = [
       'get',
       'post',
@@ -121,7 +128,7 @@ describe('AppModule completo: resolución y contratos sin conexiones externas', 
           Object.keys(path).filter((key) => methods.includes(key)).length,
         0,
       ),
-    ).toBe(36);
+    ).toBe(42);
     expect(
       Object.keys(document.paths).some((path) => path.includes('/admin')),
     ).toBe(false);

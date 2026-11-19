@@ -21,12 +21,19 @@ interface DeliveryBody {
   fechaAsignacion: string;
   fechaEntrega: string | null;
 }
+interface DestinationBody {
+  idEntrega: number;
+  idPedido: number;
+  direccionEntrega: string;
+  nombreBarrio: string;
+}
 type Identity =
   'ADMIN' | 'owner' | 'other' | 'unregistered' | 'CLIENTE' | 'EMPRENDEDOR';
 const root = '/api/v1/deliveries';
 const routes = [
   ['get', root],
   ['get', `${root}/1`],
+  ['get', `${root}/1/destination`],
   ['post', root],
   ['post', `${root}/1/start`],
   ['post', `${root}/1/complete`],
@@ -212,6 +219,13 @@ describe('Deliveries HTTP: alcance, errores y transacciones', () => {
         problem(await call(identity, method, path), 403, path);
     },
   );
+  it.each(['ADMIN', 'CLIENTE', 'EMPRENDEDOR'] as const)(
+    'rechaza el destino al rol %s',
+    async (identity) => {
+      const path = `${root}/1/destination`;
+      problem(await call(identity, 'get', path), 403, path);
+    },
+  );
   it('conserva operaciones administrativas y de repartidor separadas', async () => {
     const delivery = await assign();
     problem(
@@ -281,6 +295,62 @@ describe('Deliveries HTTP: alcance, errores y transacciones', () => {
       });
     }
   });
+  it('expone el destino mínimo solo a su repartidor y mientras la entrega está activa', async () => {
+    const own = await assign();
+    const foreign = await assign(fixture.second, fixture.other);
+    const path = `${root}/${own.idEntrega}/destination`;
+
+    const assigned = await call('owner', 'get', path).expect(200);
+    const assignedBody = assigned.body as DestinationBody;
+    expect(assignedBody).toEqual({
+      idEntrega: own.idEntrega,
+      idPedido: own.idPedido,
+      direccionEntrega: 'Nicoya',
+      nombreBarrio: 'Barrio HTTP',
+    });
+    expect(Object.keys(assignedBody).sort()).toEqual(
+      ['idEntrega', 'idPedido', 'direccionEntrega', 'nombreBarrio'].sort(),
+    );
+    problem(
+      await call('owner', 'get', `${root}/${foreign.idEntrega}/destination`),
+      404,
+      `${root}/${foreign.idEntrega}/destination`,
+    );
+
+    await call('owner', 'post', `${root}/${own.idEntrega}/start`).expect(200);
+    expect((await call('owner', 'get', path).expect(200)).body).toMatchObject({
+      idEntrega: own.idEntrega,
+      direccionEntrega: 'Nicoya',
+      nombreBarrio: 'Barrio HTTP',
+    });
+    await call('owner', 'post', `${root}/${own.idEntrega}/complete`).expect(
+      200,
+    );
+    const completed = await call('owner', 'get', path);
+    problem(completed, 404, path);
+    expect(completed.text).not.toContain('Nicoya');
+    expect(completed.text).not.toContain('Barrio HTTP');
+  });
+  it('oculta el destino cancelado, inexistente y de identificadores inválidos', async () => {
+    const canceled = await assign();
+    const path = `${root}/${canceled.idEntrega}/destination`;
+    await call('ADMIN', 'post', `${root}/${canceled.idEntrega}/cancel`).expect(
+      200,
+    );
+    const response = await call('owner', 'get', path);
+    problem(response, 404, path);
+    expect(response.text).not.toContain('Nicoya');
+    expect(response.text).not.toContain('Barrio HTTP');
+
+    const missing = `${root}/2147483647/destination`;
+    problem(await call('owner', 'get', missing), 404, missing);
+    const invalid = `${root}/0/destination`;
+    problem(await call('owner', 'get', invalid), 400, invalid);
+    const malformed = `${root}/invalid/destination`;
+    problem(await call('owner', 'get', malformed), 400, malformed);
+    const tooLarge = `${root}/2147483648/destination`;
+    problem(await call('owner', 'get', tooLarge), 400, tooLarge);
+  });
   it('devuelve página vacía y detalle 404 para usuario sin repartidor asociado', async () => {
     const delivery = await assign();
     expect(
@@ -290,6 +360,15 @@ describe('Deliveries HTTP: alcance, errores y transacciones', () => {
       await call('unregistered', 'get', `${root}/${delivery.idEntrega}`),
       404,
       `${root}/${delivery.idEntrega}`,
+    );
+    problem(
+      await call(
+        'unregistered',
+        'get',
+        `${root}/${delivery.idEntrega}/destination`,
+      ),
+      404,
+      `${root}/${delivery.idEntrega}/destination`,
     );
   });
   it('pagina, cuenta, combina filtros y ordena dentro del alcance autorizado', async () => {

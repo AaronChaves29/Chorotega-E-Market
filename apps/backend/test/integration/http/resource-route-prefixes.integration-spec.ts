@@ -1,3 +1,5 @@
+import { CatalogHttpAuth } from '../../support/catalog-http-auth';
+import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { CouriersModule } from '../../../src/modules/couriers/couriers.module';
@@ -14,8 +16,12 @@ describe('Prefijos HTTP de barrios y repartidores', () => {
   let neighborhood: NeighborhoodResponseDto;
   let courier: CourierResponseDto;
 
+  const auth = new CatalogHttpAuth();
+  let token: string;
   beforeAll(async () => {
+    await auth.prepare();
     context = await createHttpTestApp([NeighborhoodsModule, CouriersModule]);
+    token = await auth.loginAdmin(context.database.dataSource, server());
     const source = context.database.dataSource;
     const savedNeighborhood = await source.getRepository(Neighborhood).save({
       nombre: 'Barrio de prueba',
@@ -50,7 +56,11 @@ describe('Prefijos HTTP de barrios y repartidores', () => {
   });
 
   afterAll(async () => {
-    await context?.close();
+    try {
+      await context?.close();
+    } finally {
+      auth.restore();
+    }
   });
 
   function server() {
@@ -68,13 +78,56 @@ describe('Prefijos HTTP de barrios y repartidores', () => {
         ? neighborhood.idBarrio
         : courier.idRepartidor;
 
-    it('expone la colección pública con un único prefijo y DTOs', async () => {
-      await request(server()).get(path).expect(200).expect([result()]);
+    it.each(['', '/1'])(
+      'rechaza acceso anonimo e invalido a %s',
+      async (suffix) => {
+        await request(server())
+          .get(path + suffix)
+          .expect(401);
+        await request(server())
+          .get(path + suffix)
+          .set('Authorization', 'Bearer invalid-marker')
+          .expect(401);
+      },
+    );
+
+    it.each(['CLIENTE', 'EMPRENDEDOR', 'REPARTIDOR'])(
+      'aplica la politica de lectura a %s con identidad real',
+      async (rol) => {
+        const user = await context!.database.dataSource
+          .getRepository(User)
+          .save({
+            authId: randomUUID(),
+            nombre: 'Acceso',
+            apellido: 'Temporal',
+            correo: `${randomUUID()}@example.test`,
+            rol,
+            estado: 'ACTIVO',
+          });
+        const jwt = context!.app
+          .get(JwtService)
+          .sign({ idUsuario: user.idUsuario, sub: user.correo });
+        for (const suffix of ['', `/${id()}`]) {
+          await request(server())
+            .get(path + suffix)
+            .set('Authorization', `Bearer ${jwt}`)
+            .expect(resource === 'couriers' ? 403 : 200);
+        }
+      },
+    );
+
+    it('expone la colección autenticada con un único prefijo y DTOs', async () => {
+      await request(server())
+        .get(path)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200)
+        .expect([result()]);
     });
 
-    it('expone el detalle público con un único prefijo y DTO', async () => {
+    it('expone el detalle autenticado con un único prefijo y DTO', async () => {
       await request(server())
         .get(`${path}/${id()}`)
+        .set('Authorization', `Bearer ${token}`)
         .expect(200)
         .expect(result());
     });
@@ -85,6 +138,7 @@ describe('Prefijos HTTP de barrios y repartidores', () => {
         const route = operation === 'listado' ? oldPath : `${oldPath}/${id()}`;
         const response = await request(server())
           .get(route)
+          .set('Authorization', `Bearer ${token}`)
           .expect(404)
           .expect('Content-Type', /application\/problem\+json/);
         expect(response.body).toMatchObject({
@@ -98,6 +152,7 @@ describe('Prefijos HTTP de barrios y repartidores', () => {
     it('conserva el 400 de ID inválido en la ruta corregida', async () => {
       const response = await request(server())
         .get(`${path}/abc`)
+        .set('Authorization', `Bearer ${token}`)
         .expect(400)
         .expect('Content-Type', /application\/problem\+json/);
       expect(response.body).toMatchObject({
@@ -109,6 +164,7 @@ describe('Prefijos HTTP de barrios y repartidores', () => {
     it('conserva el 404 de un recurso inexistente', async () => {
       const response = await request(server())
         .get(`${path}/2147483647`)
+        .set('Authorization', `Bearer ${token}`)
         .expect(404)
         .expect('Content-Type', /application\/problem\+json/);
       expect(response.body).toMatchObject({

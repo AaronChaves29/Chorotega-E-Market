@@ -14,6 +14,17 @@ export class StoreResponseDto {
   telefono!: string | null;
   @ApiProperty({ type: 'string', nullable: true })
   horario!: string | null;
+  @ApiProperty({ type: 'string', nullable: true, maxLength: 500 })
+  instagramUrl!: string | null;
+  @ApiProperty({ type: 'string', nullable: true, maxLength: 500 })
+  facebookUrl!: string | null;
+  @ApiProperty({
+    type: 'string',
+    nullable: true,
+    maxLength: 15,
+    pattern: '^[1-9][0-9]{7,14}$',
+  })
+  whatsappComercial!: string | null;
   @ApiProperty({ type: 'string', enum: ['ACTIVA', 'INACTIVA'] })
   estado!: string;
   @ApiProperty({ type: 'string', format: 'date-time' })

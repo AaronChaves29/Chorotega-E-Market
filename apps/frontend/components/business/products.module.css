@@ -1,0 +1,26 @@
+.search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin: 24px 0;
+}
+.search > div {
+  flex: 1 1 240px;
+}
+.conflict {
+  margin-top: 24px;
+  border-color: #702b3d;
+}
+.current {
+  margin-top: 20px;
+  border-top: 1px solid #d9ded4;
+  padding-top: 16px;
+}
+.conflict > button,
+.conflict > a {
+  margin: 12px 12px 0 0;
+}
+.conflict p {
+  overflow-wrap: anywhere;
+}

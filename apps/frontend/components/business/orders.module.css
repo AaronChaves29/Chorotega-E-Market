@@ -1,0 +1,28 @@
+.items {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 16px;
+}
+.items li {
+  border: 1px solid #d9ded4;
+  border-radius: 12px;
+  padding: 18px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.items h4 {
+  font-size: 18px;
+  margin: 0;
+}
+.confirm {
+  margin: 24px 0;
+  padding: 18px;
+  border: 1px solid #702b3d;
+  border-radius: 12px;
+}
+.confirm button {
+  margin: 12px 12px 0 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}

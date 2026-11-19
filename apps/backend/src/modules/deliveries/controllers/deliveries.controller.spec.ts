@@ -20,6 +20,7 @@ describe('DeliveriesController', () => {
     cancelDelivery: jest.fn(),
     searchVisible: jest.fn(),
     findVisibleById: jest.fn(),
+    findCourierDestination: jest.fn(),
   };
 
   const jwtAuthGuard = {
@@ -81,11 +82,21 @@ describe('DeliveriesController', () => {
     deliveriesService.assignDelivery.mockResolvedValue(delivery);
 
     await expect(
-      controller.assignDelivery(input, httpResponse as never),
+      controller.assignDelivery(
+        input,
+        {
+          user: { idUsuario: 1, sub: 'admin@example.test', rol: 'ADMIN' },
+        } as never,
+        httpResponse as never,
+      ),
     ).resolves.toBe(delivery);
 
     expect(deliveriesService.assignDelivery).toHaveBeenCalledTimes(1);
-    expect(deliveriesService.assignDelivery).toHaveBeenCalledWith(input);
+    expect(deliveriesService.assignDelivery).toHaveBeenCalledWith(input, {
+      idUsuario: 1,
+      sub: 'admin@example.test',
+      rol: 'ADMIN',
+    });
 
     expect(httpResponse.location).toHaveBeenCalledTimes(1);
     expect(httpResponse.location).toHaveBeenCalledWith('/api/v1/deliveries/1');
@@ -143,10 +154,18 @@ describe('DeliveriesController', () => {
 
     deliveriesService.cancelDelivery.mockResolvedValue(response);
 
-    await expect(controller.cancelDelivery(1)).resolves.toBe(response);
+    await expect(
+      controller.cancelDelivery(1, {
+        user: { idUsuario: 1, sub: 'admin@example.test', rol: 'ADMIN' },
+      } as never),
+    ).resolves.toBe(response);
 
     expect(deliveriesService.cancelDelivery).toHaveBeenCalledTimes(1);
-    expect(deliveriesService.cancelDelivery).toHaveBeenCalledWith(1);
+    expect(deliveriesService.cancelDelivery).toHaveBeenCalledWith(1, {
+      idUsuario: 1,
+      sub: 'admin@example.test',
+      rol: 'ADMIN',
+    });
   });
 
   it('delega la búsqueda paginada de entregas al servicio', async () => {
@@ -200,4 +219,33 @@ describe('DeliveriesController', () => {
       authenticatedRequest.user,
     );
   });
+
+  it('delega la consulta del destino usando el usuario autenticado', async () => {
+    const destination = {
+      idEntrega: 1,
+      idPedido: 10,
+      direccionEntrega: 'Centro de Nicoya',
+      nombreBarrio: 'Barrio Centro',
+    };
+    deliveriesService.findCourierDestination.mockResolvedValue(destination);
+
+    await expect(
+      controller.findCourierDestination('1', authenticatedRequest as never),
+    ).resolves.toBe(destination);
+
+    expect(deliveriesService.findCourierDestination).toHaveBeenCalledWith(
+      1,
+      authenticatedRequest.user.idUsuario,
+    );
+  });
+
+  it.each(['0', '-1', '1.2', '2147483648', 'invalid'])(
+    'rechaza identificador de entrega inválido: %s',
+    (id) => {
+      expect(() =>
+        controller.findCourierDestination(id, authenticatedRequest as never),
+      ).toThrow('El identificador de entrega no es válido.');
+      expect(deliveriesService.findCourierDestination).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -31,6 +31,8 @@ describe('Migración incremental de versión de productos', () => {
         cantidadDisponible: 7,
       });
       // Recrea el estado anterior con historial y datos reales; solo en el contenedor.
+      await ds.undoLastMigration(); // Outbox posterior al contacto social.
+      await ds.undoLastMigration(); // Contacto social posterior a versión.
       await ds.undoLastMigration();
       const columns = await ds.query<{ column_name: string }[]>(
         "SELECT column_name FROM information_schema.columns WHERE table_name = 'producto' AND column_name = 'version'",
@@ -39,6 +41,8 @@ describe('Migración incremental de versión de productos', () => {
       const migrations = await ds.runMigrations();
       expect(migrations.map((m) => m.name)).toEqual([
         'AddProductVersion1793296800000',
+        'AddStoreSocialContact1794772600000',
+        'AddOrderAuditOutbox1795082400000',
       ]);
       expect(
         await ds

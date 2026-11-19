@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 
 type RegistrationError = {
@@ -21,9 +21,11 @@ export default function RegisterClientForm() {
   const [mensaje, setMensaje] = useState("");
   const [errores, setErrores] = useState<string[]>([]);
   const [registrado, setRegistrado] = useState(false);
+  const submissionLock = useRef(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submissionLock.current) return;
     setMensaje("");
     setErrores([]);
 
@@ -32,6 +34,7 @@ export default function RegisterClientForm() {
       return;
     }
 
+    submissionLock.current = true;
     setCargando(true);
     try {
       const response = await fetch("/api/auth/register", {
@@ -46,9 +49,9 @@ export default function RegisterClientForm() {
         }),
       });
 
-      const data = (await response.json().catch(() => null)) as
-        | RegistrationError
-        | null;
+      const data = (await response
+        .json()
+        .catch(() => null)) as RegistrationError | null;
 
       if (!response.ok) {
         setMensaje(
@@ -68,6 +71,7 @@ export default function RegisterClientForm() {
     } catch {
       setMensaje("No se pudo conectar con el servidor. Intentá de nuevo.");
     } finally {
+      submissionLock.current = false;
       setCargando(false);
     }
   }
@@ -173,7 +177,9 @@ export default function RegisterClientForm() {
           <button
             type="button"
             className="registration-password-toggle"
-            aria-label={mostrarClave ? "Ocultar contraseña" : "Mostrar contraseña"}
+            aria-label={
+              mostrarClave ? "Ocultar contraseña" : "Mostrar contraseña"
+            }
             aria-pressed={mostrarClave}
             onClick={() => setMostrarClave((visible) => !visible)}
           >
@@ -229,11 +235,7 @@ export default function RegisterClientForm() {
         </div>
       )}
 
-      <button
-        type="submit"
-        className="registration-submit"
-        disabled={cargando}
-      >
+      <button type="submit" className="registration-submit" disabled={cargando}>
         {cargando ? "Creando cuenta..." : "Crear cuenta"}
         {!cargando && <span aria-hidden="true">→</span>}
       </button>

@@ -39,6 +39,8 @@ import { StoreResponseDto } from '../dtos/store-response.dto';
 import { StoreSearchQueryDto } from '../dtos/store-search-query.dto';
 
 @ApiTags('stores')
+@ApiBearerAuth('bearer')
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('stores')
 export class StoresController {
   constructor(private readonly storesService: StoresService) {}
@@ -46,10 +48,10 @@ export class StoresController {
   @ApiOperation({
     summary: 'Listar tiendas',
     description:
-      'Acceso público. Paginación en PostgreSQL, filtros combinables, columnas de orden controladas y desempate por identificador.',
+      'Cuenta activa autenticada. Paginación en PostgreSQL, filtros combinables, columnas de orden controladas y desempate por identificador.',
   })
   @ApiPageResponse(StoreResponseDto)
-  @ApiProblemResponses([400, 500])
+  @ApiProblemResponses([400, 401, 500])
   @Get()
   findAll(
     @Query() query: StoreSearchQueryDto,
@@ -59,7 +61,7 @@ export class StoresController {
 
   @ApiOperation({
     summary: 'Consultar tiendas por ID',
-    description: 'Acceso público.',
+    description: 'Cuenta activa autenticada.',
   })
   @ApiParam({
     name: 'id',
@@ -72,7 +74,7 @@ export class StoresController {
     isArray: false,
     description: 'Respuesta pública mediante DTO.',
   })
-  @ApiProblemResponses([400, 404, 500])
+  @ApiProblemResponses([400, 401, 404, 500])
   @Get(':id')
   findById(@Param('id', ParseIntPipe) id: number): Promise<StoreResponseDto> {
     return this.storesService.findById(id);
@@ -96,8 +98,6 @@ export class StoresController {
     },
   })
   @ApiProblemResponses([400, 401, 403, 404, 422, 500])
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'EMPRENDEDOR')
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -129,8 +129,6 @@ export class StoresController {
     description: 'Respuesta pública mediante DTO.',
   })
   @ApiProblemResponses([400, 401, 403, 404, 500])
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'EMPRENDEDOR')
   @Patch(':id')
   update(
@@ -155,8 +153,6 @@ export class StoresController {
     description: 'Eliminación correcta; sin cuerpo.',
   })
   @ApiProblemResponses([400, 401, 403, 404, 409, 500])
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'EMPRENDEDOR')
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)

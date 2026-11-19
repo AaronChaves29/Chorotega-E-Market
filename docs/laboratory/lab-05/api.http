@@ -32,6 +32,7 @@
 @categoryId = {{createCategory.response.body.$.idCategoria}}
 @productId = {{createProduct.response.body.$.idProducto}}
 @orderId = {{createOrder.response.body.$.idPedido}}
+@cancellableOrderId = {{createOrderToCancel.response.body.$.idPedido}}
 @detailId = {{createOrder.response.body.$.items[0].idDetalle}}
 @deliveryId = {{assignDelivery.response.body.$.idEntrega}}
 @existingCategoryName = REEMPLAZAR_POR_CATEGORIA_EXISTENTE
@@ -49,6 +50,35 @@ Content-Type: application/json
   "correo": "{{registerEmail}}",
   "telefono": "88888888",
   "clave": "{{registerPassword}}"
+}
+
+### Auth - registrar repartidor
+# @name registerCourier
+# expected-status: 201
+POST {{baseUrl}}/api/v1/auth/register/courier
+Content-Type: application/json
+
+{
+  "nombre": "Persona",
+  "apellido": "Repartidora",
+  "correo": "nuevo-repartidor@example.test",
+  "clave": "{{registerPassword}}",
+  "telefono": "88888888",
+  "medioTransporte": "Bicicleta"
+}
+
+### Auth - registrar emprendedor y negocio
+# @name registerEntrepreneur
+# expected-status: 201
+POST {{baseUrl}}/api/v1/auth/register/entrepreneur
+Content-Type: application/json
+
+{
+  "nombre": "Persona",
+  "apellido": "Emprendedora",
+  "correo": "nuevo-negocio@example.test",
+  "clave": "{{registerPassword}}",
+  "tienda": { "nombre": "Negocio de prueba", "direccion": "Nicoya, direccion de prueba" }
 }
 
 ### Auth — login Admin
@@ -72,6 +102,12 @@ Content-Type: application/json
   "correo": "{{clientEmail}}",
   "clave": "{{clientPassword}}"
 }
+
+### Auth — perfil propio
+# @name currentProfile
+# expected-status: 200
+GET {{baseUrl}}/api/v1/auth/me
+Authorization: Bearer {{clientToken}}
 
 ### Auth — login Courier
 # @name loginCourier
@@ -135,11 +171,13 @@ Content-Type: application/json
 # @name listStore
 # expected-status: 200
 GET {{baseUrl}}/api/v1/stores?page=0&size=10&sortDirection=DESC
+Authorization: Bearer {{clientToken}}
 
 ### stores — detalle
 # @name getStore
 # expected-status: 200
 GET {{baseUrl}}/api/v1/stores/{{storeId}}
+Authorization: Bearer {{clientToken}}
 
 ### stores — PATCH parcial
 # @name patchStore
@@ -175,11 +213,13 @@ Content-Type: application/json
 # @name listCategory
 # expected-status: 200
 GET {{baseUrl}}/api/v1/categories?page=0&size=10&sortDirection=DESC
+Authorization: Bearer {{clientToken}}
 
 ### categories — detalle
 # @name getCategory
 # expected-status: 200
 GET {{baseUrl}}/api/v1/categories/{{categoryId}}
+Authorization: Bearer {{clientToken}}
 
 ### categories — PATCH parcial
 # @name patchCategory
@@ -217,11 +257,13 @@ Content-Type: application/json
 # @name listProduct
 # expected-status: 200
 GET {{baseUrl}}/api/v1/products?page=0&size=10&sortDirection=DESC
+Authorization: Bearer {{clientToken}}
 
 ### products — detalle
 # @name getProduct
 # expected-status: 200
 GET {{baseUrl}}/api/v1/products/{{productId}}
+Authorization: Bearer {{clientToken}}
 
 ### products — PATCH parcial
 # @name patchProduct
@@ -283,6 +325,49 @@ Authorization: Bearer {{clientToken}}
 GET {{baseUrl}}/api/v1/orders/{{orderId}}/details/{{detailId}}
 Authorization: Bearer {{clientToken}}
 
+### Orders — compra independiente para cancelación
+# @name createOrderToCancel
+# expected-status: 201
+POST {{baseUrl}}/api/v1/orders
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{
+  "idBarrio": {{neighborhoodId}},
+  "direccionEntrega": "Nicoya, cancelación de prueba",
+  "items": [{ "idProducto": {{catalogProductId}}, "cantidad": 1 }]
+}
+
+### Orders — cancelar pedido propio sin cambiar importes históricos
+# @name cancelOrder
+# expected-status: 200
+PATCH {{baseUrl}}/api/v1/orders/{{cancellableOrderId}}/cancel
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{}
+
+### Orders — verificar cancelación mediante lectura
+# @name cancelledOrder
+# expected-status: 200
+GET {{baseUrl}}/api/v1/orders/{{cancellableOrderId}}
+Authorization: Bearer {{clientToken}}
+
+### Orders — repetir no restaura inventario dos veces
+# @name cancelOrderAgain
+# expected-status: 409
+PATCH {{baseUrl}}/api/v1/orders/{{cancellableOrderId}}/cancel
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{}
+
+### Orders — comenzar preparacion como propietario
+# @name prepareOrder
+# expected-status: 200
+PATCH {{baseUrl}}/api/v1/orders/{{orderId}}/prepare
+Authorization: Bearer {{entrepreneurToken}}
+
 ### Deliveries — asignar pedido PREPARANDO preparado previamente
 # @name assignDelivery
 # expected-status: 201
@@ -307,6 +392,12 @@ Authorization: Bearer {{courierToken}}
 GET {{baseUrl}}/api/v1/deliveries/{{deliveryId}}
 Authorization: Bearer {{courierToken}}
 
+### Deliveries — destino mínimo de entrega propia activa
+# @name deliveryDestination
+# expected-status: 200
+GET {{baseUrl}}/api/v1/deliveries/{{deliveryId}}/destination
+Authorization: Bearer {{courierToken}}
+
 ### Deliveries — iniciar
 # @name startDelivery
 # expected-status: 200
@@ -329,21 +420,25 @@ Authorization: Bearer {{adminToken}}
 # @name listneighborhoods
 # expected-status: 200
 GET {{baseUrl}}/api/v1/neighborhoods
+Authorization: Bearer {{clientToken}}
 
 ### neighborhoods — detalle
 # @name getneighborhoods
 # expected-status: 200
 GET {{baseUrl}}/api/v1/neighborhoods/{{neighborhoodId}}
+Authorization: Bearer {{clientToken}}
 
 ### couriers — listado array
 # @name listcouriers
 # expected-status: 200
 GET {{baseUrl}}/api/v1/couriers
+Authorization: Bearer {{adminToken}}
 
 ### couriers — detalle
 # @name getcouriers
 # expected-status: 200
 GET {{baseUrl}}/api/v1/couriers/{{courierId}}
+Authorization: Bearer {{adminToken}}
 
 ### Health — excepción al prefijo v1
 # @name health
@@ -354,6 +449,7 @@ GET {{baseUrl}}/api/database/health
 # @name error400
 # expected-status: 400
 GET {{baseUrl}}/api/v1/products?disponible=yes
+Authorization: Bearer {{clientToken}}
 
 ### Error 401 — falta JWT
 # @name error401
@@ -370,6 +466,7 @@ Authorization: Bearer {{clientToken}}
 # @name error404
 # expected-status: 404
 GET {{baseUrl}}/api/v1/products/2147483647
+Authorization: Bearer {{clientToken}}
 
 ### Error 409 — categoría ya existente
 # @name error409

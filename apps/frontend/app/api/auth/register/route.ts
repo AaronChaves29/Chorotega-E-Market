@@ -35,8 +35,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const correo =
-    typeof input?.correo === "string" ? input.correo.trim() : "";
+  if (
+    !input ||
+    typeof input !== "object" ||
+    Array.isArray(input) ||
+    Object.keys(input).some(
+      (key) =>
+        !["nombre", "apellido", "correo", "telefono", "clave"].includes(key),
+    )
+  ) {
+    return NextResponse.json(
+      { message: "La solicitud contiene campos no permitidos." },
+      { status: 400 },
+    );
+  }
+
+  const correo = typeof input?.correo === "string" ? input.correo.trim() : "";
   const telefono = input?.telefono;
   const clave = input?.clave;
 

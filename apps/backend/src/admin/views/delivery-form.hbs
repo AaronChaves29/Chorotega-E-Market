@@ -1,0 +1,181 @@
+<html lang='es'><head><meta charset='utf-8' /><meta
+      name='viewport'
+      content='width=device-width, initial-scale=1'
+    /><title>Asignar entrega</title><style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 70rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        color: #172d24;
+      }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: center;
+        margin-bottom: 2rem;
+      }
+      nav form {
+        margin-left: auto;
+      }
+      a {
+        color: #174b37;
+        overflow-wrap: anywhere;
+      }
+      input,
+      select,
+      button {
+        font: inherit;
+        max-width: 100%;
+        padding: 0.5rem;
+      }
+      label {
+        display: block;
+        margin-top: 0.8rem;
+      }
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.8rem;
+        align-items: end;
+      }
+      .filters label {
+        min-width: 0;
+        flex: 1 1 12rem;
+      }
+      .filters input,
+      .filters select {
+        display: block;
+        width: 100%;
+      }
+      .table-scroll {
+        overflow-x: auto;
+        max-width: 100%;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        padding: 0.6rem;
+        text-align: left;
+        border-bottom: 1px solid #ccc;
+      }
+      .pagination {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-top: 1rem;
+      }
+      .error {
+        color: #8c2036;
+        overflow-wrap: anywhere;
+      }
+      main form:not(.filters) {
+        max-width: 36rem;
+      }
+      main form:not(.filters) input,
+      main form:not(.filters) select {
+        display: block;
+        width: 100%;
+      }
+      main form button {
+        margin-top: 1rem;
+      }
+      dt {
+        font-weight: bold;
+        margin-top: 1rem;
+      }
+      dd {
+        margin-left: 0;
+        overflow-wrap: anywhere;
+      }
+      summary {
+        cursor: pointer;
+        padding: 0.75rem 0;
+      }
+      @media (max-width: 480px) {
+        body {
+          margin: 1rem auto;
+        }
+        h1 {
+          font-size: 1.6rem;
+        }
+        nav {
+          gap: 0.7rem;
+        }
+        nav form {
+          margin-left: 0;
+          width: 100%;
+        }
+      }
+    </style></head><body><nav aria-label='Administración'><a
+        href='/admin/products'
+      >Productos</a><a href='/admin/stores'>Tiendas</a><a
+        href='/admin/deliveries'
+      >Entregas</a><form method='post' action='/admin/logout'><input
+          type='hidden'
+          name='_csrf'
+          value='{{csrf}}'
+        /><button type='submit'>Cerrar sesión</button></form></nav><main><h1
+      >Asignar repartidor a un pedido</h1><p>El pedido debe estar PREPARANDO y
+        cumplir las condiciones de entrega. La disponibilidad se comprueba al
+        guardar.</p><a href='/admin/deliveries'>Volver a entregas</a>
+      {{#if errors._form}}<p
+          class='error'
+          role='alert'
+        >{{errors._form}}</p>{{/if}}
+      <form method='post' action='/admin/deliveries' novalidate><input
+          type='hidden'
+          name='_csrf'
+          value='{{csrf}}'
+        />
+        <label for='idPedido'>ID del pedido</label><input
+          id='idPedido'
+          name='idPedido'
+          type='number'
+          min='1'
+          max='2147483647'
+          value='{{values.idPedido}}'
+          required
+          aria-describedby='error-idPedido'
+        />{{#if errors.idPedido}}<p
+            class='error'
+            id='error-idPedido'
+            role='alert'
+          >{{errors.idPedido}}</p>{{/if}}
+        <label for='idRepartidor'>Repartidor y disponibilidad</label><select
+          id='idRepartidor'
+          name='idRepartidor'
+          required
+          aria-describedby='error-idRepartidor'
+        ><option value=''>Seleccione un repartidor</option>{{#each
+            couriers
+          }}{{#if selected}}<option value='{{idRepartidor}}' selected>Repartidor
+                {{idRepartidor}}
+                ·
+                {{medioTransporte}}
+                ·
+                {{disponibilidad}}</option>{{else}}<option
+                value='{{idRepartidor}}'
+              >Repartidor
+                {{idRepartidor}}
+                ·
+                {{medioTransporte}}
+                ·
+                {{disponibilidad}}</option>{{/if}}{{/each}}</select>{{#if
+          errors.idRepartidor
+        }}<p
+            class='error'
+            id='error-idRepartidor'
+            role='alert'
+          >{{errors.idRepartidor}}</p>{{/if}}
+        <p>La información de disponibilidad puede cambiar. No se realiza ninguna
+          asignación hasta confirmar este formulario.</p><button
+          type='submit'
+        >Asignar entrega</button></form></main></body></html>

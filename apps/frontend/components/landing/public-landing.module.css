@@ -1,0 +1,865 @@
+@font-face {
+  font-family: LandingSerif;
+  src: url("/landing/fonts/dm-serif-display.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: LandingInter;
+  src: url("/landing/fonts/inter-regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: LandingInter;
+  src: url("/landing/fonts/inter-semibold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: LandingWork;
+  src: url("/landing/fonts/work-sans.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+.landing {
+  --forest: #244f3e;
+  --ink: #203b30;
+  --cream: #f7f3ea;
+  --wine: #702b3d;
+  --muted: #72766b;
+  --line: #e3e3d8;
+  background: var(--cream);
+  color: var(--ink);
+  font:
+    400 14px/1.5 LandingInter,
+    Arial,
+    sans-serif;
+}
+.landing :where(h1, h2, h3, h4, p, figure, ol) {
+  margin: 0;
+}
+.landing :where(a) {
+  color: inherit;
+  text-decoration: none;
+}
+.landing :where(a:focus-visible, summary:focus-visible) {
+  outline: 3px solid #b58a42;
+  outline-offset: 5px;
+}
+.landing :where(a:hover) {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.landing :where(h1, h2) {
+  font-family: LandingSerif, Georgia, serif;
+  font-weight: 400;
+  line-height: 1.12;
+}
+.landing :where(img) {
+  display: block;
+}
+.landing :where(section) {
+  scroll-margin-top: 20px;
+}
+.landing main > section,
+.header {
+  max-width: 1440px;
+  margin-inline: auto;
+}
+.skipLink {
+  position: absolute;
+  left: 20px;
+  top: 12px;
+  z-index: 10;
+  padding: 12px;
+  background: white;
+  transform: translateY(-200%);
+}
+.skipLink:focus {
+  transform: translateY(0);
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 96px;
+  padding: 16px 64px;
+  border-bottom: 1px solid var(--line);
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+.brand strong {
+  display: block;
+  font:
+    400 24px/1.4 LandingSerif,
+    Georgia,
+    serif;
+  color: var(--forest);
+}
+.brand small {
+  display: block;
+  color: var(--wine);
+  font-size: 10px;
+  line-height: 1.2;
+}
+.emblem,
+.footerEmblem {
+  position: relative;
+  display: block;
+  width: 64px;
+  height: 61.183px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.footerEmblem {
+  width: 82px;
+  height: 78.391px;
+}
+.emblem img,
+.footerEmblem img {
+  position: absolute;
+  max-width: none;
+  width: 125.19%;
+  height: 130.94%;
+  left: -12.11%;
+  top: -13.93%;
+}
+.navigation,
+.access {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  color: var(--forest);
+}
+.access {
+  gap: 24px;
+}
+.primaryButton,
+.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+}
+.primaryButton {
+  background: var(--forest);
+  color: white !important;
+}
+.secondaryButton {
+  background: white;
+  border: 1px solid var(--line);
+  color: var(--forest) !important;
+}
+.landing .primaryButton:hover,
+.landing .secondaryButton:hover {
+  text-decoration: none;
+  box-shadow: 0 3px 12px #203b301c;
+}
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 610px);
+  align-items: center;
+  gap: 52px;
+  padding: 48px 64px 56px;
+}
+.heroCopy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 28px;
+  min-width: 0;
+}
+.eyebrow {
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--wine);
+}
+.hero h1 {
+  font-size: 76px;
+}
+.heroDescription {
+  font-size: 19px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.origin {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  color: var(--forest);
+  font-size: 13px;
+}
+.origin img {
+  flex-shrink: 0;
+}
+.heroFigure {
+  overflow: hidden;
+  border-radius: 26px;
+}
+.heroPhoto {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 610/510;
+  object-fit: cover;
+}
+.heroFigure figcaption {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 22px;
+  background: var(--wine);
+  color: white;
+}
+.heroFigure h2 {
+  font-size: 24px;
+  line-height: 1.4;
+}
+.heroFigure figcaption p {
+  margin-top: 5px;
+  font-size: 12px;
+  color: #eee7d9;
+}
+.purpose {
+  display: grid;
+  grid-template-columns: 470px minmax(0, 1fr);
+  align-items: center;
+  gap: 100px;
+  padding: 56px 80px;
+  background: var(--forest);
+  color: var(--cream);
+}
+.purpose .eyebrow {
+  color: #eee7d9;
+  margin-bottom: 16px;
+}
+.purpose h2 {
+  font-size: 42px;
+}
+.purpose > p {
+  font-size: 20px;
+}
+.categories,
+.benefits {
+  padding: 80px 64px;
+}
+.sectionHeading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 70px;
+  margin-bottom: 32px;
+}
+.sectionHeading h2,
+.community h2,
+.benefits h2 {
+  font-size: 50px;
+}
+.sectionHeading .eyebrow {
+  margin-bottom: 14px;
+}
+.sectionHeading > p {
+  max-width: 370px;
+  color: var(--muted);
+  font:
+    400 16px/24px LandingWork,
+    Arial,
+    sans-serif;
+}
+.categoryLayout {
+  display: grid;
+  grid-template-columns: 420px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.craftsFigure {
+  border-radius: 20px;
+  overflow: hidden;
+}
+.craftsFigure > img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 420/290;
+  object-fit: cover;
+}
+.craftsFigure figcaption {
+  padding: 24px;
+  color: white;
+  background: var(--wine);
+}
+.craftsFigure h3 {
+  font:
+    400 28px/1.12 LandingSerif,
+    Georgia,
+    serif;
+}
+.craftsFigure a {
+  display: block;
+  margin-top: 8px;
+  color: var(--cream);
+}
+.categoryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.categoryCard {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+  padding: 24px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+.categoryCard > div {
+  min-width: 0;
+  flex: 1;
+}
+.categoryCard > img {
+  flex-shrink: 0;
+}
+.categoryCard h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--forest);
+}
+.categoryCard p {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.categoryIcon {
+  display: block;
+  padding: 14px;
+  border-radius: 12px;
+  background: #e9f0e8;
+  flex-shrink: 0;
+}
+.community {
+  padding: 72px 64px;
+  background: #eee7d9;
+}
+.community > h2 {
+  margin-top: 32px;
+  margin-bottom: 32px;
+}
+.roleGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+.roleCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 22px;
+  padding: 30px;
+  border-radius: 20px;
+  background: var(--cream);
+}
+.roleCard h3 {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.12;
+}
+.roleCard p {
+  min-height: 96px;
+  font:
+    400 16px/24px LandingWork,
+    Arial,
+    sans-serif;
+  color: var(--muted);
+}
+.roleCard a {
+  width: 100%;
+  margin-top: auto;
+}
+.benefits > h2 {
+  margin-top: 40px;
+  margin-bottom: 40px;
+}
+.benefitGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 48px;
+}
+.benefitGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+.benefitGroup > h3 {
+  color: var(--wine);
+  font-weight: 600;
+}
+.benefitItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.benefitItem > img {
+  flex-shrink: 0;
+}
+.benefitItem h4 {
+  font-size: 20px;
+  line-height: 1.12;
+  font-weight: 600;
+}
+.benefitItem p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 15px;
+}
+.ourLand {
+  display: grid;
+  grid-template-columns: 640px minmax(0, 1fr);
+  align-items: center;
+  gap: 64px;
+  padding: 64px;
+  background: white;
+}
+.nicoyaPhoto {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 640/430;
+}
+.nicoyaPhoto img {
+  position: absolute;
+  max-width: none;
+  width: 103.67%;
+  height: 128.72%;
+  left: -1.84%;
+  top: 0.03%;
+  object-fit: cover;
+}
+.ourLand > div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  align-items: flex-start;
+}
+.ourLand h2 {
+  font-size: 52px;
+}
+.ourLand p:not(.eyebrow) {
+  font-size: 17px;
+  color: var(--muted);
+}
+.howItWorks {
+  padding: 72px 64px;
+}
+.howItWorks .sectionHeading {
+  margin-bottom: 36px;
+}
+.howItWorks h2 {
+  font-size: 48px;
+}
+.howItWorks .sectionHeading > .eyebrow {
+  color: var(--wine);
+  font:
+    600 12px/1.3 LandingInter,
+    Arial,
+    sans-serif;
+  margin: 0;
+}
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 48px;
+  padding: 0;
+  list-style: none;
+}
+.steps li {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.steps li > span {
+  color: var(--wine);
+  font:
+    400 36px/1.4 LandingSerif,
+    Georgia,
+    serif;
+}
+.steps h3 {
+  font-size: 22px;
+  line-height: 1.12;
+  font-weight: 600;
+}
+.steps p {
+  font:
+    400 16px/24px LandingWork,
+    Arial,
+    sans-serif;
+  color: var(--muted);
+}
+.invitation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  align-items: center;
+  gap: 70px;
+  padding: 64px 80px;
+  color: var(--cream);
+  background: var(--wine);
+}
+.invitation .eyebrow {
+  color: #eee7d9;
+  margin-bottom: 16px;
+}
+.invitation h2 {
+  font-size: 52px;
+}
+.invitationActions {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: center;
+}
+.footer {
+  color: #eee7d9;
+  background: var(--forest);
+}
+.footerInner {
+  max-width: 1440px;
+  margin-inline: auto;
+  padding: 48px 64px;
+}
+.footerNavigation {
+  display: grid;
+  grid-template-columns: 400px repeat(3, minmax(0, 1fr));
+  gap: 90px;
+}
+.footerIdentity {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.footer nav {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  font-size: 13px;
+}
+.footer nav h2 {
+  color: white;
+  font:
+    600 14px/1.5 LandingInter,
+    Arial,
+    sans-serif;
+}
+.footerBottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 36px;
+  padding-top: 24px;
+  border-top: 1px solid #ffffff30;
+  font-size: 12px;
+}
+
+@media (max-width: 1279px) {
+  .header {
+    padding-inline: 32px;
+    gap: 18px;
+  }
+  .navigation {
+    gap: 18px;
+  }
+  .access {
+    gap: 16px;
+  }
+  .hero,
+  .ourLand {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 32px;
+    padding-inline: 32px;
+  }
+  .hero h1 {
+    font-size: 62px;
+  }
+  .purpose {
+    grid-template-columns: 40% minmax(0, 1fr);
+    gap: 48px;
+    padding-inline: 40px;
+  }
+  .categories,
+  .community,
+  .benefits,
+  .howItWorks,
+  .footerInner {
+    padding-inline: 32px;
+  }
+  .categoryLayout {
+    grid-template-columns: 32% minmax(0, 1fr);
+  }
+  .categoryCard {
+    padding: 18px;
+    gap: 12px;
+  }
+  .categoryIcon {
+    padding: 10px;
+  }
+  .ourLand h2 {
+    font-size: 44px;
+  }
+  .footerNavigation {
+    grid-template-columns: 2fr repeat(3, minmax(0, 1fr));
+    gap: 40px;
+  }
+}
+@media (max-width: 1050px) {
+  .header {
+    flex-wrap: wrap;
+  }
+  .navigation {
+    order: 3;
+    justify-content: center;
+    width: 100%;
+  }
+  .categoryLayout {
+    grid-template-columns: 1fr;
+  }
+  .craftsFigure {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .craftsFigure figcaption {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .roleCard {
+    padding: 22px;
+  }
+  .roleCard h3 {
+    font-size: 24px;
+  }
+  .roleCard .secondaryButton {
+    padding-inline: 10px;
+    font-size: 13px;
+  }
+}
+@media (max-width: 900px) {
+  .hero,
+  .ourLand,
+  .purpose {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  .heroFigure {
+    width: 100%;
+    max-width: 610px;
+    justify-self: center;
+  }
+  .hero h1 {
+    font-size: clamp(44px, 7.5vw, 64px);
+    max-width: 700px;
+  }
+  .heroCopy {
+    gap: 24px;
+  }
+  .purpose h2,
+  .sectionHeading h2,
+  .community h2,
+  .benefits h2,
+  .ourLand h2,
+  .howItWorks h2,
+  .invitation h2 {
+    font-size: 40px;
+  }
+  .sectionHeading {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+  }
+  .sectionHeading > p {
+    max-width: 100%;
+  }
+  .benefitGrid,
+  .steps {
+    gap: 24px;
+  }
+  .invitation {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    padding-inline: 32px;
+  }
+  .invitationActions {
+    max-width: 300px;
+    width: 100%;
+  }
+}
+@media (max-width: 700px) {
+  .header {
+    padding: 16px 20px;
+    gap: 20px 12px;
+  }
+  .brand {
+    gap: 8px;
+  }
+  .brand strong {
+    font-size: 21px;
+  }
+  .access {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    flex: 1;
+    gap: 12px;
+  }
+  .access .primaryButton {
+    font-size: 12px;
+    padding-inline: 12px;
+  }
+  .navigation {
+    gap: 18px;
+    flex-wrap: wrap;
+    font-size: 12px;
+  }
+  .hero,
+  .categories,
+  .community,
+  .benefits,
+  .ourLand,
+  .howItWorks {
+    padding: 48px 20px;
+  }
+  .purpose,
+  .invitation {
+    padding: 48px 24px;
+  }
+  .heroDescription {
+    font-size: 17px;
+  }
+  .heroFigure h2 {
+    font-size: 22px;
+  }
+  .heroFigure figcaption {
+    padding: 20px;
+  }
+  .purpose > p {
+    font-size: 18px;
+  }
+  .categoryGrid,
+  .roleGrid,
+  .benefitGrid,
+  .steps {
+    grid-template-columns: 1fr;
+  }
+  .craftsFigure {
+    display: block;
+  }
+  .craftsFigure > img {
+    aspect-ratio: 420/290;
+  }
+  .categoryCard {
+    padding: 20px;
+  }
+  .categoryIcon {
+    padding: 14px;
+  }
+  .roleCard {
+    padding: 28px;
+  }
+  .roleCard h3 {
+    font-size: 28px;
+  }
+  .roleCard p {
+    min-height: 0;
+  }
+  .roleCard .secondaryButton {
+    font-size: 14px;
+  }
+  .community > h2 {
+    margin-top: 24px;
+  }
+  .benefits > h2 {
+    margin-top: 24px;
+    margin-bottom: 32px;
+  }
+  .benefitGrid {
+    gap: 36px;
+  }
+  .footerInner {
+    padding: 40px 20px;
+  }
+  .footerNavigation {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 32px 24px;
+  }
+  .footerIdentity {
+    grid-column: 1/-1;
+    max-width: 400px;
+  }
+  .footerBottom {
+    flex-direction: column;
+    gap: 16px;
+  }
+}
+@media (max-width: 420px) {
+  .header .access {
+    flex-basis: 100%;
+    justify-content: space-between;
+  }
+  .navigation {
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .hero h1 {
+    font-size: 44px;
+  }
+  .purpose h2,
+  .sectionHeading h2,
+  .community h2,
+  .benefits h2,
+  .ourLand h2,
+  .howItWorks h2,
+  .invitation h2 {
+    font-size: 34px;
+  }
+  .actions {
+    width: 100%;
+  }
+  .actions > a {
+    width: 100%;
+  }
+  .heroFigure figcaption {
+    gap: 8px;
+    padding: 18px;
+  }
+  .heroFigure figcaption > img {
+    flex-shrink: 0;
+  }
+  .categoryCard {
+    padding: 16px;
+  }
+}

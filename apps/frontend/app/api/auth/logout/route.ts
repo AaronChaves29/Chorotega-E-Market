@@ -1,3 +1,4 @@
+import { CART_SESSION_COOKIE } from "@/lib/cart-session";
 import { NextResponse } from "next/server";
 
 export async function POST() {
@@ -13,5 +14,6 @@ export async function POST() {
     maxAge: 0,
   });
 
+  response.cookies.delete(CART_SESSION_COOKIE);
   return response;
 }

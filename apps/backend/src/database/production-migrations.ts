@@ -1,3 +1,4 @@
+import { AddOrderAuditOutbox1795082400000 } from './migrations/1795082400000-AddOrderAuditOutbox';
 import 'reflect-metadata';
 import {
   DataSource,
@@ -11,6 +12,7 @@ import { CreateInitialSchema1788732000000 } from './migrations/1788732000000-Cre
 import { AlignTimestampDefaults1788998400000 } from './migrations/1788998400000-AlignTimestampDefaults';
 import { AddPasswordHashToUser1791352458237 } from './migrations/1791352458237-AddPasswordHashToUser';
 import { AddProductVersion1793296800000 } from './migrations/1793296800000-AddProductVersion';
+import { AddStoreSocialContact1794772600000 } from './migrations/1794772600000-AddStoreSocialContact';
 
 // Compartida por todos los arranques y comandos de migración de este backend.
 export const MIGRATION_LOCK = [509, 6001] as const;
@@ -48,6 +50,8 @@ export function createProductionMigrationDataSource(
       AlignTimestampDefaults1788998400000,
       AddPasswordHashToUser1791352458237,
       AddProductVersion1793296800000,
+      AddStoreSocialContact1794772600000,
+      AddOrderAuditOutbox1795082400000,
     ],
     logger: migrationLogger,
     logging: false,

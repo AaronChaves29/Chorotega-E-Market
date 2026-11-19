@@ -1,3 +1,6 @@
+jest.mock('../../order-audits/outbox/order-audit-writer', () => ({
+  writeOrderAudit: jest.fn().mockResolvedValue(undefined),
+}));
 import type {
   DataSource,
   EntityManager,
@@ -48,6 +51,7 @@ describe('DeliveriesService', () => {
     deliveriesRepository = {
       findById: jest.fn(),
       findActiveByOrderId: jest.fn(),
+      findCourierDestination: jest.fn(),
       save: jest.fn(),
     } as unknown as jest.Mocked<DeliveriesRepository>;
 
@@ -147,7 +151,11 @@ describe('DeliveriesService', () => {
       ['valor primitivo', '1'],
     ])('rechaza %s antes de consultar o escribir', async (_name, input) => {
       await expect(
-        service.assignDelivery(input as AssignDeliveryDto),
+        service.assignDelivery(input as AssignDeliveryDto, {
+          idUsuario: 1,
+          sub: 'admin@example.test',
+          rol: 'ADMIN',
+        }),
       ).rejects.toBeInstanceOf(InvalidAssignmentInputException);
       expect(dataSource.transaction.mock.calls).toHaveLength(0);
       expect(transactionalDeliveriesRepository.save.mock.calls).toHaveLength(0);
@@ -166,7 +174,10 @@ describe('DeliveriesService', () => {
       );
       transactionalNeighborhoodsRepository.findOneBy.mockResolvedValue(null);
       await expect(
-        service.assignDelivery({ idPedido: 1, idRepartidor: 1 }),
+        service.assignDelivery(
+          { idPedido: 1, idRepartidor: 1 },
+          { idUsuario: 1, sub: 'admin@example.test', rol: 'ADMIN' },
+        ),
       ).rejects.toBeInstanceOf(NeighborhoodNotFoundException);
       expect(transactionalDeliveriesRepository.save.mock.calls).toHaveLength(0);
     });
@@ -186,7 +197,10 @@ describe('DeliveriesService', () => {
       activeDeliveryQuery.getOne.mockResolvedValue(null);
       transactionalCouriersRepository.findOne.mockResolvedValue(null);
       await expect(
-        service.assignDelivery({ idPedido: 1, idRepartidor: 1 }),
+        service.assignDelivery(
+          { idPedido: 1, idRepartidor: 1 },
+          { idUsuario: 1, sub: 'admin@example.test', rol: 'ADMIN' },
+        ),
       ).rejects.toBeInstanceOf(CourierNotFoundException);
       expect(transactionalDeliveriesRepository.save.mock.calls).toHaveLength(0);
     });
@@ -227,10 +241,13 @@ describe('DeliveriesService', () => {
       transactionalDeliveriesRepository.save.mockResolvedValue(savedDelivery);
       transactionalCouriersRepository.save.mockResolvedValue(courier);
 
-      const result = await service.assignDelivery({
-        idPedido: 1,
-        idRepartidor: 1,
-      });
+      const result = await service.assignDelivery(
+        {
+          idPedido: 1,
+          idRepartidor: 1,
+        },
+        { idUsuario: 1, sub: 'admin@example.test', rol: 'ADMIN' },
+      );
 
       expect(result).toEqual({
         idEntrega: savedDelivery.idEntrega,
@@ -274,10 +291,13 @@ describe('DeliveriesService', () => {
       transactionalOrdersRepository.findOne.mockResolvedValue(null);
 
       await expect(
-        service.assignDelivery({
-          idPedido: 1,
-          idRepartidor: 1,
-        }),
+        service.assignDelivery(
+          {
+            idPedido: 1,
+            idRepartidor: 1,
+          },
+          { idUsuario: 1, sub: 'admin@example.test', rol: 'ADMIN' },
+        ),
       ).rejects.toBeInstanceOf(OrderNotFoundException);
     });
 
@@ -290,10 +310,13 @@ describe('DeliveriesService', () => {
       transactionalOrdersRepository.findOne.mockResolvedValue(order);
 
       await expect(
-        service.assignDelivery({
-          idPedido: 1,
-          idRepartidor: 1,
-        }),
+        service.assignDelivery(
+          {
+            idPedido: 1,
+            idRepartidor: 1,
+          },
+          { idUsuario: 1, sub: 'admin@example.test', rol: 'ADMIN' },
+        ),
       ).rejects.toBeInstanceOf(InvalidOrderStateException);
     });
 
@@ -308,10 +331,13 @@ describe('DeliveriesService', () => {
       transactionalOrdersRepository.findOne.mockResolvedValue(order);
 
       await expect(
-        service.assignDelivery({
-          idPedido: 1,
-          idRepartidor: 1,
-        }),
+        service.assignDelivery(
+          {
+            idPedido: 1,
+            idRepartidor: 1,
+          },
+          { idUsuario: 1, sub: 'admin@example.test', rol: 'ADMIN' },
+        ),
       ).rejects.toBeInstanceOf(InvalidDeliveryAddressException);
     });
 
@@ -334,10 +360,13 @@ describe('DeliveriesService', () => {
       );
 
       await expect(
-        service.assignDelivery({
-          idPedido: 1,
-          idRepartidor: 1,
-        }),
+        service.assignDelivery(
+          {
+            idPedido: 1,
+            idRepartidor: 1,
+          },
+          { idUsuario: 1, sub: 'admin@example.test', rol: 'ADMIN' },
+        ),
       ).rejects.toBeInstanceOf(InactiveNeighborhoodException);
     });
 
@@ -368,10 +397,13 @@ describe('DeliveriesService', () => {
       activeDeliveryQuery.getOne.mockResolvedValue(activeDelivery);
 
       await expect(
-        service.assignDelivery({
-          idPedido: 1,
-          idRepartidor: 1,
-        }),
+        service.assignDelivery(
+          {
+            idPedido: 1,
+            idRepartidor: 1,
+          },
+          { idUsuario: 1, sub: 'admin@example.test', rol: 'ADMIN' },
+        ),
       ).rejects.toBeInstanceOf(ActiveDeliveryExistsException);
     });
 
@@ -401,10 +433,13 @@ describe('DeliveriesService', () => {
       transactionalCouriersRepository.findOne.mockResolvedValue(courier);
 
       await expect(
-        service.assignDelivery({
-          idPedido: 1,
-          idRepartidor: 1,
-        }),
+        service.assignDelivery(
+          {
+            idPedido: 1,
+            idRepartidor: 1,
+          },
+          { idUsuario: 1, sub: 'admin@example.test', rol: 'ADMIN' },
+        ),
       ).rejects.toBeInstanceOf(CourierNotAvailableException);
     });
   });
@@ -748,9 +783,13 @@ describe('DeliveriesService', () => {
     it('debe rechazar cancelar una entrega inexistente', async () => {
       transactionalDeliveriesRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.cancelDelivery(999)).rejects.toBeInstanceOf(
-        DeliveryNotFoundException,
-      );
+      await expect(
+        service.cancelDelivery(999, {
+          idUsuario: 1,
+          sub: 'admin@example.test',
+          rol: 'ADMIN',
+        }),
+      ).rejects.toBeInstanceOf(DeliveryNotFoundException);
 
       expect(dataSource.transaction.mock.calls).toHaveLength(1);
       expect(transactionalDeliveriesRepository.save.mock.calls).toHaveLength(0);
@@ -783,7 +822,11 @@ describe('DeliveriesService', () => {
         Promise.resolve(value as Courier),
       );
 
-      const result = await service.cancelDelivery(1);
+      const result = await service.cancelDelivery(1, {
+        idUsuario: 1,
+        sub: 'admin@example.test',
+        rol: 'ADMIN',
+      });
 
       expect(result.estado).toBe('CANCELADA');
       expect(delivery.estado).toBe('CANCELADA');
@@ -813,9 +856,13 @@ describe('DeliveriesService', () => {
 
       transactionalDeliveriesRepository.findOne.mockResolvedValue(delivery);
 
-      await expect(service.cancelDelivery(1)).rejects.toBeInstanceOf(
-        InvalidDeliveryStateException,
-      );
+      await expect(
+        service.cancelDelivery(1, {
+          idUsuario: 1,
+          sub: 'admin@example.test',
+          rol: 'ADMIN',
+        }),
+      ).rejects.toBeInstanceOf(InvalidDeliveryStateException);
       expect(dataSource.transaction.mock.calls).toHaveLength(1);
 
       expect(transactionalDeliveriesRepository.save.mock.calls).toHaveLength(0);
@@ -860,5 +907,34 @@ describe('DeliveriesService', () => {
     );
 
     expect(deliveriesRepository.findById.mock.calls).toEqual([[999]]);
+  });
+
+  describe('findCourierDestination', () => {
+    it('devuelve únicamente el destino consultado para el usuario autenticado', async () => {
+      const destination = {
+        idEntrega: 7,
+        idPedido: 9,
+        direccionEntrega: 'Centro de Nicoya',
+        nombreBarrio: 'Barrio Centro',
+      };
+      deliveriesRepository.findCourierDestination.mockResolvedValue(
+        destination,
+      );
+
+      await expect(service.findCourierDestination(7, 42)).resolves.toBe(
+        destination,
+      );
+      expect(deliveriesRepository.findCourierDestination.mock.calls).toEqual([
+        [7, 42],
+      ]);
+    });
+
+    it('oculta entregas inexistentes, ajenas o sin destino disponible', async () => {
+      deliveriesRepository.findCourierDestination.mockResolvedValue(null);
+
+      await expect(
+        service.findCourierDestination(7, 42),
+      ).rejects.toBeInstanceOf(DeliveryNotFoundException);
+    });
   });
 });

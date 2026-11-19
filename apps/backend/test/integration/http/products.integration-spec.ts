@@ -1,5 +1,6 @@
 import { CatalogHttpAuth } from '../../support/catalog-http-auth';
 import request from 'supertest';
+import { Product } from '../../../src/modules/products/entities/product.entity';
 import { ProductsModule } from '../../../src/modules/products/products.module';
 import type { ProductResponseDto } from '../../../src/modules/products/dto/product-response.dto';
 import type { PaginationResult } from '../../../src/common/pagination/pagination-result';
@@ -92,7 +93,11 @@ describe('Productos: API real con PostgreSQL', () => {
   async function list(
     query: Record<string, string | number | boolean> = {},
   ): Promise<PaginationResult<ProductJson>> {
-    const response = await request(server()).get(path).query(query).expect(200);
+    const response = await request(server())
+      .get(path)
+      .set('Authorization', `Bearer ${token}`)
+      .query(query)
+      .expect(200);
     return response.body as PaginationResult<ProductJson>;
   }
   function problem(response: request.Response, status: number) {
@@ -139,6 +144,92 @@ describe('Productos: API real con PostgreSQL', () => {
     return { a, b, c, d, e, f, g };
   }
 
+  it('busca fragmentos literales sin distinguir mayúsculas, combinando filtros SQL', async () => {
+    const literal = await create({ nombre: 'Café 100%_\\local' });
+    await create({ nombre: 'CAFÉ 100XXlocal' });
+    await create({
+      nombre: 'Café de otra tienda',
+      idTienda: otherStore.idTienda,
+    });
+    await create({ nombre: 'Café inactivo', estado: 'INACTIVO' });
+    const combined = await list({
+      nombre: 'CAFÉ',
+      idTienda: store.idTienda,
+      estado: 'ACTIVO',
+      disponible: true,
+      size: 1,
+      page: 1,
+      sortBy: 'nombre',
+      sortDirection: 'ASC',
+    });
+    expect(combined.totalElements).toBe(2);
+    expect(combined.content).toHaveLength(1);
+    const escaped = await list({ nombre: '%_\\' });
+    expect(escaped.content.map((item) => item.idProducto)).toEqual([
+      literal.idProducto,
+    ]);
+    const injected = await list({ nombre: "' OR 1=1 --" });
+    expect(injected.totalElements).toBe(0);
+    expect(
+      await context!.database.dataSource.getRepository(Product).count(),
+    ).toBe(4);
+  });
+
+  it('ordena novedades por fecha real y desempata por ID antes de paginar', async () => {
+    const older = await create({ nombre: 'Pieza antigua' });
+    const first = await create({ nombre: 'Pieza reciente A' });
+    const second = await create({ nombre: 'Pieza reciente B' });
+    const repository = context!.database.dataSource.getRepository(Product);
+    await repository.update(older.idProducto, {
+      fechaPublicacion: new Date('2026-01-01T12:00:00Z'),
+    });
+    await repository.update(first.idProducto, {
+      fechaPublicacion: new Date('2026-09-01T12:00:00Z'),
+    });
+    await repository.update(second.idProducto, {
+      fechaPublicacion: new Date('2026-09-01T12:00:00Z'),
+    });
+    // Un ID posterior con fecha antigua impide confundir novedades con ID DESC.
+    const last = await create({ nombre: 'Pieza anterior' });
+    await repository.update(last.idProducto, {
+      fechaPublicacion: new Date('2025-01-01T12:00:00Z'),
+    });
+    const filters = {
+      nombre: 'Pieza',
+      idTienda: store.idTienda,
+      sortBy: 'fechaPublicacion',
+      size: 2,
+    };
+    const recent = await list({ ...filters, sortDirection: 'DESC' });
+    expect(recent.content.map((item) => item.idProducto)).toEqual([
+      second.idProducto,
+      first.idProducto,
+    ]);
+    expect(recent.totalElements).toBe(4);
+    expect(
+      (await list({ ...filters, sortDirection: 'DESC', page: 1 })).content.map(
+        (item) => item.idProducto,
+      ),
+    ).toEqual([older.idProducto, last.idProducto]);
+    expect(
+      (await list({ ...filters, sortDirection: 'ASC' })).content.map(
+        (item) => item.idProducto,
+      ),
+    ).toEqual([last.idProducto, older.idProducto]);
+  });
+
+  it.each([{ nombre: 'a'.repeat(151) }, { nombre: ['uno', 'dos'] }])(
+    'rechaza nombre inválido %j con Problem Details',
+    async (query) => {
+      const response = await request(server())
+        .get(path)
+        .set('Authorization', `Bearer ${token}`)
+        .query(query)
+        .expect(400);
+      problem(response, 400);
+    },
+  );
+
   it('POST devuelve 201, Location utilizable, DTO y precio string', async () => {
     const response = await request(server())
       .post(path)
@@ -158,6 +249,7 @@ describe('Productos: API real con PostgreSQL', () => {
     expect(response.headers.location).toBe(`${path}/${product.idProducto}`);
     await request(server())
       .get(`${path}/${product.idProducto}`)
+      .set('Authorization', `Bearer ${token}`)
       .expect(200)
       .expect(product);
   });
@@ -211,13 +303,25 @@ describe('Productos: API real con PostgreSQL', () => {
   });
 
   it('GET inexistente devuelve 404', async () => {
-    problem(await request(server()).get(`${path}/999`).expect(404), 404);
+    problem(
+      await request(server())
+        .get(`${path}/999`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404),
+      404,
+    );
   });
 
   it.each(['abc', '1.5', '0', '-1', '2147483648'])(
     'rechaza ID %s',
     async (id) => {
-      problem(await request(server()).get(`${path}/${id}`).expect(400), 400);
+      problem(
+        await request(server())
+          .get(`${path}/${id}`)
+          .set('Authorization', `Bearer ${token}`)
+          .expect(400),
+        400,
+      );
     },
   );
 
@@ -236,6 +340,7 @@ describe('Productos: API real con PostgreSQL', () => {
     });
     await request(server())
       .get(`${path}/${product.idProducto}`)
+      .set('Authorization', `Bearer ${token}`)
       .expect(200)
       .expect(response.body as ProductJson);
     await request(server())
@@ -292,6 +397,7 @@ describe('Productos: API real con PostgreSQL', () => {
       );
       await request(server())
         .get(`${path}/${product.idProducto}`)
+        .set('Authorization', `Bearer ${token}`)
         .expect(200)
         .expect(product);
     },
@@ -326,7 +432,10 @@ describe('Productos: API real con PostgreSQL', () => {
           .expect(204)
       ).text,
     ).toBe('');
-    await request(server()).get(`${path}/${product.idProducto}`).expect(404);
+    await request(server())
+      .get(`${path}/${product.idProducto}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(404);
   });
 
   it('DELETE inexistente devuelve 404', async () => {
@@ -370,6 +479,7 @@ describe('Productos: API real con PostgreSQL', () => {
     );
     await request(server())
       .get(`${path}/${product.idProducto}`)
+      .set('Authorization', `Bearer ${token}`)
       .expect(200)
       .expect(product);
     expect(
@@ -511,6 +621,13 @@ describe('Productos: API real con PostgreSQL', () => {
     { idCategoria: 'abc' },
     { extra: 'x' },
   ])('rechaza query inválida %j', async (query) => {
-    problem(await request(server()).get(path).query(query).expect(400), 400);
+    problem(
+      await request(server())
+        .get(path)
+        .set('Authorization', `Bearer ${token}`)
+        .query(query)
+        .expect(400),
+      400,
+    );
   });
 });

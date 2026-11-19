@@ -1,9 +1,29 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Max,
+  Min,
+} from 'class-validator';
 import { PaginationQueryDto } from '../../../common/pagination/pagination-query.dto';
 
 export class ProductSearchQueryDto extends PaginationQueryDto {
+  @ApiPropertyOptional({
+    type: 'string',
+    maxLength: 150,
+    description:
+      'Fragmento literal del nombre; no distingue mayúsculas y minúsculas.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  nombre?: string;
+
   @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 2147483647 })
   @IsOptional()
   @Type(() => Number)
@@ -38,13 +58,32 @@ export class ProductSearchQueryDto extends PaginationQueryDto {
 
   @ApiPropertyOptional({
     type: 'string',
-    enum: ['idProducto', 'nombre', 'precio', 'cantidadDisponible', 'estado'],
+    enum: [
+      'idProducto',
+      'nombre',
+      'precio',
+      'cantidadDisponible',
+      'estado',
+      'fechaPublicacion',
+    ],
     default: 'idProducto',
   })
   @IsOptional()
-  @IsIn(['idProducto', 'nombre', 'precio', 'cantidadDisponible', 'estado'])
-  sortBy: 'idProducto' | 'nombre' | 'precio' | 'cantidadDisponible' | 'estado' =
-    'idProducto';
+  @IsIn([
+    'idProducto',
+    'nombre',
+    'precio',
+    'cantidadDisponible',
+    'estado',
+    'fechaPublicacion',
+  ])
+  sortBy:
+    | 'idProducto'
+    | 'nombre'
+    | 'precio'
+    | 'cantidadDisponible'
+    | 'estado'
+    | 'fechaPublicacion' = 'idProducto';
 
   @ApiPropertyOptional({
     type: 'string',

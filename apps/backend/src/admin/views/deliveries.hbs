@@ -1,0 +1,216 @@
+<html lang='es'><head><meta charset='utf-8' /><meta
+      name='viewport'
+      content='width=device-width, initial-scale=1'
+    /><title>Administración de entregas</title><style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 70rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        color: #172d24;
+      }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: center;
+        margin-bottom: 2rem;
+      }
+      nav form {
+        margin-left: auto;
+      }
+      a {
+        color: #174b37;
+        overflow-wrap: anywhere;
+      }
+      input,
+      select,
+      button {
+        font: inherit;
+        max-width: 100%;
+        padding: 0.5rem;
+      }
+      label {
+        display: block;
+        margin-top: 0.8rem;
+      }
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.8rem;
+        align-items: end;
+      }
+      .filters label {
+        min-width: 0;
+        flex: 1 1 12rem;
+      }
+      .filters input,
+      .filters select {
+        display: block;
+        width: 100%;
+      }
+      .table-scroll {
+        overflow-x: auto;
+        max-width: 100%;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        padding: 0.6rem;
+        text-align: left;
+        border-bottom: 1px solid #ccc;
+      }
+      .pagination {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-top: 1rem;
+      }
+      .error {
+        color: #8c2036;
+        overflow-wrap: anywhere;
+      }
+      main form:not(.filters) {
+        max-width: 36rem;
+      }
+      main form:not(.filters) input,
+      main form:not(.filters) select {
+        display: block;
+        width: 100%;
+      }
+      main form button {
+        margin-top: 1rem;
+      }
+      dt {
+        font-weight: bold;
+        margin-top: 1rem;
+      }
+      dd {
+        margin-left: 0;
+        overflow-wrap: anywhere;
+      }
+      summary {
+        cursor: pointer;
+        padding: 0.75rem 0;
+      }
+      @media (max-width: 480px) {
+        body {
+          margin: 1rem auto;
+        }
+        h1 {
+          font-size: 1.6rem;
+        }
+        nav {
+          gap: 0.7rem;
+        }
+        nav form {
+          margin-left: 0;
+          width: 100%;
+        }
+      }
+    </style></head><body><nav aria-label='Administración'><a
+        href='/admin/products'
+      >Productos</a><a href='/admin/stores'>Tiendas</a><a
+        href='/admin/deliveries'
+      >Entregas</a><form method='post' action='/admin/logout'><input
+          type='hidden'
+          name='_csrf'
+          value='{{csrf}}'
+        /><button type='submit'>Cerrar sesión</button></form></nav><main><h1
+      >Administración de entregas</h1><a href='/admin/deliveries/new'>Asignar
+        repartidor</a>
+      <form class='filters' method='get' action='/admin/deliveries'>
+        <label for='estado'>Estado<select id='estado' name='estado'><option
+              value=''
+            >Todos</option>{{#each states}}{{#if selected}}<option
+                  value='{{value}}'
+                  selected
+                >{{value}}</option>{{else}}<option
+                  value='{{value}}'
+                >{{value}}</option>{{/if}}{{/each}}</select></label>
+        <label for='idPedido'>ID pedido<input
+            id='idPedido'
+            name='idPedido'
+            type='number'
+            min='1'
+            max='2147483647'
+            value='{{filters.idPedido}}'
+          /></label>
+        <label for='idRepartidor'>ID repartidor<input
+            id='idRepartidor'
+            name='idRepartidor'
+            type='number'
+            min='1'
+            max='2147483647'
+            value='{{filters.idRepartidor}}'
+          /></label>
+        <label for='fechaDesde'>Asignación desde (ISO 8601 UTC)<input
+            id='fechaDesde'
+            name='fechaDesde'
+            placeholder='2026-11-01T00:00:00Z'
+            value='{{filters.fechaDesde}}'
+          /></label>
+        <label for='fechaHasta'>Asignación hasta (ISO 8601 UTC)<input
+            id='fechaHasta'
+            name='fechaHasta'
+            placeholder='2026-11-30T23:59:59Z'
+            value='{{filters.fechaHasta}}'
+          /></label>
+        <label for='sortBy'>Ordenar por<select id='sortBy' name='sortBy'>{{#each
+              sorts
+            }}{{#if selected}}<option
+                  value='{{value}}'
+                  selected
+                >{{value}}</option>{{else}}<option
+                  value='{{value}}'
+                >{{value}}</option>{{/if}}{{/each}}</select></label>
+        <label for='sortDirection'>Dirección<select
+            id='sortDirection'
+            name='sortDirection'
+          >{{#each directions}}{{#if selected}}<option
+                  value='{{value}}'
+                  selected
+                >{{value}}</option>{{else}}<option
+                  value='{{value}}'
+                >{{value}}</option>{{/if}}{{/each}}</select></label>
+        <label for='size'>Por página<input
+            id='size'
+            name='size'
+            type='number'
+            min='1'
+            max='100'
+            value='{{size}}'
+            required
+          /></label><button type='submit'>Filtrar</button><a
+          href='/admin/deliveries'
+        >Limpiar filtros</a></form>
+      <p>Total de registros: {{totalElements}}. Página {{displayPage}}.</p>
+      <div
+        class='table-scroll'
+        role='region'
+        aria-label='Listado de entregas, desplazamiento horizontal en pantallas pequeñas'
+        tabindex='0'
+      ><table><caption>Entregas registradas</caption><thead><tr><th
+              >Entrega</th><th>Pedido</th><th>Repartidor</th><th>Estado</th><th
+              >Asignación (Costa Rica)</th><th>Entrega (Costa Rica)</th><th
+              >Detalle</th></tr></thead><tbody>{{#each content}}<tr><td
+                >{{idEntrega}}</td><td>{{idPedido}}</td><td
+                >{{idRepartidor}}</td><td>{{estado}}</td><td
+                >{{fechaAsignacion}}</td><td>{{fechaEntrega}}</td><td><a
+                    href='/admin/deliveries/{{idEntrega}}'
+                  >Ver entrega {{idEntrega}}</a></td></tr>{{else}}<tr><td
+                  colspan='7'
+                >No hay entregas en esta página.</td></tr>{{/each}}</tbody></table></div>
+      <div class='pagination' aria-label='Paginación'>{{#if previous}}<a
+            rel='prev'
+            href='{{previous}}'
+          >Anterior</a>{{/if}}{{#if next}}<a
+            rel='next'
+            href='{{next}}'
+          >Siguiente</a>{{/if}}</div></main></body></html>
