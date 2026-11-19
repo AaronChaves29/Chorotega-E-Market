@@ -1,6 +1,7 @@
 import type { OrderState, OrderItem } from "@/types/orders";
 import type { Store } from "@/types/catalog";
 import { validId } from "@/lib/cart";
+import { costaRicaDateTime } from "@/lib/date-time";
 
 export const orderStates: readonly OrderState[] = [
   "PENDIENTE",
@@ -152,9 +153,5 @@ export function emptyPrepareBody(value: unknown) {
   );
 }
 export function orderDate(value: string) {
-  return new Intl.DateTimeFormat("es-CR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "America/Costa_Rica",
-  }).format(new Date(value));
+  return costaRicaDateTime(value);
 }

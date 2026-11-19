@@ -1,4 +1,5 @@
 import { validId } from "@/lib/cart";
+import { costaRicaDateTime } from "@/lib/date-time";
 
 export const deliveryStates = [
   "ASIGNADA",
@@ -119,11 +120,7 @@ export function courierDeliveryParams(
   return params;
 }
 export function deliveryDate(value: string) {
-  return new Intl.DateTimeFormat("es-CR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "America/Costa_Rica",
-  }).format(new Date(value));
+  return costaRicaDateTime(value);
 }
 
 export function emptyDeliveryBody(value: unknown) {
