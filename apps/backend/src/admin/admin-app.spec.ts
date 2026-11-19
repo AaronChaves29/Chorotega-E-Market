@@ -92,7 +92,7 @@ describe('AppModule completo: resolución y contratos sin conexiones externas', 
       }
     }
   });
-  it('resuelve todos los módulos y sirve el acceso MVC y Swagger con las 40 operaciones REST', async () => {
+  it('resuelve todos los módulos y sirve el acceso MVC y Swagger con las 41 operaciones REST', async () => {
     if (!app) throw new Error('Aplicación no inicializada');
     await request(app.getHttpServer())
       .get('/admin/login')
@@ -105,6 +105,9 @@ describe('AppModule completo: resolución y contratos sin conexiones externas', 
       paths: Record<string, Record<string, unknown>>;
     };
     expect(document.paths['/api/v1/auth/register']?.post).toBeDefined();
+    expect(
+      document.paths['/api/v1/deliveries/{id}/destination']?.get,
+    ).toBeDefined();
     const methods = [
       'get',
       'post',
@@ -121,7 +124,7 @@ describe('AppModule completo: resolución y contratos sin conexiones externas', 
           Object.keys(path).filter((key) => methods.includes(key)).length,
         0,
       ),
-    ).toBe(40);
+    ).toBe(41);
     expect(
       Object.keys(document.paths).some((path) => path.includes('/admin')),
     ).toBe(false);

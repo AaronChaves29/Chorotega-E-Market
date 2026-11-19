@@ -354,6 +354,12 @@ Authorization: Bearer {{courierToken}}
 GET {{baseUrl}}/api/v1/deliveries/{{deliveryId}}
 Authorization: Bearer {{courierToken}}
 
+### Deliveries — destino mínimo de entrega propia activa
+# @name deliveryDestination
+# expected-status: 200
+GET {{baseUrl}}/api/v1/deliveries/{{deliveryId}}/destination
+Authorization: Bearer {{courierToken}}
+
 ### Deliveries — iniciar
 # @name startDelivery
 # expected-status: 200
