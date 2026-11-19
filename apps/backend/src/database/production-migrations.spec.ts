@@ -54,7 +54,7 @@ describe('Migraciones de producción', () => {
   }
   afterEach(() => jest.restoreAllMocks());
 
-  it('registra las cinco migraciones reales, TLS validado y ningún seed', () => {
+  it('registra las seis migraciones reales, TLS validado y ningún seed', () => {
     const source = createProductionMigrationDataSource({
       NODE_ENV: 'production',
       DATABASE_URL: 'postgresql://localhost/deployment_test',
@@ -75,6 +75,7 @@ describe('Migraciones de producción', () => {
       'AddPasswordHashToUser1791352458237',
       'AddProductVersion1793296800000',
       'AddStoreSocialContact1794772600000',
+      'AddOrderAuditOutbox1795082400000',
     ]);
   });
   it('rechaza entorno no productivo y TLS desactivado antes de conectar', () => {

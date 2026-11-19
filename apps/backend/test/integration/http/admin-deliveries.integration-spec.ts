@@ -192,15 +192,25 @@ describe('Entregas administrativas: HTTP, sesiones y PostgreSQL reales', () => {
     ).toBe('PREPARANDO');
   });
   it('lista con SQL paginado, filtra por estado/pedido/repartidor/fechas y conserva orden', async () => {
-    const first = await service().assignDelivery({
-      idPedido: order.idPedido,
-      idRepartidor: courier.idRepartidor,
+    const first = await service().assignDelivery(
+      {
+        idPedido: order.idPedido,
+        idRepartidor: courier.idRepartidor,
+      },
+      { idUsuario: 1, sub: 'admin@example.test', rol: 'ADMIN' },
+    );
+    await service().cancelDelivery(first.idEntrega, {
+      idUsuario: 1,
+      sub: 'admin@example.test',
+      rol: 'ADMIN',
     });
-    await service().cancelDelivery(first.idEntrega);
-    const second = await service().assignDelivery({
-      idPedido: order.idPedido,
-      idRepartidor: courier.idRepartidor,
-    });
+    const second = await service().assignDelivery(
+      {
+        idPedido: order.idPedido,
+        idRepartidor: courier.idRepartidor,
+      },
+      { idUsuario: 1, sub: 'admin@example.test', rol: 'ADMIN' },
+    );
     const { agent } = await admin();
     const page = await agent
       .get('/admin/deliveries?size=1&sortBy=idEntrega&sortDirection=ASC')
@@ -479,8 +489,8 @@ describe('Entregas administrativas: HTTP, sesiones y PostgreSQL reales', () => {
     ) as DeliveriesService['assignDelivery'];
     jest
       .spyOn(service(), 'assignDelivery')
-      .mockImplementationOnce(async (dto) => {
-        await original(dto);
+      .mockImplementationOnce(async (dto, actor) => {
+        await original(dto, actor);
         throw new Error('SELECT private-secret');
       });
     const { agent, token } = await admin();

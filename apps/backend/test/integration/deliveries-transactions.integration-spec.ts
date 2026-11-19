@@ -148,10 +148,13 @@ describe('Entregas: EntityManager, pool pequeño y atomicidad en PostgreSQL', ()
     );
   }
   const assign = () =>
-    service.assignDelivery({
-      idPedido: order.idPedido,
-      idRepartidor: courier.idRepartidor,
-    });
+    service.assignDelivery(
+      {
+        idPedido: order.idPedido,
+        idRepartidor: courier.idRepartidor,
+      },
+      { idUsuario: 1, sub: 'admin@example.test', rol: 'ADMIN' },
+    );
   async function state(idEntrega: number) {
     return {
       delivery: await observer
@@ -173,7 +176,11 @@ describe('Entregas: EntityManager, pool pequeño y atomicidad en PostgreSQL', ()
   ) {
     if (action === 'start') return target.startDelivery(id, userId);
     if (action === 'complete') return target.completeDelivery(id, userId);
-    return target.cancelDelivery(id);
+    return target.cancelDelivery(id, {
+      idUsuario: 1,
+      sub: 'admin@example.test',
+      rol: 'ADMIN',
+    });
   }
 
   it('asigna, inicia y completa con un pool de una conexión sin pedir una segunda', async () => {

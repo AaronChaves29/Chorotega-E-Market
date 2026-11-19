@@ -1,3 +1,6 @@
+const {
+  AddOrderAuditOutbox1795082400000,
+} = require('../../dist/database/migrations/1795082400000-AddOrderAuditOutbox.js');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { randomBytes, randomUUID } = require('node:crypto');
@@ -80,6 +83,7 @@ test(
           AddPasswordHashToUser1791352458237,
           AddProductVersion1793296800000,
           AddStoreSocialContact1794772600000,
+          AddOrderAuditOutbox1795082400000,
         ],
         logging: false,
       });
@@ -373,10 +377,13 @@ test(
           assert.equal(await source.getRepository(Delivery).count(), 1);
         },
       );
-      const active = await app.get(DeliveriesService).assignDelivery({
-        idPedido: order.idPedido,
-        idRepartidor: courier.idRepartidor,
-      });
+      const active = await app.get(DeliveriesService).assignDelivery(
+        {
+          idPedido: order.idPedido,
+          idRepartidor: courier.idRepartidor,
+        },
+        { idUsuario: 1, sub: 'admin@example.test', rol: 'ADMIN' },
+      );
       const third = await makeOrder();
       await t.test('repartidor ocupado produce conflicto visible', async () => {
         await navigate('/admin/deliveries/new', '#idPedido');

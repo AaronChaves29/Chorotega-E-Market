@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { writeOrderAudit } from '../../order-audits/outbox/order-audit-writer';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { CouriersRepository } from '../../couriers/repositories/couriers.repository';
@@ -39,7 +40,11 @@ export class DeliveriesService {
     private readonly dataSource: DataSource,
   ) {}
 
-  async assignDelivery(input: AssignDeliveryDto): Promise<DeliveryResponseDto> {
+  async assignDelivery(
+    input: AssignDeliveryDto,
+    actor: AuthenticatedUser,
+  ): Promise<DeliveryResponseDto> {
+    this.assertAdminActor(actor);
     if (!input || typeof input !== 'object' || Array.isArray(input)) {
       throw new InvalidAssignmentInputException();
     }
@@ -100,6 +105,13 @@ export class DeliveriesService {
       courier.disponibilidad = 'OCUPADO';
       const saved = await deliveries.save(delivery);
       await transactionalCouriers.save(courier);
+      await writeOrderAudit(manager, {
+        pedidoId: saved.idPedido,
+        tipo: 'ENTREGA_ASIGNADA',
+        actor,
+        entregaId: saved.idEntrega,
+        repartidorId: saved.idRepartidor,
+      });
       return DeliveryMapper.toResponseDto(saved);
     });
   }
@@ -136,6 +148,7 @@ export class DeliveriesService {
         throw new OrderNotFoundException(delivery.idPedido);
       }
 
+      const pedidoAnterior = order.estado;
       delivery.estado = 'EN_CAMINO';
       order.estado = 'EN_CAMINO';
 
@@ -144,6 +157,14 @@ export class DeliveriesService {
 
       await transactionalOrdersRepository.save(order);
 
+      await writeOrderAudit(manager, {
+        pedidoId: delivery.idPedido,
+        tipo: 'ENTREGA_EN_CAMINO',
+        pedidoAnterior,
+        actor: { idUsuario, rol: 'REPARTIDOR' },
+        entregaId: delivery.idEntrega,
+        repartidorId: delivery.idRepartidor,
+      });
       return DeliveryMapper.toResponseDto(savedDelivery);
     });
   }
@@ -190,6 +211,7 @@ export class DeliveriesService {
         throw new CourierNotFoundException(delivery.idRepartidor);
       }
 
+      const pedidoAnterior = order.estado;
       delivery.estado = 'ENTREGADA';
       delivery.fechaEntrega = new Date();
 
@@ -202,11 +224,23 @@ export class DeliveriesService {
       await transactionalOrdersRepository.save(order);
       await transactionalCouriersRepository.save(courier);
 
+      await writeOrderAudit(manager, {
+        pedidoId: delivery.idPedido,
+        tipo: 'PEDIDO_ENTREGADO',
+        pedidoAnterior,
+        actor: { idUsuario, rol: 'REPARTIDOR' },
+        entregaId: delivery.idEntrega,
+        repartidorId: delivery.idRepartidor,
+      });
       return DeliveryMapper.toResponseDto(savedDelivery);
     });
   }
 
-  async cancelDelivery(idEntrega: number): Promise<DeliveryResponseDto> {
+  async cancelDelivery(
+    idEntrega: number,
+    actor: AuthenticatedUser,
+  ): Promise<DeliveryResponseDto> {
+    this.assertAdminActor(actor);
     return this.dataSource.transaction(async (manager) => {
       const transactionalDeliveriesRepository = manager.getRepository(Delivery);
 
@@ -242,8 +276,26 @@ export class DeliveriesService {
 
       await transactionalCouriersRepository.save(courier);
 
+      await writeOrderAudit(manager, {
+        pedidoId: delivery.idPedido,
+        tipo: 'ENTREGA_CANCELADA',
+        actor,
+        entregaId: delivery.idEntrega,
+        repartidorId: delivery.idRepartidor,
+      });
       return DeliveryMapper.toResponseDto(savedDelivery);
     });
+  }
+
+  private assertAdminActor(actor: AuthenticatedUser): void {
+    if (
+      !actor ||
+      actor.rol !== 'ADMIN' ||
+      !Number.isInteger(actor.idUsuario) ||
+      actor.idUsuario < 1 ||
+      actor.idUsuario > 2147483647
+    )
+      throw new ForbiddenException('Se requiere identidad ADMIN autorizada.');
   }
 
   async search(

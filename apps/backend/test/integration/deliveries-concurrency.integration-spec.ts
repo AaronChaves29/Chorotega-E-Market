@@ -133,7 +133,13 @@ describe('Asignación de entregas: concurrencia real', () => {
     try {
       await blocker.query(lockSql, [id]);
       pending = Promise.allSettled(
-        assignments.map((dto) => service.assignDelivery(dto)),
+        assignments.map((dto) =>
+          service.assignDelivery(dto, {
+            idUsuario: 1,
+            sub: 'admin@example.test',
+            rol: 'ADMIN',
+          }),
+        ),
       );
       // Se espera evidencia de las dos operaciones en PostgreSQL, no un retardo arbitrario.
       const deadline = Date.now() + 10_000;

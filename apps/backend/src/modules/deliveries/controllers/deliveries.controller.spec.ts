@@ -82,11 +82,21 @@ describe('DeliveriesController', () => {
     deliveriesService.assignDelivery.mockResolvedValue(delivery);
 
     await expect(
-      controller.assignDelivery(input, httpResponse as never),
+      controller.assignDelivery(
+        input,
+        {
+          user: { idUsuario: 1, sub: 'admin@example.test', rol: 'ADMIN' },
+        } as never,
+        httpResponse as never,
+      ),
     ).resolves.toBe(delivery);
 
     expect(deliveriesService.assignDelivery).toHaveBeenCalledTimes(1);
-    expect(deliveriesService.assignDelivery).toHaveBeenCalledWith(input);
+    expect(deliveriesService.assignDelivery).toHaveBeenCalledWith(input, {
+      idUsuario: 1,
+      sub: 'admin@example.test',
+      rol: 'ADMIN',
+    });
 
     expect(httpResponse.location).toHaveBeenCalledTimes(1);
     expect(httpResponse.location).toHaveBeenCalledWith('/api/v1/deliveries/1');
@@ -144,10 +154,18 @@ describe('DeliveriesController', () => {
 
     deliveriesService.cancelDelivery.mockResolvedValue(response);
 
-    await expect(controller.cancelDelivery(1)).resolves.toBe(response);
+    await expect(
+      controller.cancelDelivery(1, {
+        user: { idUsuario: 1, sub: 'admin@example.test', rol: 'ADMIN' },
+      } as never),
+    ).resolves.toBe(response);
 
     expect(deliveriesService.cancelDelivery).toHaveBeenCalledTimes(1);
-    expect(deliveriesService.cancelDelivery).toHaveBeenCalledWith(1);
+    expect(deliveriesService.cancelDelivery).toHaveBeenCalledWith(1, {
+      idUsuario: 1,
+      sub: 'admin@example.test',
+      rol: 'ADMIN',
+    });
   });
 
   it('delega la búsqueda paginada de entregas al servicio', async () => {

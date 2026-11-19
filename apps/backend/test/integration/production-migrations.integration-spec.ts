@@ -42,7 +42,7 @@ describe('Migraciones de despliegue en PostgreSQL temporal', () => {
       logger: migrationLogger,
     });
   }
-  it('aplica las cinco migraciones reales en una base vacía y registra solo cinco entradas', async () => {
+  it('aplica las seis migraciones reales en una base vacía y registra solo seis entradas', async () => {
     await database.dataSource.query('CREATE DATABASE deployment_fresh');
     const options = source().options;
     if (options.type !== 'postgres' || !options.url)
@@ -53,18 +53,18 @@ describe('Migraciones de despliegue en PostgreSQL temporal', () => {
       runProductionMigrations(
         new DataSource({ ...options, url: url.toString() }),
       ),
-    ).resolves.toBe(5);
+    ).resolves.toBe(6);
     const inspector = new DataSource({ ...options, url: url.toString() });
     try {
       await inspector.initialize();
       const history: { count: string }[] = await inspector.query(
         'SELECT count(*) FROM typeorm_migrations',
       );
-      expect(history[0].count).toBe('5');
+      expect(history[0].count).toBe('6');
       const tables: { count: string }[] = await inspector.query(
         "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'",
       );
-      expect(tables[0].count).toBe('10');
+      expect(tables[0].count).toBe('12');
     } finally {
       if (inspector.isInitialized) await inspector.destroy();
     }
@@ -75,7 +75,7 @@ describe('Migraciones de despliegue en PostgreSQL temporal', () => {
     const rows: { count: string }[] = await database.dataSource.query(
       'SELECT count(*) FROM typeorm_migrations',
     );
-    expect(rows[0].count).toBe('5');
+    expect(rows[0].count).toBe('6');
     const users: { count: string }[] = await database.dataSource.query(
       'SELECT count(*) FROM usuario',
     );
@@ -110,7 +110,7 @@ describe('Migraciones de despliegue en PostgreSQL temporal', () => {
     const history: { count: string }[] = await database.dataSource.query(
       'SELECT count(*) FROM typeorm_migrations',
     );
-    expect(history[0].count).toBe('5');
+    expect(history[0].count).toBe('6');
     await expect(runProductionMigrations(source())).resolves.toBe(0);
   });
 });

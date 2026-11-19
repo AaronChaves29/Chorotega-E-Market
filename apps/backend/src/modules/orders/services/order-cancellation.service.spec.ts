@@ -1,3 +1,6 @@
+jest.mock('../../order-audits/outbox/order-audit-writer', () => ({
+  writeOrderAudit: jest.fn().mockResolvedValue(undefined),
+}));
 import {
   BadRequestException,
   ForbiddenException,

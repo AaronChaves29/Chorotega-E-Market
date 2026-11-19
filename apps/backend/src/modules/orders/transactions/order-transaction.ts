@@ -1,3 +1,5 @@
+import { writeOrderAudit } from '../../order-audits/outbox/order-audit-writer';
+import type { AuditInput } from '../../order-audits/models/order-audit.model';
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Neighborhood } from '../../neighborhoods/entities/neighborhood.entity';
@@ -14,6 +16,7 @@ import { Order } from '../entities/order.entity';
 import { OrdersRepository } from '../repositories/orders.repository';
 
 export interface OrderTransactionRepositories {
+  audit: { write(input: AuditInput): Promise<void> };
   users: Pick<UsersRepository, 'findById'>;
   neighborhoods: Pick<NeighborhoodsRepository, 'findById'>;
   stores: Pick<StoresRepository, 'findById'>;
@@ -37,6 +40,7 @@ export class OrderTransaction implements OrderTransactionRunner {
   ): Promise<T> {
     return this.dataSource.transaction(async (manager) =>
       work({
+        audit: { write: (input) => writeOrderAudit(manager, input) },
         users: new UsersRepository(manager.getRepository(User)),
         neighborhoods: new NeighborhoodsRepository(
           manager.getRepository(Neighborhood),

@@ -1,3 +1,4 @@
+import { writeOrderAudit } from '../../order-audits/outbox/order-audit-writer';
 import {
   BadRequestException,
   ForbiddenException,
@@ -52,6 +53,12 @@ export class OrderPreparationService {
       const details = await manager.getRepository(OrderDetail).find({
         where: { idPedido: id },
         order: { idDetalle: 'ASC' },
+      });
+      await writeOrderAudit(manager, {
+        pedidoId: id,
+        tipo: 'PEDIDO_PREPARANDO',
+        actor,
+        pedidoAnterior: order.estado,
       });
       return OrderMapper.toResponseDto(order, details, state);
     });

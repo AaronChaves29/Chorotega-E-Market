@@ -137,6 +137,11 @@ export class OrdersService {
       const state = transitionOrderState(order.estado, 'CONFIRMADO');
       order.estado = state;
       order = await repositories.orders.save(order);
+      await repositories.audit.write({
+        pedidoId: order.idPedido,
+        tipo: 'PEDIDO_CONFIRMADO',
+        actor: { idUsuario: idCliente, rol: 'CLIENTE' },
+      });
       return OrderMapper.toResponseDto(order, savedDetails, state);
     });
   }

@@ -1,3 +1,4 @@
+import { writeOrderAudit } from '../../order-audits/outbox/order-audit-writer';
 import {
   BadRequestException,
   ConflictException,
@@ -97,6 +98,12 @@ export class OrderCancellationService {
         }
       }
       await orders.update({ idPedido: id }, { estado: state });
+      await writeOrderAudit(manager, {
+        pedidoId: id,
+        tipo: 'PEDIDO_CANCELADO',
+        actor,
+        pedidoAnterior: order.estado,
+      });
       return OrderMapper.toResponseDto(order, details, state);
     });
   }

@@ -719,6 +719,10 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
     expect(deliveries.assignDelivery).toHaveBeenCalledTimes(1);
     expect(deliveries.assignDelivery).toHaveBeenCalledWith(
       expect.objectContaining({ idPedido: 4, idRepartidor: 2 }),
+      expect.objectContaining({
+        idUsuario: expect.any(Number) as number,
+        rol: 'ADMIN',
+      }),
     );
   });
   it('entregas: traduce excepción del dominio sin mostrar su mensaje original', async () => {
