@@ -9,6 +9,8 @@ import {
 import { MongoDatabaseService } from '../../../database/mongodb/mongodb-database.service';
 
 export function parseAuditEvent(raw: OrderAuditEvent): OrderAuditEvent {
+  if (!(raw.fecha instanceof Date) && typeof raw.fecha !== 'string')
+    throw new Error('Fecha de bitácora no válida.');
   const date = new Date(raw.fecha);
   const body = auditPayload({
     pedidoId: raw.pedidoId,
@@ -32,6 +34,7 @@ export function parseAuditEvent(raw: OrderAuditEvent): OrderAuditEvent {
     !Number.isSafeInteger(raw.secuencia) ||
     raw.secuencia < 1 ||
     !Number.isFinite(date.getTime()) ||
+    (typeof raw.fecha === 'string' && raw.fecha !== date.toISOString()) ||
     !isDeepStrictEqual({ ...raw, fecha: date }, expected)
   )
     throw new Error('Evento de bitácora no válido.');
@@ -64,12 +67,16 @@ export class OrderAuditsRepository {
       .listIndexes({ timeoutMS: 5000 })
       .toArray()) as unknown as {
       unique?: boolean;
+      partialFilterExpression?: unknown;
+      sparse?: boolean;
       key: Record<string, number>;
     }[];
     if (
       !indexes.some(
         (index) =>
           index.unique === true &&
+          index.partialFilterExpression === undefined &&
+          index.sparse !== true &&
           Object.keys(index.key).length === 1 &&
           index.key.pedidoId === 1,
       )
@@ -130,7 +137,7 @@ export class OrderAuditsRepository {
     );
     const result = await this.collection.findOne(
       { pedidoId },
-      { timeoutMS: 5000 },
+      { timeoutMS: 5000, readConcern: { level: 'majority' } },
     );
     const matching = result?.eventos.filter(
       (item) => 'eventoId' in item && item.eventoId === event.eventoId,

@@ -16,7 +16,7 @@ export class OutboxStore {
     return this.source.transaction(async (manager) => {
       // The predecessor predicate includes leased, delayed AND failed events.
       // Hence SKIP LOCKED cannot cause N+1 to overtake an uncertain N.
-      return manager.query(
+      return manager.query<ClaimedAudit[]>(
         `WITH candidates AS (
         SELECT o.evento_id FROM pedido_audit_outbox o
         WHERE ((o.estado = 'PENDIENTE' AND o.proxima_ejecucion <= clock_timestamp())
@@ -25,11 +25,12 @@ export class OutboxStore {
           WHERE previous.pedido_id = o.pedido_id AND previous.secuencia < o.secuencia
           AND previous.estado <> 'PUBLICADO')
         ORDER BY o.fecha, o.evento_id LIMIT 5 FOR UPDATE OF o SKIP LOCKED
-      ) UPDATE pedido_audit_outbox o SET estado = 'PUBLICANDO',
+      ), claimed AS (UPDATE pedido_audit_outbox o SET estado = 'PUBLICANDO',
         concesion_id = $1, concesion_hasta = clock_timestamp() + interval '30 seconds',
         intentos = intentos + 1
       FROM candidates c WHERE o.evento_id = c.evento_id
-      RETURNING o.evento_id, o.payload, o.concesion_id, o.intentos`,
+      RETURNING o.evento_id, o.payload, o.concesion_id, o.intentos)
+      SELECT * FROM claimed`,
         [randomUUID()],
       );
     });
@@ -48,7 +49,7 @@ export class OutboxStore {
     await this.source.query(
       `UPDATE pedido_audit_outbox SET
       estado = CASE WHEN intentos >= 10 THEN 'FALLIDO' ELSE 'PENDIENTE' END,
-      proxima_ejecucion = clock_timestamp() + $3 * interval '1 second',
+      proxima_ejecucion = clock_timestamp() + $3::integer * interval '1 second',
       concesion_id = NULL, concesion_hasta = NULL
       WHERE evento_id = $1 AND concesion_id = $2 AND estado = 'PUBLICANDO'
       AND concesion_hasta > clock_timestamp()`,

@@ -65,11 +65,25 @@ describe('Bitácora: contratos, privacidad y transacción', () => {
       { schemaVersion: 2 },
       { pedido: { anterior: 'EN_CAMINO', nuevo: 'CONFIRMADO' } },
       { fecha: 'invalid' },
+      { fecha: null },
+      { fecha: 0 },
       { eventoId: 'invalid' },
     ])
       expect(() =>
         parseAuditEvent({ ...event(), ...patch } as OrderAuditEvent),
       ).toThrow();
+  });
+  it('registra el estado real previo en entregas sin inventar una transición comercial', () => {
+    expect(
+      auditPayload({
+        pedidoId: 1,
+        tipo: 'ENTREGA_EN_CAMINO',
+        actor: { idUsuario: 3, rol: 'REPARTIDOR' },
+        entregaId: 2,
+        repartidorId: 3,
+        pedidoAnterior: 'CONFIRMADO',
+      }).pedido,
+    ).toEqual({ anterior: 'CONFIRMADO', nuevo: 'EN_CAMINO' });
   });
   it('rechaza escribir fuera de una transacción', async () => {
     const manager = {
@@ -81,15 +95,18 @@ describe('Bitácora: contratos, privacidad y transacción', () => {
     ).rejects.toThrow();
     expect(manager.query).not.toHaveBeenCalled();
   });
-  it('usa el mismo manager y no continúa si no obtiene el bloqueo final', async () => {
+  it('usa el mismo manager y no escribe outbox si falla el contador', async () => {
     const manager = {
-      query: jest.fn().mockResolvedValue([{ acquired: false }]),
+      query: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockRejectedValueOnce(new Error('counter failed')),
       queryRunner: { isTransactionActive: true },
     };
     await expect(
       writeOrderAudit(manager as unknown as EntityManager, input),
     ).rejects.toThrow();
-    expect(manager.query).toHaveBeenCalledTimes(1);
+    expect(manager.query).toHaveBeenCalledTimes(2);
   });
 });
 describe('Publicador: ejecución y cierre', () => {

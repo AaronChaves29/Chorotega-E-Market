@@ -148,6 +148,7 @@ export class DeliveriesService {
         throw new OrderNotFoundException(delivery.idPedido);
       }
 
+      const pedidoAnterior = order.estado;
       delivery.estado = 'EN_CAMINO';
       order.estado = 'EN_CAMINO';
 
@@ -159,6 +160,7 @@ export class DeliveriesService {
       await writeOrderAudit(manager, {
         pedidoId: delivery.idPedido,
         tipo: 'ENTREGA_EN_CAMINO',
+        pedidoAnterior,
         actor: { idUsuario, rol: 'REPARTIDOR' },
         entregaId: delivery.idEntrega,
         repartidorId: delivery.idRepartidor,
@@ -209,6 +211,7 @@ export class DeliveriesService {
         throw new CourierNotFoundException(delivery.idRepartidor);
       }
 
+      const pedidoAnterior = order.estado;
       delivery.estado = 'ENTREGADA';
       delivery.fechaEntrega = new Date();
 
@@ -224,6 +227,7 @@ export class DeliveriesService {
       await writeOrderAudit(manager, {
         pedidoId: delivery.idPedido,
         tipo: 'PEDIDO_ENTREGADO',
+        pedidoAnterior,
         actor: { idUsuario, rol: 'REPARTIDOR' },
         entregaId: delivery.idEntrega,
         repartidorId: delivery.idRepartidor,

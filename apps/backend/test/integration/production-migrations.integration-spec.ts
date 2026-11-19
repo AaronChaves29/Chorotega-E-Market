@@ -42,7 +42,7 @@ describe('Migraciones de despliegue en PostgreSQL temporal', () => {
       logger: migrationLogger,
     });
   }
-  it('aplica las cinco migraciones reales en una base vacía y registra solo cinco entradas', async () => {
+  it('aplica las seis migraciones reales en una base vacía y registra solo seis entradas', async () => {
     await database.dataSource.query('CREATE DATABASE deployment_fresh');
     const options = source().options;
     if (options.type !== 'postgres' || !options.url)

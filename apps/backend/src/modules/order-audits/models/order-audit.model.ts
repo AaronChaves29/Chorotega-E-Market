@@ -73,11 +73,22 @@ export function auditPayload(
     actor: { idUsuario: input.actor.idUsuario, rol: transition.rol },
   };
   if ('pedido' in transition) {
-    const previous =
-      input.tipo === 'PEDIDO_CANCELADO' && input.pedidoAnterior === 'PENDIENTE'
-        ? 'PENDIENTE'
-        : transition.pedido[0];
-    if (input.pedidoAnterior !== undefined && input.pedidoAnterior !== previous)
+    const previous = input.pedidoAnterior ?? transition.pedido[0];
+    const states = [
+      'PENDIENTE',
+      'CONFIRMADO',
+      'PREPARANDO',
+      'EN_CAMINO',
+      'ENTREGADO',
+      'CANCELADO',
+    ];
+    const isDelivery = 'entrega' in transition;
+    if (
+      !states.includes(previous) ||
+      (!isDelivery &&
+        previous !== transition.pedido[0] &&
+        !(input.tipo === 'PEDIDO_CANCELADO' && previous === 'PENDIENTE'))
+    )
       throw new Error('Estado de bitácora no válido.');
     payload.pedido = { anterior: previous, nuevo: transition.pedido[1] };
   }

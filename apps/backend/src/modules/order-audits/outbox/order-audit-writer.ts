@@ -14,13 +14,12 @@ export async function writeOrderAudit(
   if (!manager.queryRunner?.isTransactionActive)
     throw new Error('La bitácora requiere una transacción activa.');
   const payload = auditPayload(input);
-  // Limit counter contention without changing the caller's transaction settings.
-  // try advisory lock avoids an indefinite wait and uses a separate lock namespace.
-  const [lock] = await manager.query<{ acquired: boolean }[]>(
-    'SELECT pg_try_advisory_xact_lock(512, $1) AS acquired',
-    [input.pedidoId],
-  );
-  if (!lock.acquired) throw new Error('Secuencia de bitácora ocupada.');
+  // The counter is the final lock: wait for normal contention rather than reject
+  // an otherwise valid operation. Bound waits without raising a stricter timeout.
+  await manager.query(`SELECT set_config('lock_timeout',
+    (CASE WHEN setting::bigint = 0 THEN 5000
+      ELSE LEAST(setting::bigint, 5000) END)::text || 'ms', true)
+    FROM pg_settings WHERE name = 'lock_timeout'`);
   const [counter] = await manager.query<{ secuencia: number }[]>(
     `INSERT INTO pedido_audit_sequence (pedido_id, secuencia)
     VALUES ($1, 1) ON CONFLICT (pedido_id) DO UPDATE

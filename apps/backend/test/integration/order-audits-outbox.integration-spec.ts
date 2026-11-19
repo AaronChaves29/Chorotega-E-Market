@@ -1,3 +1,5 @@
+import { DataSource } from 'typeorm';
+import { writeOrderAudit } from '../../src/modules/order-audits/outbox/order-audit-writer';
 import { randomUUID } from 'node:crypto';
 import {
   GenericContainer,
@@ -36,6 +38,7 @@ import type {
 describe('Outbox transaccional y MongoDB reales', () => {
   let context: Awaited<ReturnType<typeof createHttpTestApp>>;
   let container: StartedTestContainer, mongo: MongoDatabaseService, db: Db;
+  let mongoConfig: ConfigService;
   let repository: OrderAuditsRepository,
     store: OutboxStore,
     publisher: OrderAuditPublisher;
@@ -57,9 +60,15 @@ describe('Outbox transaccional y MongoDB reales', () => {
       items: [{ idProducto: product.idProducto, cantidad: 2 }],
     });
   const rows = () =>
-    ds().query<{ evento_id: string; estado: string; intentos: number; payload: OrderAuditEvent }[]>(
-      'SELECT * FROM pedido_audit_outbox ORDER BY pedido_id,secuencia',
-    );
+    ds().query<
+      {
+        evento_id: string;
+        tipo: string;
+        estado: string;
+        intentos: number;
+        payload: OrderAuditEvent;
+      }[]
+    >('SELECT * FROM pedido_audit_outbox ORDER BY pedido_id,secuencia');
   const savedProduct = () =>
     ds()
       .getRepository(Product)
@@ -75,12 +84,11 @@ describe('Outbox transaccional y MongoDB reales', () => {
         .withExposedPorts(27017)
         .withWaitStrategy(Wait.forLogMessage(/Waiting for connections/))
         .start();
-      mongo = new MongoDatabaseService(
-        new ConfigService({
-          MONGODB_URI: `mongodb://${container.getHost()}:${container.getMappedPort(27017)}/?serverSelectionTimeoutMS=1000`,
-          MONGODB_DATABASE: 'outbox_temporal',
-        }),
-      );
+      mongoConfig = new ConfigService({
+        MONGODB_URI: `mongodb://${container.getHost()}:${container.getMappedPort(27017)}/?serverSelectionTimeoutMS=1000`,
+        MONGODB_DATABASE: 'outbox_temporal',
+      });
+      mongo = new MongoDatabaseService(mongoConfig);
       await mongo.onModuleInit();
       db = mongo.getDatabase();
       await provisionOrderAudits(db);
@@ -191,7 +199,7 @@ describe('Outbox transaccional y MongoDB reales', () => {
         (e) => e.tipo,
       ),
     ).toEqual(['PEDIDO_CONFIRMADO', 'PEDIDO_CANCELADO']);
-    const events = (await rows()).map((r) => r.payload as OrderAuditEvent);
+    const events = (await rows()).map((r) => r.payload);
     expect(new Set(events.map((e) => e.tipo)).size).toBe(7);
     for (const event of events)
       expect(event.actor.idUsuario).toBe(actors[event.actor.rol].idUsuario);
@@ -252,14 +260,36 @@ describe('Outbox transaccional y MongoDB reales', () => {
   it('MongoDB no disponible conserva pendientes y bloquea N+1; reinicio recupera', async () => {
     const order = await buy();
     await preparations().prepare(actors.EMPRENDEDOR, order.idPedido);
-    await mongo.onModuleDestroy();
-    await publisher.runOnce();
-    expect((await rows()).map((r) => [r.estado, r.intentos])).toEqual([
-      ['PENDIENTE', 1],
-      ['PENDIENTE', 0],
+    // Stop the actual MongoDB process, not merely a mocked/closed collection.
+    await container.exec([
+      'mongosh',
+      '--quiet',
+      '--eval',
+      "db.getSiblingDB('admin').shutdownServer()",
     ]);
-    await mongo.onModuleInit();
-    db = mongo.getDatabase();
+    try {
+      await publisher.runOnce();
+      expect((await rows()).map((r) => [r.estado, r.intentos])).toEqual([
+        ['PENDIENTE', 1],
+        ['PENDIENTE', 0],
+      ]);
+      expect(
+        (
+          await ds()
+            .getRepository(Order)
+            .findOneByOrFail({ idPedido: order.idPedido })
+        ).estado,
+      ).toBe('PREPARANDO');
+    } finally {
+      await container.restart();
+      mongoConfig.set(
+        'MONGODB_URI',
+        `mongodb://${container.getHost()}:${container.getMappedPort(27017)}/?serverSelectionTimeoutMS=1000`,
+      );
+      await mongo.onModuleDestroy();
+      await mongo.onModuleInit();
+      db = mongo.getDatabase();
+    }
     await ds().query(
       "UPDATE pedido_audit_outbox SET proxima_ejecucion = clock_timestamp() WHERE estado = 'PENDIENTE'",
     );
@@ -274,7 +304,9 @@ describe('Outbox transaccional y MongoDB reales', () => {
   });
   it('respuesta perdida después de escritura real se reconcilia sin duplicados', async () => {
     const order = await buy();
-    const original = repository.appendEvent.bind(repository);
+    const original = repository.appendEvent.bind(
+      repository,
+    ) as OrderAuditsRepository['appendEvent'];
     const spy = jest
       .spyOn(repository, 'appendEvent')
       .mockImplementationOnce(async (id, event) => {
@@ -317,23 +349,41 @@ describe('Outbox transaccional y MongoDB reales', () => {
       second = await buy();
     await preparations().prepare(actors.EMPRENDEDOR, first.idPedido);
     await cancellations().cancel(actors.CLIENTE, second.idPedido);
-    const another = new OrderAuditPublisher(
-      new OutboxStore(ds()),
-      new OrderAuditsRepository(mongo),
-    );
-    for (let n = 0; n < 3; n++)
-      await Promise.all([publisher.runOnce(), another.runOnce()]);
-    for (const order of [first, second]) {
-      const history = (await repository.findByPedidoId(order.idPedido))!;
-      expect(
-        history.eventos.map((e) => (e as OrderAuditEvent).secuencia),
-      ).toEqual([1, 2]);
-      expect(
-        new Set(history.eventos.map((e) => (e as OrderAuditEvent).eventoId))
-          .size,
-      ).toBe(2);
+    const another = new OrderAuditPublisher(new OutboxStore(ds()), repository);
+    let active = 0,
+      maximum = 0;
+    const original = repository.appendEvent.bind(
+      repository,
+    ) as OrderAuditsRepository['appendEvent'];
+    const spy = jest
+      .spyOn(repository, 'appendEvent')
+      .mockImplementation(async (id, event) => {
+        active++;
+        maximum = Math.max(maximum, active);
+        try {
+          await original(id, event);
+        } finally {
+          active--;
+        }
+      });
+    try {
+      for (let n = 0; n < 3; n++)
+        await Promise.all([publisher.runOnce(), another.runOnce()]);
+      for (const order of [first, second]) {
+        const history = (await repository.findByPedidoId(order.idPedido))!;
+        expect(
+          history.eventos.map((e) => (e as OrderAuditEvent).secuencia),
+        ).toEqual([1, 2]);
+        expect(
+          new Set(history.eventos.map((e) => (e as OrderAuditEvent).eventoId))
+            .size,
+        ).toBe(2);
+      }
+      expect((await rows()).every((r) => r.estado === 'PUBLICADO')).toBe(true);
+      expect(maximum).toBeGreaterThan(1);
+    } finally {
+      spy.mockRestore();
     }
-    expect((await rows()).every((r) => r.estado === 'PUBLICADO')).toBe(true);
   });
   it('creación concurrente del primer documento y reenvío concurrente no duplican', async () => {
     const order = await buy();
@@ -465,5 +515,204 @@ describe('Outbox transaccional y MongoDB reales', () => {
     await drain();
     expect((await rows()).every((r) => r.estado === 'PUBLICADO')).toBe(true);
     expect((await savedProduct()).cantidadDisponible).toBe(98);
+  });
+  it('la contención transitoria del contador espera sin rechazar una preparación válida', async () => {
+    const order = await buy();
+    const blocker = ds().createQueryRunner();
+    await blocker.connect();
+    await blocker.startTransaction();
+    let done = false;
+    let preparing: Promise<unknown> | undefined;
+    try {
+      // Simulate an emitter finishing with both locks of the previous implementation.
+      await blocker.query('SELECT pg_advisory_xact_lock(512, $1)', [
+        order.idPedido,
+      ]);
+      await blocker.query(
+        'SELECT pedido_id FROM pedido_audit_sequence WHERE pedido_id=$1 FOR UPDATE',
+        [order.idPedido],
+      );
+      preparing = preparations()
+        .prepare(actors.EMPRENDEDOR, order.idPedido)
+        .then(
+          (value) => {
+            done = true;
+            return value;
+          },
+          () => {
+            done = true;
+            return null;
+          },
+        );
+      const deadline = Date.now() + 2000;
+      let waiting = false;
+      while (!done && Date.now() < deadline) {
+        const locks = await ds().query<{ present: boolean }[]>(`SELECT EXISTS (
+          SELECT 1 FROM pg_stat_activity WHERE datname=current_database()
+            AND wait_event_type='Lock' AND query LIKE 'INSERT INTO pedido_audit_sequence%'
+        ) AS present`);
+        if (locks[0].present) {
+          waiting = true;
+          break;
+        }
+        // Poll a real observable PostgreSQL lock, not a timing-based assertion.
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(waiting).toBe(true);
+    } finally {
+      await blocker.rollbackTransaction();
+      await blocker.release();
+    }
+    await expect(preparing).resolves.toMatchObject({ estado: 'PREPARANDO' });
+    await drain();
+    expect(
+      (await repository.findByPedidoId(order.idPedido))!.eventos.map(
+        (e) => (e as OrderAuditEvent).secuencia,
+      ),
+    ).toEqual([1, 2]);
+  });
+  it('el escritor conserva un lock_timeout más estricto del llamador', async () => {
+    const order = await buy();
+    await ds().transaction(async (manager) => {
+      await manager.query("SET LOCAL lock_timeout='250ms'");
+      await manager
+        .getRepository(Order)
+        .update(order.idPedido, { estado: 'PREPARANDO' });
+      await writeOrderAudit(manager, {
+        pedidoId: order.idPedido,
+        tipo: 'PEDIDO_PREPARANDO',
+        actor: actors.EMPRENDEDOR,
+        pedidoAnterior: 'CONFIRMADO',
+      });
+      const [setting] = await manager.query<{ value: string }[]>(
+        "SELECT current_setting('lock_timeout') AS value",
+      );
+      expect(setting.value).toBe('250ms');
+    });
+    await drain();
+    expect(
+      (await repository.findByPedidoId(order.idPedido))!.eventos,
+    ).toHaveLength(2);
+  });
+  it('el publicador libera PostgreSQL antes de Mongo y funciona con pool de una conexión', async () => {
+    const order = await buy();
+    const options = ds().options;
+    if (options.type !== 'postgres')
+      throw new Error('Se requiere PostgreSQL temporal.');
+    const single = new DataSource({
+      ...options,
+      poolSize: 1,
+      extra: { max: 1, connectionTimeoutMillis: 500 },
+    });
+    await single.initialize();
+    const singleStore = new OutboxStore(single);
+    const original = repository.appendEvent.bind(
+      repository,
+    ) as OrderAuditsRepository['appendEvent'];
+    const spy = jest
+      .spyOn(repository, 'appendEvent')
+      .mockImplementation(async (id, event) => {
+        expect(await single.query('SELECT 1 AS available')).toEqual([
+          { available: 1 },
+        ]);
+        await original(id, event);
+      });
+    try {
+      await new OrderAuditPublisher(singleStore, repository).runOnce();
+    } finally {
+      spy.mockRestore();
+      await single.destroy();
+    }
+    expect((await rows())[0].estado).toBe('PUBLICADO');
+    expect(
+      (await repository.findByPedidoId(order.idPedido))!.eventos,
+    ).toHaveLength(1);
+  });
+  it('un publicador vencido termina tarde sin duplicar ni adelantar eventos', async () => {
+    const order = await buy();
+    await preparations().prepare(actors.EMPRENDEDOR, order.idPedido);
+    const [old] = await store.claim();
+    await ds().query(
+      "UPDATE pedido_audit_outbox SET concesion_hasta=clock_timestamp()-interval '1 second' WHERE evento_id=$1",
+      [old.evento_id],
+    );
+    const [replacement] = await store.claim();
+    await repository.appendEvent(order.idPedido, replacement.payload);
+    await store.published(replacement);
+    await publisher.runOnce();
+    await repository.appendEvent(order.idPedido, old.payload);
+    await store.failed(old);
+    await store.published(old);
+    expect((await rows()).every((r) => r.estado === 'PUBLICADO')).toBe(true);
+    expect(
+      (await repository.findByPedidoId(order.idPedido))!.eventos.map(
+        (e) => (e as OrderAuditEvent).secuencia,
+      ),
+    ).toEqual([1, 2]);
+  });
+  it('sin índice global falla cerrado incluso si existe un índice parcial', async () => {
+    const order = await buy();
+    await db.collection('bitacora_pedidos').dropIndex('uq_bitacora_pedido_id');
+    await db.collection('bitacora_pedidos').createIndex(
+      { pedidoId: 1 },
+      {
+        unique: true,
+        name: 'indice_parcial',
+        partialFilterExpression: { pedidoId: { $gt: 9999 } },
+      },
+    );
+    try {
+      await publisher.runOnce();
+      expect((await rows())[0].estado).toBe('PENDIENTE');
+      expect(await db.collection('bitacora_pedidos').countDocuments()).toBe(0);
+    } finally {
+      await db.collection('bitacora_pedidos').dropIndex('indice_parcial');
+      await provisionOrderAudits(db);
+    }
+    await ds().query(
+      'UPDATE pedido_audit_outbox SET proxima_ejecucion=clock_timestamp()',
+    );
+    await drain();
+    expect(
+      (await repository.findByPedidoId(order.idPedido))!.eventos,
+    ).toHaveLength(1);
+  });
+  it('el validador Mongo rechaza campos sensibles y actores contradictorios', async () => {
+    await buy();
+    const [row] = await store.claim();
+    for (const patch of [
+      { correo: 'sensitive@example.test' },
+      { actor: { idUsuario: actors.ADMIN.idUsuario, rol: 'ADMIN' } },
+    ]) {
+      await expect(
+        db.collection('bitacora_pedidos').insertOne({
+          pedidoId: row.payload.pedidoId,
+          eventos: [
+            { ...row.payload, fecha: new Date(row.payload.fecha), ...patch },
+          ],
+          ultimaSecuencia: 1,
+        }),
+      ).rejects.toMatchObject({ code: 121 });
+    }
+    expect(await db.collection('bitacora_pedidos').countDocuments()).toBe(0);
+  });
+  it('PostgreSQL rechaza payload nulo o incompatible con sus metadatos', async () => {
+    await buy();
+    const [row] = await rows();
+    for (const [key, value] of [
+      ['fecha', null],
+      ['tipo', null],
+      ['pedidoId', 999],
+      ['correo', 'private@example.test'],
+    ]) {
+      await expect(
+        ds().query(
+          'UPDATE pedido_audit_outbox SET payload = jsonb_set(payload, ARRAY[$2]::text[], $3::jsonb) WHERE evento_id=$1',
+          [row.evento_id, key, JSON.stringify(value)],
+        ),
+      ).rejects.toMatchObject({ driverError: { code: '23514' } });
+    }
+    await drain();
+    expect((await rows())[0].estado).toBe('PUBLICADO');
   });
 });

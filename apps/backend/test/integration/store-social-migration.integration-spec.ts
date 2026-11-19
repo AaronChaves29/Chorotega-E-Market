@@ -24,6 +24,7 @@ describe('Store social contact additive migration on populated PostgreSQL', () =
         direccion: 'Nicoya',
         telefono: '88888888',
       });
+      await ds.undoLastMigration(); // Outbox posterior al contacto social.
       await ds.undoLastMigration();
       const legacy = await ds.query<{ nombre: string; telefono: string }[]>(
         'SELECT nombre, telefono FROM tienda WHERE id_tienda = $1',
@@ -46,7 +47,7 @@ describe('Store social contact additive migration on populated PostgreSQL', () =
       if (production.options.type !== 'postgres')
         throw new Error('PostgreSQL required');
       const migrated = new DataSource({ ...production.options, ssl: false });
-      expect(await runProductionMigrations(migrated)).toBe(1);
+      expect(await runProductionMigrations(migrated)).toBe(2);
       const updated = await ds
         .getRepository(Store)
         .findOneByOrFail({ idTienda: store.idTienda });
@@ -85,6 +86,7 @@ describe('Store social contact additive migration on populated PostgreSQL', () =
         },
       ]);
       expect(await ds.runMigrations()).toEqual([]);
+      await ds.undoLastMigration(); // Outbox posterior al contacto social.
       await ds.undoLastMigration();
       expect(await ds.query('SELECT id_tienda FROM tienda')).toEqual([
         { id_tienda: store.idTienda },
@@ -92,6 +94,7 @@ describe('Store social contact additive migration on populated PostgreSQL', () =
       expect(await ds.getRepository(User).count()).toBe(1);
       expect((await ds.runMigrations()).map((m) => m.name)).toEqual([
         'AddStoreSocialContact1794772600000',
+        'AddOrderAuditOutbox1795082400000',
       ]);
     });
   });

@@ -18,6 +18,19 @@ export class AddOrderAuditOutbox1795082400000 implements MigrationInterface {
       schema_version integer NOT NULL CHECK (schema_version = 1),
       payload jsonb NOT NULL CHECK (jsonb_typeof(payload) = 'object'),
       fecha timestamptz NOT NULL,
+      CHECK (payload ?& ARRAY['eventoId','schemaVersion','pedidoId','secuencia','tipo','fecha','actor']),
+      CHECK ((payload - ARRAY['eventoId','schemaVersion','pedidoId','secuencia','tipo','fecha','actor','pedido','entrega','entregaId','repartidorId']::text[]) = '{}'::jsonb),
+      CHECK (jsonb_typeof(payload->'eventoId') = 'string'
+        AND jsonb_typeof(payload->'tipo') = 'string'
+        AND jsonb_typeof(payload->'fecha') = 'string'),
+      CHECK (payload->>'eventoId' = evento_id::text AND payload->>'tipo' = tipo
+        AND payload->'schemaVersion' = to_jsonb(schema_version)
+        AND payload->'pedidoId' = to_jsonb(pedido_id)
+        AND payload->'secuencia' = to_jsonb(secuencia)
+        AND (payload->>'fecha')::timestamptz = fecha),
+      CHECK (jsonb_typeof(payload->'actor') = 'object'
+        AND (payload->'actor') ?& ARRAY['idUsuario','rol']
+        AND ((payload->'actor') - ARRAY['idUsuario','rol']::text[]) = '{}'::jsonb),
       estado text NOT NULL DEFAULT 'PENDIENTE'
         CHECK (estado IN ('PENDIENTE','PUBLICANDO','PUBLICADO','FALLIDO')),
       intentos integer NOT NULL DEFAULT 0 CHECK (intentos >= 0),
@@ -26,6 +39,7 @@ export class AddOrderAuditOutbox1795082400000 implements MigrationInterface {
       concesion_hasta timestamptz,
       publicado_en timestamptz,
       CONSTRAINT uq_pedido_audit_sequence UNIQUE (pedido_id, secuencia),
+      CHECK ((concesion_id IS NULL) = (concesion_hasta IS NULL)),
       CHECK ((estado = 'PUBLICANDO') =
         (concesion_id IS NOT NULL AND concesion_hasta IS NOT NULL)),
       CHECK ((estado = 'PUBLICADO') = (publicado_en IS NOT NULL))

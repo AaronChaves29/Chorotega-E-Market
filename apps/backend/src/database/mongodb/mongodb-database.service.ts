@@ -1,3 +1,4 @@
+import * as os from 'node:os';
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MongoClient, type Db } from 'mongodb';
@@ -25,7 +26,7 @@ export class MongoDatabaseService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    this.client = new MongoClient(uri);
+    this.client = new MongoClient(uri, { runtimeAdapters: { os } });
     await this.client.connect();
     this.database = this.client.db(databaseName);
   }

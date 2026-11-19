@@ -1,3 +1,4 @@
+import * as os from 'node:os';
 import { MongoClient } from 'mongodb';
 import { validateEnvironment } from '../config/environment';
 import { provisionOrderAudits } from '../modules/order-audits/provision-order-audits';
@@ -7,6 +8,7 @@ export async function provision(): Promise<void> {
   validateEnvironment(process.env, 'production');
   const client = new MongoClient(process.env.MONGODB_URI!, {
     serverSelectionTimeoutMS: 10000,
+    runtimeAdapters: { os },
   });
   try {
     await client.connect();

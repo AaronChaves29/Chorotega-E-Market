@@ -12,49 +12,70 @@ const legacy = {
     detalle: { bsonType: 'string' },
   },
 };
-const state = {
-  bsonType: 'object',
-  additionalProperties: false,
-  required: ['anterior', 'nuevo'],
-  properties: {
-    anterior: { bsonType: ['string', 'null'] },
-    nuevo: { bsonType: 'string' },
-  },
-};
-const current = {
-  bsonType: 'object',
-  additionalProperties: false,
-  required: [
-    'eventoId',
-    'schemaVersion',
-    'pedidoId',
-    'secuencia',
-    'tipo',
-    'fecha',
-    'actor',
-  ],
-  properties: {
-    eventoId: { bsonType: 'string', pattern: '^[0-9a-fA-F-]{36}$' },
+const orderStates = [
+  'PENDIENTE',
+  'CONFIRMADO',
+  'PREPARANDO',
+  'EN_CAMINO',
+  'ENTREGADO',
+  'CANCELADO',
+];
+const current = Object.entries(auditTransitions).map(([tipo, transition]) => {
+  const properties: Record<string, unknown> = {
+    eventoId: {
+      bsonType: 'string',
+      pattern:
+        '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+    },
     schemaVersion: { enum: [1] },
     pedidoId: integer,
     secuencia: integer,
-    tipo: { enum: Object.keys(auditTransitions) },
+    tipo: { enum: [tipo] },
     fecha: { bsonType: 'date' },
     actor: {
       bsonType: 'object',
       additionalProperties: false,
       required: ['idUsuario', 'rol'],
-      properties: {
-        idUsuario: integer,
-        rol: { enum: ['CLIENTE', 'EMPRENDEDOR', 'ADMIN', 'REPARTIDOR'] },
-      },
+      properties: { idUsuario: integer, rol: { enum: [transition.rol] } },
     },
-    entregaId: integer,
-    repartidorId: integer,
-    pedido: state,
-    entrega: state,
-  },
-};
+  };
+  if ('pedido' in transition) {
+    const previous =
+      'entrega' in transition
+        ? orderStates
+        : tipo === 'PEDIDO_CANCELADO'
+          ? ['PENDIENTE', 'CONFIRMADO']
+          : [transition.pedido[0]];
+    properties.pedido = {
+      bsonType: 'object',
+      additionalProperties: false,
+      required: ['anterior', 'nuevo'],
+      properties: {
+        anterior: { enum: previous },
+        nuevo: { enum: [transition.pedido[1]] },
+      },
+    };
+  }
+  if ('entrega' in transition) {
+    properties.entregaId = integer;
+    properties.repartidorId = integer;
+    properties.entrega = {
+      bsonType: 'object',
+      additionalProperties: false,
+      required: ['anterior', 'nuevo'],
+      properties: {
+        anterior: { enum: [transition.entrega[0]] },
+        nuevo: { enum: [transition.entrega[1]] },
+      },
+    };
+  }
+  return {
+    bsonType: 'object',
+    additionalProperties: false,
+    required: Object.keys(properties),
+    properties,
+  };
+});
 /** Explicit provisioning, never fixtures or destructive history replacement. */
 export async function provisionOrderAudits(database: Db): Promise<void> {
   const name = 'bitacora_pedidos';
@@ -70,7 +91,7 @@ export async function provisionOrderAudits(database: Db): Promise<void> {
         eventos: {
           bsonType: 'array',
           minItems: 1,
-          items: { oneOf: [legacy, current] },
+          items: { oneOf: [legacy, ...current] },
         },
       },
     },
@@ -78,7 +99,19 @@ export async function provisionOrderAudits(database: Db): Promise<void> {
   if (
     !(await database.listCollections({ name }, { nameOnly: true }).hasNext())
   ) {
-    await database.createCollection(name); // no data is inserted
+    try {
+      await database.createCollection(name);
+    } catch (error: unknown) {
+      // no data is inserted
+      // Another provisioner may have created the same empty collection.
+      if (!(
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        error.code === 48
+      ))
+        throw error;
+    }
   }
   // Fail safely on existing duplicates. Never delete or merge documents here.
   await database
