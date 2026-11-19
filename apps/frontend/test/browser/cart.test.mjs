@@ -6,7 +6,7 @@ import { resolve, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { chrome, freePort, until } from "./support.mjs";
+import { chrome, freePort, until, waitForLoginHydration } from "./support.mjs";
 
 const frontend = resolve(import.meta.dirname, "../..");
 const backend = createRequire(resolve(frontend, "../backend/package.json"));
@@ -216,6 +216,7 @@ test(
           "location.pathname==='/login' && document.readyState==='complete' && !!document.querySelector('#correo')",
           "login listo",
         );
+        await waitForLoginHydration(browser);
         await browser.fill("#correo", accounts[role].correo);
         await browser.fill("#clave", password);
         await evaluate("document.querySelector('form').requestSubmit()");
