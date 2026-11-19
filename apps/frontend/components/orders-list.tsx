@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Order, OrderState, PaginatedOrders } from "@/types/orders";
+import OrderCancellation from "@/components/order-cancellation";
 import { costaRicaDateTime } from "@/lib/date-time";
 
 const PAGE_SIZE = 10;
@@ -193,6 +194,11 @@ export default function OrdersList() {
                 <dd>{order.direccionEntrega}</dd>
               </div>
             </dl>
+            <OrderCancellation
+              id={order.idPedido}
+              state={order.estado}
+              onChanged={() => setRetryCount((value) => value + 1)}
+            />
           </article>
         ))}
       </div>

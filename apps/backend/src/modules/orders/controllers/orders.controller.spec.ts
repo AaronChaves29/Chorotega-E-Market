@@ -4,6 +4,7 @@ import type { Request } from 'express';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from '../services/orders.service';
 import { OrdersReadService } from '../services/orders-read.service';
+import { OrderCancellationService } from '../services/order-cancellation.service';
 import { OrderPreparationService } from '../services/order-preparation.service';
 import { OrderSearchQueryDto } from '../dtos/order-search-query.dto';
 import {
@@ -15,6 +16,7 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 describe('OrdersController', () => {
   const business = { createAndConfirm: jest.fn() };
   const preparation = { prepare: jest.fn() };
+  const cancellation = { cancel: jest.fn() };
   const reads = {
     search: jest.fn(),
     findById: jest.fn(),
@@ -25,6 +27,7 @@ describe('OrdersController', () => {
     business as unknown as OrdersService,
     reads as unknown as OrdersReadService,
     preparation as unknown as OrderPreparationService,
+    cancellation as unknown as OrderCancellationService,
   );
   const user = { idUsuario: 8, sub: 'correo@example.test', rol: 'CLIENTE' };
   const request = { user } as Request & { user: typeof user };
@@ -34,6 +37,29 @@ describe('OrdersController', () => {
     items: [{ idProducto: 4, cantidad: 2 }],
   };
   beforeEach(() => jest.resetAllMocks());
+  it('delega cancelación con identidad autenticada y acción fija', async () => {
+    const result = { idPedido: 19, estado: 'CANCELADO' };
+    cancellation.cancel.mockResolvedValue(result);
+    expect(await controller.cancel(request, 19, {})).toBe(result);
+    expect(cancellation.cancel).toHaveBeenCalledWith(user, 19);
+  });
+  it.each([{ idCliente: 99 }, { estado: 'CANCELADO' }, null, []])(
+    'rechaza cuerpo de cancelación %j',
+    async (body) => {
+      await expect(controller.cancel(request, 19, body)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(cancellation.cancel).not.toHaveBeenCalled();
+    },
+  );
+  it('traduce conflicto de cancelación a 409', async () => {
+    cancellation.cancel.mockRejectedValue(
+      new InvalidOrderTransitionException('CANCELADO', 'CANCELADO'),
+    );
+    await expect(controller.cancel(request, 19, {})).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
   it('delegates preparation with the trusted actor and fixed action', async () => {
     const result = { idPedido: 19, estado: 'PREPARANDO' };
     preparation.prepare.mockResolvedValue(result);

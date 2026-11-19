@@ -86,6 +86,7 @@ add('patch', 'users/{id}', [200, 400, 401, 403, 404, 500], true);
 add('get', 'orders', [200, 400, 401, 403, 500], true);
 add('get', 'orders/{id}', [200, 400, 401, 403, 404, 500], true);
 add('post', 'orders', [201, 400, 401, 403, 404, 409, 422, 500], true);
+add('patch', 'orders/{id}/cancel', [200, 400, 401, 403, 404, 409, 500], true);
 add('patch', 'orders/{id}/prepare', [200, 400, 401, 403, 404, 409, 500], true);
 add('get', 'orders/{id}/details', [200, 400, 401, 403, 404, 500], true);
 add(
@@ -196,7 +197,7 @@ const responseModels: Record<string, string> = {
   couriers: 'CourierResponseDto',
 };
 
-describe('OpenAPI HTTP: contrato generado de las 41 operaciones', () => {
+describe('OpenAPI HTTP: contrato generado de las 42 operaciones', () => {
   let context: Awaited<ReturnType<typeof createHttpTestApp>> | undefined;
   let document: OpenAPIObject;
   const previousSecret = process.env.JWT_SECRET;
@@ -273,7 +274,7 @@ describe('OpenAPI HTTP: contrato generado de las 41 operaciones', () => {
       version: '1.0.0',
     });
   });
-  it('contiene exactamente las 41 operaciones de ruta y método esperadas, sin duplicaciones', () => {
+  it('contiene exactamente las 42 operaciones de ruta y método esperadas, sin duplicaciones', () => {
     const actual = Object.entries(document.paths).flatMap(([path, item]) =>
       Object.keys(item)
         .filter((method) => ['get', 'post', 'patch', 'delete'].includes(method))
@@ -282,7 +283,7 @@ describe('OpenAPI HTTP: contrato generado de las 41 operaciones', () => {
     expect(actual.sort()).toEqual(
       expected.map((x) => `${x.method} ${x.path}`).sort(),
     );
-    expect(actual).toHaveLength(41);
+    expect(actual).toHaveLength(42);
     expect(document.paths).not.toHaveProperty('/api/v1/api/v1/couriers');
     expect(document.paths).not.toHaveProperty('/api/v1/api/v1/neighborhoods');
     expect(document.paths['/api/v1/users'].post).toBeUndefined();
@@ -631,7 +632,7 @@ describe('OpenAPI HTTP: contrato generado de las 41 operaciones', () => {
           .replace(/\?.*$/, '')
           .replace(/\{\{detailId\}\}/g, '{detailId}')
           .replace(
-            /\{\{(?:userId|storeId|categoryId|productId|orderId|deliveryId|cancellableDeliveryId|neighborhoodId|courierId)\}\}/g,
+            /\{\{(?:userId|storeId|categoryId|productId|orderId|cancellableOrderId|deliveryId|cancellableDeliveryId|neighborhoodId|courierId)\}\}/g,
             '{id}',
           );
         return `${m[1].toLowerCase()} ${path}`;
@@ -821,7 +822,9 @@ describe('OpenAPI HTTP: contrato generado de las 41 operaciones', () => {
         expect(response.headers.location).toEqual(expect.any(String));
       executed.push(name);
     }
-    expect(executed).toHaveLength(50);
+    expect(executed).toHaveLength(54);
+    expect(responses.cancelOrder).toMatchObject({ estado: 'CANCELADO' });
+    expect(responses.cancelledOrder).toEqual(responses.cancelOrder);
     expect(
       await orders.findOneByOrFail({ idPedido: prepared.idPedido }),
     ).toMatchObject({ estado: 'ENTREGADO' });
