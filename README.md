@@ -4,20 +4,70 @@
 
 Chorotega E-Market es una plataforma web tipo marketplace diseñada para impulsar el comercio local de la región Chorotega. El sistema permite a los emprendedores registrar sus tiendas, publicar productos y gestionar pedidos, mientras que los clientes pueden explorar el catálogo, realizar compras y dar seguimiento a sus pedidos.
 
-## Producción — Laboratorio 6
+## Video de demostración
 
-Sistema publicado desde `main`; `develop` se utiliza para integración. Estado documentado al 22 de octubre de 2026.
+[Ver video de demostración de Chorotega E-Market](https://drive.google.com/file/d/1ziNKqFG9LN1uBpVqURnx2mJoKhzVOvfc/view?usp=drive_link)
 
-| Acceso                     | URL pública                                           |
-| -------------------------- | ----------------------------------------------------- |
-| Frontend Next.js en Vercel | <https://chorotega-e-market-frontend.vercel.app>      |
-| Backend NestJS en Render   | <https://chorotega-e-market.onrender.com>             |
-| Swagger UI                 | <https://chorotega-e-market.onrender.com/docs>        |
-| Panel MVC administrativo   | <https://chorotega-e-market.onrender.com/admin/login> |
+El video muestra el funcionamiento del marketplace y sus principales procesos, incluyendo las operaciones de compra, administración de pedidos y gestión de entregas.
 
-PostgreSQL utiliza Supabase y la bitácora MongoDB utiliza Atlas. API y frontend publican HTTPS; las conexiones de bases utilizan TLS. No se publican direcciones de conexión ni credenciales de las bases.
+## Acceso al sistema desplegado
 
-[Entrega y evidencia consolidada del Lab 6](docs/laboratory/lab-06/entrega-final.md): rúbrica, resultados verificables de CI, comprobaciones públicas y manuales reportadas, equivalencias académicas y pendientes. Las capturas y sus límites se registran en el [inventario de evidencias](docs/laboratory/lab-06/evidencias/README.md).
+El sistema está publicado en producción desde `main`; `develop` se utiliza para integración. Los enlaces oficiales para la entrega final son:
+
+| Recurso              | Enlace                                                |
+| -------------------- | ----------------------------------------------------- |
+| Aplicación web       | <https://chorotega-e-market-frontend.vercel.app>      |
+| Backend NestJS       | <https://chorotega-e-market.onrender.com>             |
+| Swagger UI           | <https://chorotega-e-market.onrender.com/docs>        |
+| Panel administrativo | <https://chorotega-e-market.onrender.com/admin/login> |
+
+PostgreSQL utiliza Supabase y la bitácora MongoDB utiliza Atlas. La configuración productiva exige HTTPS y conexiones de bases de datos con TLS; no se publican cadenas de conexión ni credenciales. La implementación de la bitácora está integrada en `main`, pero la comprobación de todos sus eventos en Atlas productivo sigue pendiente de evidencia.
+
+El CI final está aprobado; el job `Deploy production` permanece desactivado mediante `false &&`. La publicación actual no demuestra un despliegue productivo automático completo. Consultar [integración continua](#integración-continua).
+
+## Cuentas de demostración
+
+Las credenciales de demostración se entregan por separado mediante el aula virtual del curso. Los correos y contraseñas de estas cuentas se entregan de forma privada, sin publicar JWT ni cookies; tampoco se incluyen contraseñas codificadas o cifradas como mecanismo de distribución. El panel administrativo requiere una cuenta ADMIN previamente autorizada.
+
+### CLIENTE
+
+- Explora emprendimientos.
+- Agrega productos al carrito.
+- Realiza pedidos.
+- Consulta su historial.
+
+### EMPRENDEDOR
+
+- Administra tiendas.
+- Gestiona productos y existencias.
+- Consulta y prepara pedidos.
+
+### REPARTIDOR
+
+- Consulta sus entregas.
+- Visualiza dirección y barrio autorizados.
+- Inicia y completa recorridos.
+
+### ADMIN
+
+- Accede al panel administrativo MVC.
+- Gestiona operaciones administrativas.
+- Asigna y cancela entregas cuando corresponde.
+
+Los registros públicos permiten crear cuentas CLIENTE, EMPRENDEDOR y REPARTIDOR mediante flujos separados. No permiten autoasignarse ADMIN. GitHub Secrets puede custodiar credenciales para futuras pruebas automatizadas autorizadas, pero no sustituye la entrega privada de accesos al profesor ni debe publicarlas en logs o artifacts.
+
+## Documentación de la entrega
+
+| Documento                                                                                                            | Alcance                                                                                |
+| -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| [Auditoría de seguridad](AUDITORIA-SEGURIDAD.md)                                                                     | Hallazgos, pruebas, concurrencia y riesgos documentados.                               |
+| [Flujo integral de cuatro roles](docs/testing/flujo-integral-cuatro-roles.md)                                        | Recorrido de compra y entrega con datos sintéticos y evidencias de pruebas.            |
+| [Bitácora de pedidos con outbox](docs/backend/bitacora-pedidos-outbox-mongodb.md)                                    | Arquitectura PostgreSQL/MongoDB, eventos, recuperación y límites.                      |
+| [Pipeline de GitHub Actions](docs/laboratory/lab-07/pipeline-ci-cd.md)                                               | CI/CD, incidencias y controles de publicación.                                         |
+| [Preparación de despliegue seguro](docs/laboratory/lab-07/preparacion-despliegue-seguro.md)                          | Privilegios, verificación de Vercel y pasos operativos sujetos a autorización.         |
+| [Diagrama de arquitectura y despliegue — Laboratorio 6](docs/laboratory/lab-06/diagrama-arquitectura-despliegue.png) | Referencia histórica del Lab 6, no validación del estado de todos los módulos finales. |
+| [Entrega y evidencia consolidada — Laboratorio 6](docs/laboratory/lab-06/entrega-final.md)                           | Rúbrica, evidencias, equivalencias académicas y pendientes de ese laboratorio.         |
+| [Inventario de evidencias — Laboratorio 6](docs/laboratory/lab-06/evidencias/README.md)                              | Capturas incorporadas, límites y pendientes históricos.                                |
 
 ## Tecnologías
 
@@ -51,7 +101,7 @@ Supabase aloja PostgreSQL. La autenticación implementada se realiza en NestJS; 
 - JWT firmado y emitido por NestJS; roles tomados del usuario persistido.
 - Cookie HttpOnly en el frontend y sesión cifrada con CSRF en el panel MVC.
 
-Supabase Auth y Google OAuth figuran como decisiones previstas en el [ADR-001 histórico](docs/adr/ADR-001-Seleccion-Stack-Tecnologico.md), pero no están implementados en el flujo actual. El registro público crea únicamente cuentas CLIENTE; no existe un endpoint para autoasignarse ADMIN.
+Supabase Auth y Google OAuth figuran como decisiones previstas en el [ADR-001 histórico](docs/adr/ADR-001-Seleccion-Stack-Tecnologico.md), pero no están implementados en el flujo actual. Los flujos públicos registran CLIENTE, EMPRENDEDOR y REPARTIDOR; no existe un endpoint público para autoasignarse ADMIN.
 
 ### Herramientas
 
@@ -71,7 +121,7 @@ Supabase Auth y Google OAuth figuran como decisiones previstas en el [ADR-001 hi
 - `apps/frontend/`: aplicación Next.js.
 - `database/postgres/migrations/`: SQL original del esquema, conservado como referencia.
 - `database/postgres/seeds/`: datos de ejemplo de PostgreSQL.
-- `database/mongodb/seeds/`: inicialización de la bitácora de pedidos.
+- `database/mongodb/seeds/`: datos de ejemplo para desarrollo local; el aprovisionamiento productivo de la bitácora es independiente y explícito.
 - `docs/`: documentación técnica y diagramas.
 - `.github/workflows/`: configuración de integración continua.
 - `docker-compose.yml`: servicios locales de bases de datos.
@@ -81,7 +131,7 @@ Supabase Auth y Google OAuth figuran como decisiones previstas en el [ADR-001 hi
 
 Para ejecutar el proyecto se necesita:
 
-- Node.js 22.22.0 o superior (CI del backend utiliza 22.22.0).
+- Node.js 22.22.0 para backend y Node.js 24 para frontend, según los jobs actuales de CI.
 - npm.
 - Docker.
 - Docker Compose.
@@ -174,25 +224,27 @@ Desde la raíz del proyecto:
 cd apps/backend
 ```
 
+Definí previamente `DATABASE_URL_LOCAL` mediante un canal local privado, apuntando exclusivamente al PostgreSQL de Docker en `localhost:5432`, base `chorotega_emarket`. No uses una conexión productiva ni guardes credenciales en este README.
+
 Consulta las migraciones disponibles:
 
 ```bash
-DATABASE_URL='postgresql://postgres:postgres@localhost:5432/chorotega_emarket' DATABASE_SSL=false npm run migration:show
+DATABASE_URL="${DATABASE_URL_LOCAL:?Defina DATABASE_URL_LOCAL para PostgreSQL local}" DATABASE_SSL=false npm run migration:show
 ```
 
 Ejecuta las migraciones pendientes:
 
 ```bash
-DATABASE_URL='postgresql://postgres:postgres@localhost:5432/chorotega_emarket' DATABASE_SSL=false npm run migration:run
+DATABASE_URL="${DATABASE_URL_LOCAL:?Defina DATABASE_URL_LOCAL para PostgreSQL local}" DATABASE_SSL=false npm run migration:run
 ```
 
 Comprueba su estado:
 
 ```bash
-DATABASE_URL='postgresql://postgres:postgres@localhost:5432/chorotega_emarket' DATABASE_SSL=false npm run migration:show
+DATABASE_URL="${DATABASE_URL_LOCAL:?Defina DATABASE_URL_LOCAL para PostgreSQL local}" DATABASE_SSL=false npm run migration:show
 ```
 
-Estas variables se aplican únicamente a cada comando y seleccionan explícitamente PostgreSQL local, aunque el `.env` apunte a Supabase.
+Estas variables se aplican únicamente a cada comando. Verificá que `DATABASE_URL_LOCAL` esté definida y seleccione PostgreSQL local, aunque el `.env` apunte a Supabase.
 
 TypeORM registra las migraciones aplicadas en `typeorm_migrations`. Las migraciones registradas no se vuelven a ejecutar al repetir `migration:run`.
 
@@ -386,7 +438,7 @@ Con el backend en ejecución en el puerto 3000:
 
 - Swagger UI: <http://localhost:3000/docs>.
 - Especificación JSON: <http://localhost:3000/docs-json>.
-- Colección de las 36 operaciones actuales: [api.http](docs/laboratory/lab-05/api.http).
+- Colección de las 42 operaciones REST actuales (54 bloques HTTP): [api.http](docs/laboratory/lab-05/api.http).
 
 Los endpoints protegidos permiten utilizar **Authorize** con un JWT obtenido
 mediante `/api/v1/auth/login`. La documentación refleja los permisos actuales;
@@ -411,26 +463,31 @@ npm run dev
 
 Utiliza la dirección y el puerto que indique la terminal; si el backend ocupa el puerto 3000, utiliza otro para Next.js. `API_URL` debe apuntar al backend seleccionado e incluir el prefijo `/api/v1`; no debe publicarse como variable del navegador.
 
-### Administración MVC — Laboratorio 6
+### Administración MVC
 
-El backend incorpora vistas Handlebars en `/admin/login`, `/admin/products` y `/admin/stores`, con acceso exclusivo ADMIN, listados paginados, formularios de creación, validación por campo, Post/Redirect/Get y CSRF vinculado a la sesión.
+El módulo incorporado en el Laboratorio 6 ofrece vistas Handlebars en `/admin/login`, `/admin/products` y `/admin/stores`, con acceso exclusivo ADMIN, listados paginados, formularios de creación, validación por campo, Post/Redirect/Get y CSRF vinculado a la sesión. La entrega final también incluye gestión de entregas en `/admin/deliveries`, con asignación, detalle y cancelación según las reglas del dominio; consultar [Administración de entregas](docs/backend/administracion-entregas.md).
 
 En desarrollo utilizar `npm run start:dev`. Después del build de producción, `npm run start` y `npm run start:render` ejecutan el mismo arranque compilado con validación y migraciones previas a HTTP. No se crean cuentas ni datos de ejemplo automáticamente.
 
-Consultar [el flujo MVC, seguridad, pruebas y verificación en Render](docs/laboratory/lab-06/admin-mvc.md). Las rutas MVC son independientes de las 36 operaciones REST actuales documentadas en OpenAPI, incluido el registro público de clientes. La regresión de formularios con Chrome/Chromium y PostgreSQL temporal se ejecuta con `npm run test:browser`, después del build y con Docker disponible.
+Consultar [el flujo MVC, seguridad, pruebas y verificación en Render](docs/laboratory/lab-06/admin-mvc.md). Las rutas MVC son independientes de las 42 operaciones REST actuales documentadas en OpenAPI, incluidos los registros públicos de cliente, emprendedor y repartidor. La regresión de formularios con Chrome/Chromium y PostgreSQL temporal se ejecuta con `npm run test:browser`, después del build y con Docker disponible.
 
 ### Frontend — SPA en React y Next.js
 
 El frontend de Chorotega E-Market está desarrollado con Next.js, React y TypeScript. Se encuentra en `apps/frontend/` dentro del monorepositorio y consume la API REST de NestJS.
 
-**Funcionalidades implementadas:**
+**Funcionalidades implementadas en `main`:**
 
-- Inicio y cierre de sesión mediante JWT.
-- Almacenamiento del token en una cookie HttpOnly.
-- Consulta paginada de pedidos con estados de carga, datos, error y lista vacía.
-- Creación de pedidos mediante selección de tienda, productos, cantidades, barrio y dirección de entrega.
-- Validación de datos y presentación de mensajes de error.
-- Cliente HTTP compartido en `apps/frontend/lib/api-client.ts`, encargado de centralizar las solicitudes al backend y detectar respuestas HTTP 401.
+- Landing pública y registro separado de clientes, emprendedores y repartidores.
+- Inicio y cierre de sesión mediante JWT en cookie HttpOnly, con navegación y permisos por rol.
+- Exploración autenticada de emprendimientos, detalle de tienda, búsqueda en vivo, ordenamiento y paginación.
+- Carrito por cliente y sesión, con productos de una sola tienda y confirmación de pedido.
+- Creación manual de pedidos, historial y cancelación por el propietario cuando el estado lo permite.
+- Gestión de tiendas, contactos comerciales opcionales, productos, existencias y preparación de pedidos por el emprendedor.
+- Panel del repartidor, destino autorizado e inicio y finalización de entregas.
+- Validaciones por campo y estados de carga, vacío y error.
+- Intermediarios de API en Next.js, con manejo de sesiones y respuestas HTTP 401; el catálogo permanece protegido.
+
+Los límites de cada flujo y sus pruebas se documentan en [Carrito](docs/frontend/carrito-compras.md), [Gestión de tiendas](docs/frontend/gestion-tiendas-emprendedor.md), [Productos](docs/frontend/gestion-productos-emprendedor.md), [Pedidos del emprendedor](docs/frontend/gestion-pedidos-emprendedor.md), [Panel del repartidor](docs/frontend/panel-repartidor-entregas.md) y [Cancelación del cliente](docs/frontend/cancelacion-pedidos-cliente.md).
 
 **Variables de entorno del frontend:**
 
@@ -447,7 +504,7 @@ El frontend está publicado desde `main`, utilizando `apps/frontend` como direct
 
 `API_URL` es una variable de servidor de Vercel que selecciona la API de Render con el prefijo `/api/v1`. Las configuraciones Production y Preview se revisan por separado; no utilizar `localhost` en producción ni introducir secretos en variables `NEXT_PUBLIC_*`.
 
-La disponibilidad pública está comprobada. La evidencia del recorrido autenticado de login, listado y creación de pedidos desde Vercel debe completarse en [la entrega final](docs/laboratory/lab-06/entrega-final.md). El código, las pruebas del backend y un build aprobado no sustituyen esa evidencia manual.
+El video de esta entrega presenta los flujos del sistema publicado. Las comprobaciones históricas y los pendientes del Laboratorio 6 permanecen en [su entrega final](docs/laboratory/lab-06/entrega-final.md); el recorrido automatizado con datos sintéticos se documenta por separado en [la prueba integral de cuatro roles](docs/testing/flujo-integral-cuatro-roles.md). Un build aprobado no sustituye evidencia de ejecución productiva.
 
 ## Verificación del backend
 
@@ -519,19 +576,22 @@ Las compras mantienen bloqueos pesimistas sobre productos, adquiridos en orden
 por ID dentro de la transacción de pedidos: descuento de inventario, detalles y
 confirmación deben completarse o revertirse juntos. Estas escrituras incrementan
 también la versión, por lo que una edición antigua no repone existencias vendidas.
-La migración `1793296800000-AddProductVersion` debe aplicarse antes de utilizar
-el backend y el contrato nuevos; no se ha verificado su aplicación productiva en
-el cierre documental.
+La migración `1793296800000-AddProductVersion` debe estar aplicada antes de utilizar
+el contrato de edición. El historial productivo debe comprobarse durante cada
+publicación; las migraciones ejecutadas en CI no acreditan por sí solas ese estado.
 
 Consultar la [auditoría final de seguridad](AUDITORIA-SEGURIDAD.md) y el
 [diseño y pruebas de concurrencia](docs/laboratory/lab-07/concurrencia-optimista.md).
-Los bloques 1–5 están integrados en `develop`; al 3 de noviembre no están en
-`main`, y el despliegue automático continúa deshabilitado. Los resultados del
-Lab 6 que siguen son históricos, no evidencia de publicación del Lab 7.
+Los bloques de seguridad y concurrencia, junto con los módulos finales, están
+integrados en `main` para esta entrega. El despliegue automático continúa
+deshabilitado. Los resultados del Lab 6 que siguen son históricos y no sustituyen
+la evidencia de CI ni las verificaciones operativas actuales.
 
 ## Integración continua
 
 GitHub Actions ejecuta jobs independientes para backend y frontend.
+
+El [CI final verificado](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/44599870798) corresponde a `main` en `e4639d5d6483896cae70806529098431e9d04a9e` y terminó en **Success**: Build Backend y Build Frontend aprobaron. `Deploy production` quedó **Skipped** porque conserva el bloqueo `false &&`. Esto acredita integración continua, no un despliegue automático completo.
 
 El [CI histórico aprobado del Lab 6](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/39828366237), correspondiente a `main` en `d45b97cf0caae338a86a8dc6c393573759308d47`, verificó 455 unitarias, 565 integraciones, ocho pruebas del artefacto y nueve escenarios de Chrome. Los resultados y sus límites se detallan en [la entrega del Lab 6](docs/laboratory/lab-06/entrega-final.md).
 
