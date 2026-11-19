@@ -59,10 +59,17 @@ function identifier(value: string): number {
 }
 
 function presentation(delivery: DeliveryResponseDto) {
+  const dates = new Intl.DateTimeFormat('es-CR', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'America/Costa_Rica',
+  });
   return {
     ...delivery,
-    fechaAsignacion: delivery.fechaAsignacion.toISOString(),
-    fechaEntrega: delivery.fechaEntrega?.toISOString() ?? 'Pendiente',
+    fechaAsignacion: dates.format(delivery.fechaAsignacion),
+    fechaEntrega: delivery.fechaEntrega
+      ? dates.format(delivery.fechaEntrega)
+      : 'Pendiente',
     canCancel: delivery.estado === 'ASIGNADA',
   };
 }

@@ -609,13 +609,51 @@ describe('MVC: HTTP real, servicios de catálogo simulados y guards activos', ()
     expect(result.text).toContain('estado&#x3D;ASIGNADA');
     expect(result.text).toContain('sortBy&#x3D;idEntrega');
     expect(result.text).toContain('page&#x3D;2');
-    expect(result.text).toContain('2026-11-17T12:00:00.000Z');
+    expect(result.text.replaceAll('\u00a0', ' ')).toContain(
+      '17 nov 2026, 6:00 a. m.',
+    );
+    expect(result.text).toContain('Asignación (Costa Rica)');
+    expect(result.text).toContain('ISO 8601 UTC');
     await agent.get('/admin/deliveries/9').expect(200);
     expect(deliveries.findVisibleById).toHaveBeenCalledWith(
       9,
       expect.objectContaining({ rol: 'ADMIN' }),
     );
   });
+  it.each([
+    ['2026-11-19T05:59:00.000Z', '18 nov 2026, 11:59 p. m.'],
+    ['2026-11-19T06:00:00.000Z', '19 nov 2026, 12:00 a. m.'],
+  ])(
+    'entregas: presenta %s en Costa Rica sin cambiar el instante',
+    async (iso, text) => {
+      const { agent } = await loggedIn();
+      const current = {
+        ...delivery,
+        estado: 'ENTREGADA',
+        fechaAsignacion: new Date(iso),
+        fechaEntrega: new Date('2026-11-19T06:01:00.000Z'),
+      };
+      deliveries.searchVisible.mockResolvedValueOnce({
+        content: [current],
+        page: 0,
+        size: 20,
+        totalElements: 1,
+        totalPages: 1,
+      });
+      deliveries.findVisibleById.mockResolvedValueOnce(current);
+      for (const path of ['/admin/deliveries', '/admin/deliveries/9']) {
+        const response = await agent.get(path).expect(200);
+        const html = response.text.replaceAll('\u00a0', ' ');
+        expect(html).toContain(text);
+        expect(html).toContain('19 nov 2026, 12:01 a. m.');
+        expect(html).toContain('(Costa Rica)');
+      }
+      expect(current.fechaAsignacion.toISOString()).toBe(iso);
+      expect(current.fechaEntrega.toISOString()).toBe(
+        '2026-11-19T06:01:00.000Z',
+      );
+    },
+  );
   it('entregas: filtros vacíos de formulario nativo conservan los defaults', async () => {
     const { agent } = await loggedIn();
     await agent
