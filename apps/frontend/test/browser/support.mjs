@@ -21,6 +21,28 @@ export async function freePort() {
   await new Promise((resolve) => server.close(resolve));
   return port;
 }
+
+export async function waitForLoginHydration(browser) {
+  await browser.wait(
+    "document.readyState === 'complete' && !!document.querySelector('.login-password-toggle') && document.querySelector('#clave')?.type === 'password'",
+    "formulario de acceso listo",
+  );
+  await browser.evaluate(
+    "document.querySelector('.login-password-toggle').click()",
+  );
+  await browser.wait(
+    "document.querySelector('#clave')?.type === 'text'",
+    "el formulario responde al mostrar la contraseña",
+  );
+  await browser.evaluate(
+    "document.querySelector('.login-password-toggle').click()",
+  );
+  await browser.wait(
+    "document.querySelector('#clave')?.type === 'password'",
+    "contraseña oculta antes de completar el formulario",
+  );
+}
+
 export async function chrome() {
   const binary =
     process.env.CHROME_BIN ||
