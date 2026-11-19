@@ -268,11 +268,12 @@ test(
         );
       await browser.navigate(origin + "/login");
       await t.test(
-        "sin sesión: cuatro BFF 401 y página privada redirige",
+        "sin sesión: cinco BFF 401 y página privada redirige",
         async () => {
           for (const [path, body] of [
             ["", undefined],
             [`/${main.idEntrega}`, undefined],
+            [`/${main.idEntrega}/destino`, undefined],
             [`/${main.idEntrega}/iniciar`, {}],
             [`/${main.idEntrega}/completar`, {}],
           ])
@@ -292,6 +293,7 @@ test(
             for (const [path, body] of [
               ["", undefined],
               [`/${main.idEntrega}`, undefined],
+              [`/${main.idEntrega}/destino`, undefined],
               [`/${main.idEntrega}/iniciar`, {}],
               [`/${main.idEntrega}/completar`, {}],
             ])
@@ -318,6 +320,7 @@ test(
             assert.equal(r.status, 200);
             assert.equal(r.data.totalElements, 0);
             assert.equal((await bff(`/${main.idEntrega}`)).status, 404);
+            assert.equal((await bff(`/${main.idEntrega}/destino`)).status, 404);
             assert.equal((await post(main, "iniciar")).status, 403);
             await navigate("/mis-entregas", "#my-deliveries");
             await browser.wait(
@@ -389,9 +392,21 @@ test(
         },
       );
       await t.test(
-        "ajenas/inexistentes: GET 404, POST ajeno 403, no acceso a pedidos",
+        "destino propio visible; destino ajeno oculto sin acceso general a pedidos",
         async () => {
           assert.equal((await bff(`/${foreign.idEntrega}`)).status, 404);
+          assert.equal(
+            (await bff(`/${foreign.idEntrega}/destino`)).status,
+            404,
+          );
+          const ownDestination = await bff(`/${main.idEntrega}/destino`);
+          assert.equal(ownDestination.status, 200);
+          assert.deepEqual(ownDestination.data, {
+            idEntrega: main.idEntrega,
+            idPedido: main.idPedido,
+            direccionEntrega: "Dirección de entrega exclusivamente sintética",
+            nombreBarrio: "Barrio sintético",
+          });
           assert.equal((await bff("/2147483647")).status, 404);
           assert.equal((await post(foreign, "iniciar")).status, 403);
           assert.equal((await post(foreign, "completar")).status, 403);
@@ -400,10 +415,15 @@ test(
             403,
           );
           await open(main);
+          await browser.wait(
+            "!!document.querySelector('[data-delivery-destination]')",
+            "destino visible",
+          );
           const text = await browser.evaluate("document.body.innerText");
           assert(
-            !text.includes("Dirección de entrega exclusivamente sintética"),
+            text.includes("Dirección de entrega exclusivamente sintética"),
           );
+          assert(text.includes("Barrio sintético"));
           assert(!text.includes(accounts.CLIENTE.correo));
         },
       );
@@ -462,6 +482,12 @@ test(
               ),
               false,
             );
+            assert.equal(
+              await browser.evaluate(
+                "!!document.querySelector('[data-delivery-destination]')",
+              ),
+              false,
+            );
             assert.equal((await post(d, "iniciar")).status, 409);
             assert.equal((await post(d, "completar")).status, 409);
           }
@@ -497,6 +523,12 @@ test(
               "(()=>{const b=Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Confirmar entrega');b.click();b.click()})()",
             );
             await waitState("ENTREGADA");
+            assert.equal(
+              await browser.evaluate(
+                "!!document.querySelector('[data-delivery-destination]')",
+              ),
+              false,
+            );
             assert.equal(await browser.evaluate("window.phase9Writes"), 2);
             assert(
               await browser.evaluate(
@@ -688,6 +720,38 @@ test(
           await button("Confirmar inicio");
           await waitState("EN_CAMINO");
           await domainPost(target, "complete");
+        },
+      );
+      await t.test(
+        "destino no disponible ofrece reintento seguro y recupera solo el destino",
+        async () => {
+          const target = await assign();
+          const service = context.app.get(DeliveriesService),
+            original = service.findCourierDestination;
+          service.findCourierDestination = async () => {
+            throw new Error("SYNTHETIC_PRIVATE_DESTINATION_FAILURE");
+          };
+          try {
+            await open(target);
+            await browser.wait(
+              "!!document.querySelector('[role=\"alert\"] button') && document.body.innerText.includes('No fue posible consultar el destino')",
+              "error de destino visible",
+            );
+            assert(
+              !(await browser.evaluate("document.body.innerText")).includes(
+                "SYNTHETIC_PRIVATE_DESTINATION_FAILURE",
+              ),
+            );
+          } finally {
+            service.findCourierDestination = original;
+          }
+          await button("Reintentar consulta del destino");
+          await browser.wait(
+            "!!document.querySelector('[data-delivery-destination]')",
+            "destino recuperado",
+          );
+          assert.equal((await current(target)).estado, "ASIGNADA");
+          await domainPost(target, "cancel", "ADMIN");
         },
       );
       await t.test(

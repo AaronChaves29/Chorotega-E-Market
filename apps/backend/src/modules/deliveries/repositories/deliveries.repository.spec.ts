@@ -208,4 +208,36 @@ describe('DeliveriesRepository: búsqueda paginada', () => {
       }
     },
   );
+
+  it('consulta solo destinos activos del repartidor y proyecta los cuatro campos permitidos', async () => {
+    let sql = '';
+    let parameters: unknown[] = [];
+    jest
+      .spyOn(SelectQueryBuilder.prototype, 'getRawOne')
+      .mockImplementation(function (this: SelectQueryBuilder<Delivery>) {
+        [sql, parameters] = this.getQueryAndParameters();
+        return Promise.resolve({
+          idEntrega: 7,
+          idPedido: 9,
+          direccionEntrega: 'Centro de Nicoya',
+          nombreBarrio: 'Barrio Centro',
+        });
+      });
+
+    await expect(repository.findCourierDestination(7, 42)).resolves.toEqual({
+      idEntrega: 7,
+      idPedido: 9,
+      direccionEntrega: 'Centro de Nicoya',
+      nombreBarrio: 'Barrio Centro',
+    });
+    expect(sql).toContain('"entrega"."id_entrega" = $1');
+    expect(sql).toContain('"repartidor"."id_usuario" = $2');
+    expect(sql).toContain('"entrega"."estado" IN ($3, $4)');
+    expect(sql).toContain('"pedido"."direccion_entrega"');
+    expect(sql).toContain('"barrio"."nombre"');
+    expect(parameters).toEqual([7, 42, 'ASIGNADA', 'EN_CAMINO']);
+    expect(sql.match(/SELECT /g)).toHaveLength(1);
+    expect(sql).not.toContain('"usuario"');
+    expect(sql).not.toContain('"id_cliente"');
+  });
 });

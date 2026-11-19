@@ -48,6 +48,7 @@ function load(file) {
 const pure = load("lib/courier-deliveries.ts"),
   list = load("app/api/mis-entregas/route.ts"),
   detail = load("app/api/mis-entregas/[id]/route.ts"),
+  destinationRoute = load("app/api/mis-entregas/[id]/destino/route.ts"),
   start = load("app/api/mis-entregas/[id]/iniciar/route.ts"),
   complete = load("app/api/mis-entregas/[id]/completar/route.ts");
 const initial = {
@@ -57,6 +58,12 @@ const initial = {
   estado: "ASIGNADA",
   fechaAsignacion: "2026-11-17T10:00:00.000Z",
   fechaEntrega: null,
+};
+const destination = {
+  idEntrega: 7,
+  idPedido: 9,
+  direccionEntrega: "Centro de Nicoya, 100 m norte",
+  nombreBarrio: "Barrio Centro",
 };
 const context = (id) => ({ params: Promise.resolve({ id: id ?? "7" }) });
 const req = (method = "GET", body, query = "", headers = {}) =>
@@ -72,6 +79,8 @@ const req = (method = "GET", body, query = "", headers = {}) =>
 const get = (query) => list.GET(req("GET", undefined, query));
 const read = (id = "7", query = "") =>
   detail.GET(req("GET", undefined, query), context(id));
+const readDestination = (id = "7", query = "") =>
+  destinationRoute.GET(req("GET", undefined, query), context(id));
 const post = (action = start, body = {}, headers = {}, id = "7", query = "") =>
   action.POST(req("POST", body, query, headers), context(id));
 const page = (
@@ -119,6 +128,8 @@ function setup(custom) {
         ),
       );
     if (u.pathname === "/api/v1/deliveries/7") return Response.json(initial);
+    if (u.pathname === "/api/v1/deliveries/7/destination")
+      return Response.json(destination);
     if (u.pathname.endsWith("/start"))
       return Response.json({ ...initial, estado: "EN_CAMINO" });
     if (u.pathname.endsWith("/complete"))
@@ -167,6 +178,29 @@ test("proyección de entregas conserva solo seis campos autorizados", () => {
     true,
   );
 });
+test("proyección del destino valida y conserva únicamente sus cuatro campos", () => {
+  assert.deepEqual(
+    pure.projectCourierDeliveryDestination({
+      ...destination,
+      correo: "synthetic-private",
+      token: "synthetic-private",
+      cliente: { nombre: "synthetic-private" },
+    }),
+    destination,
+  );
+  for (const value of [
+    null,
+    [],
+    {},
+    { ...destination, idEntrega: 0 },
+    { ...destination, idPedido: "9" },
+    { ...destination, direccionEntrega: "" },
+    { ...destination, direccionEntrega: "x".repeat(256) },
+    { ...destination, nombreBarrio: "" },
+    { ...destination, nombreBarrio: "x".repeat(101) },
+  ])
+    assert.equal(pure.projectCourierDeliveryDestination(value), null);
+});
 test("cuatro estados de entrega, sin mezclarlos con los estados del pedido", async (t) => {
   for (const estado of pure.deliveryStates)
     await t.test(estado, () =>
@@ -184,7 +218,13 @@ test("cuatro estados de entrega, sin mezclarlos con los estados del pedido", asy
 test("sin cookie todos los BFF fallan sin consultar Nest; ADMIN y otros roles no acceden", async (t) => {
   setup();
   session = false;
-  for (const call of [get, read, () => post(), () => post(complete)]) {
+  for (const call of [
+    get,
+    read,
+    readDestination,
+    () => post(),
+    () => post(complete),
+  ]) {
     const r = await call();
     assert.equal(r.status, 401);
     assert.match(r.headers.get("set-cookie"), /chorotega_session=/);
@@ -195,7 +235,13 @@ test("sin cookie todos los BFF fallan sin consultar Nest; ADMIN y otros roles no
     await t.test(rol, async () => {
       setup();
       role = rol;
-      for (const call of [get, read, () => post(), () => post(complete)])
+      for (const call of [
+        get,
+        read,
+        readDestination,
+        () => post(),
+        () => post(complete),
+      ])
         assert.equal((await call()).status, 403);
       assert(calls.every((c) => c.path === "/api/v1/auth/me"));
     });
@@ -278,6 +324,48 @@ test("detalle consulta directamente ID; entrega ajena o inexistente no filtra da
   const r = await read("123");
   assert.equal(r.status, 404);
   assert(!JSON.stringify(await r.json()).includes("synthetic-private"));
+});
+test("destino usa endpoint autenticado y devuelve solo su contrato mínimo", async () => {
+  setup((u) =>
+    u.pathname.endsWith("/destination")
+      ? Response.json({ ...destination, correo: "synthetic-private" })
+      : null,
+  );
+  const response = await readDestination();
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.deepEqual(await response.json(), destination);
+  assert.equal(calls.at(-1).path, "/api/v1/deliveries/7/destination");
+  assert.equal(calls.at(-1).method, "GET");
+  assert(calls.at(-1).bearer);
+});
+test("destino rechaza IDs/queries inválidos y respuestas malformadas sin filtrar", async (t) => {
+  for (const id of ["0", "-1", "1.2", "2147483648", "invalid"])
+    await t.test(id, async () => {
+      setup();
+      assert.equal((await readDestination(id)).status, 400);
+      assert.equal(calls.length, 1);
+    });
+  setup();
+  assert.equal((await readDestination("7", "?estado=ASIGNADA")).status, 400);
+  assert.equal(calls.length, 1);
+
+  for (const body of [
+    null,
+    { ...destination, idEntrega: 8 },
+    { ...destination, direccionEntrega: "" },
+    { ...destination, nombreBarrio: null },
+  ])
+    await t.test(JSON.stringify(body), async () => {
+      setup((u) =>
+        u.pathname.endsWith("/destination") ? Response.json(body) : null,
+      );
+      const response = await readDestination();
+      assert.equal(response.status, 502);
+      assert(
+        !JSON.stringify(await response.json()).includes("synthetic-private"),
+      );
+    });
 });
 test("IDs y queries de detalle/escritura se validan antes de consultar entregas", async (t) => {
   for (const id of ["0", "-1", "1e2", "1.2", "2147483648", "7/start", "7?x=1"])

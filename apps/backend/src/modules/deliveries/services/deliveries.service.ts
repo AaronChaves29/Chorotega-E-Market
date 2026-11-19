@@ -13,6 +13,7 @@ import { DeliveryNotFoundException } from '../exceptions/delivery-not-found.exce
 import { InvalidDeliveryStateException } from '../exceptions/invalid-delivery-state.exception';
 import { AssignDeliveryDto } from '../dtos/assign-delivery.dto';
 import { DeliveryResponseDto } from '../dtos/delivery-response.dto';
+import { DeliveryDestinationResponseDto } from '../dtos/delivery-destination-response.dto';
 import { DeliveryMapper } from '../mappers/delivery.mapper';
 import { NeighborhoodsRepository } from '../../neighborhoods/repositories/neighborhoods.repository';
 import { InvalidAssignmentInputException } from '../exceptions/invalid-assignment-input.exception';
@@ -294,6 +295,18 @@ export class DeliveriesService {
     );
     if (!delivery) throw new DeliveryNotFoundException(idEntrega);
     return DeliveryMapper.toResponseDto(delivery);
+  }
+
+  async findCourierDestination(
+    idEntrega: number,
+    idUsuario: number,
+  ): Promise<DeliveryDestinationResponseDto> {
+    const destination = await this.deliveriesRepository.findCourierDestination(
+      idEntrega,
+      idUsuario,
+    );
+    if (!destination) throw new DeliveryNotFoundException(idEntrega);
+    return destination;
   }
 
   private readScope(user: AuthenticatedUser): DeliveryReadScope {

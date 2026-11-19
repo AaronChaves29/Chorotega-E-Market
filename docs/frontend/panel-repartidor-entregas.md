@@ -40,6 +40,7 @@ etiquetas de estado legibles, foco visible y diseño móvil de una columna.
 | -------------------------------------- | -------------------------------------- |
 | GET `/api/mis-entregas`                | GET `/api/v1/deliveries`               |
 | GET `/api/mis-entregas/:id`            | GET `/api/v1/deliveries/:id`           |
+| GET `/api/mis-entregas/:id/destino`    | GET `/api/v1/deliveries/:id/destination` |
 | POST `/api/mis-entregas/:id/iniciar`   | POST `/api/v1/deliveries/:id/start`    |
 | POST `/api/mis-entregas/:id/completar` | POST `/api/v1/deliveries/:id/complete` |
 
@@ -58,12 +59,21 @@ enteros positivos de 32 bits y timestamps UTC ISO de la serialización JSON de D
 ENTREGADA requiere fecha de entrega no anterior a la asignación; los demás estados
 conservan `fechaEntrega: null`. No se trasladan relaciones, perfiles ni campos extra.
 
+El destino usa un contrato separado con solo `idEntrega`, `idPedido`,
+`direccionEntrega` y `nombreBarrio`. NestJS une pedido, barrio y repartidor en una
+consulta que condiciona simultáneamente el ID, `repartidor.idUsuario` y los estados
+`ASIGNADA`/`EN_CAMINO`. Entregas ajenas, inexistentes, finalizadas o canceladas
+responden 404. El cliente no consulta el endpoint en estados terminales y desmonta
+la dirección cuando observa una transición a ENTREGADA o CANCELADA. Los errores de
+lectura se muestran sin información sensible y permiten un reintento explícito.
+
 ## Identidad, roles y propiedad
 
 Cada BFF vuelve a verificar la identidad vigente con `/auth/me`. Una cookie o rol
 de interfaz no basta: el backend valida firma/expiración, cuenta ACTIVO y rol actual
-desde PostgreSQL. ADMIN, CLIENTE y EMPRENDEDOR reciben 403 en estos BFF exclusivos,
-aunque ADMIN mantenga sus permisos REST originales fuera del panel.
+desde PostgreSQL. ADMIN, CLIENTE y EMPRENDEDOR reciben 403 en estos BFF exclusivos.
+El endpoint REST de destino también exige el rol REPARTIDOR; los permisos REST
+administrativos existentes para otros recursos de entregas no se amplían.
 
 No existe `idRepartidor` en los filtros aceptados. La propiedad se determina por el
 usuario JWT: `DeliveriesRepository.applyScope()` relaciona `repartidor.idUsuario`
@@ -125,18 +135,13 @@ solicitud haya terminado: cualquier nueva operación debe volver a serializarse 
 validarse por NestJS. Dos POST concurrentes sobre la misma transición deben dar
 exactamente 200/409, sin efectos duplicados.
 
-## Limitación de información para reparto real
+## Límite de información para reparto real
 
-El DTO no contiene dirección, teléfono, nombre del comprador ni productos. El
-REPARTIDOR no puede leer `/orders/:id`, y el panel no llama ese endpoint ni utiliza
-credenciales de ADMIN/EMPRENDEDOR para suplirlo. Se informa esta limitación en el
-detalle; no se presentan datos ficticios como información de una entrega real.
-
-Para uso operativo sería necesaria una fase posterior autorizada: ampliar el DTO
-de detalle de entrega con una proyección mínima de destino/contacto comercial
-necesarios, accesible solo al repartidor propietario y durante estados apropiados,
-manteniendo el filtro SQL de propiedad y sus pruebas de privacidad. Requiere decidir
-retención/visibilidad de históricos. No se implementa ni se amplían permisos aquí.
+El DTO general de entrega sigue sin incluir dirección, teléfono, nombre del
+comprador ni productos. El destino se obtiene exclusivamente mediante el endpoint
+específico descrito arriba; el REPARTIDOR no puede leer `/orders/:id` y el panel no
+usa credenciales de ADMIN/EMPRENDEDOR para suplirlo. No se exponen datos personales
+adicionales ni se conserva la dirección al quedar la entrega ENTREGADA o CANCELADA.
 
 ## Pruebas y evidencias
 

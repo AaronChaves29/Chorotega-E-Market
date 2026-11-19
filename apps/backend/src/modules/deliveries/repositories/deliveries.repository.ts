@@ -6,6 +6,7 @@ import { Delivery } from '../entities/delivery.entity';
 import { DeliverySearchFilters } from '../interfaces/delivery-search-filters.interface';
 import { PaginationResult } from '../../../common/pagination/pagination-result';
 import type { DeliveryReadScope } from '../interfaces/delivery-read-scope.interface';
+import type { DeliveryDestinationResponseDto } from '../dtos/delivery-destination-response.dto';
 
 @Injectable()
 export class DeliveriesRepository extends TypeOrmBaseRepository<
@@ -55,6 +56,28 @@ export class DeliveriesRepository extends TypeOrmBaseRepository<
       .leftJoin('entrega.repartidor', 'repartidor')
       .where('entrega.idEntrega = :idEntrega', { idEntrega });
     return this.applyScope(query, scope).getOne();
+  }
+
+  async findCourierDestination(
+    idEntrega: number,
+    idUsuario: number,
+  ): Promise<DeliveryDestinationResponseDto | null> {
+    const destination = await this.repository
+      .createQueryBuilder('entrega')
+      .innerJoin('entrega.pedido', 'pedido')
+      .innerJoin('pedido.barrio', 'barrio')
+      .innerJoin('entrega.repartidor', 'repartidor')
+      .select('entrega.idEntrega', 'idEntrega')
+      .addSelect('pedido.idPedido', 'idPedido')
+      .addSelect('pedido.direccionEntrega', 'direccionEntrega')
+      .addSelect('barrio.nombre', 'nombreBarrio')
+      .where('entrega.idEntrega = :idEntrega', { idEntrega })
+      .andWhere('repartidor.idUsuario = :idUsuario', { idUsuario })
+      .andWhere('entrega.estado IN (:...estados)', {
+        estados: ['ASIGNADA', 'EN_CAMINO'],
+      })
+      .getRawOne<DeliveryDestinationResponseDto>();
+    return destination ?? null;
   }
 
   private applyScope(
