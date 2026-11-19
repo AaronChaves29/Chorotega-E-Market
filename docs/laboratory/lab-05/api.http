@@ -32,6 +32,7 @@
 @categoryId = {{createCategory.response.body.$.idCategoria}}
 @productId = {{createProduct.response.body.$.idProducto}}
 @orderId = {{createOrder.response.body.$.idPedido}}
+@cancellableOrderId = {{createOrderToCancel.response.body.$.idPedido}}
 @detailId = {{createOrder.response.body.$.items[0].idDetalle}}
 @deliveryId = {{assignDelivery.response.body.$.idEntrega}}
 @existingCategoryName = REEMPLAZAR_POR_CATEGORIA_EXISTENTE
@@ -323,6 +324,43 @@ Authorization: Bearer {{clientToken}}
 # expected-status: 200
 GET {{baseUrl}}/api/v1/orders/{{orderId}}/details/{{detailId}}
 Authorization: Bearer {{clientToken}}
+
+### Orders — compra independiente para cancelación
+# @name createOrderToCancel
+# expected-status: 201
+POST {{baseUrl}}/api/v1/orders
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{
+  "idBarrio": {{neighborhoodId}},
+  "direccionEntrega": "Nicoya, cancelación de prueba",
+  "items": [{ "idProducto": {{catalogProductId}}, "cantidad": 1 }]
+}
+
+### Orders — cancelar pedido propio sin cambiar importes históricos
+# @name cancelOrder
+# expected-status: 200
+PATCH {{baseUrl}}/api/v1/orders/{{cancellableOrderId}}/cancel
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{}
+
+### Orders — verificar cancelación mediante lectura
+# @name cancelledOrder
+# expected-status: 200
+GET {{baseUrl}}/api/v1/orders/{{cancellableOrderId}}
+Authorization: Bearer {{clientToken}}
+
+### Orders — repetir no restaura inventario dos veces
+# @name cancelOrderAgain
+# expected-status: 409
+PATCH {{baseUrl}}/api/v1/orders/{{cancellableOrderId}}/cancel
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{}
 
 ### Orders — comenzar preparacion como propietario
 # @name prepareOrder

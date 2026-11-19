@@ -34,6 +34,7 @@ import type { AuthenticatedUser } from '../../../auth/interfaces/authenticated-u
 import type { PaginationResult } from '../../../common/pagination/pagination-result';
 import { OrdersService } from '../services/orders.service';
 import { OrdersReadService } from '../services/orders-read.service';
+import { OrderCancellationService } from '../services/order-cancellation.service';
 import { OrderPreparationService } from '../services/order-preparation.service';
 import { CreateOrderDto } from '../dtos/create-order.dto';
 import {
@@ -54,7 +55,47 @@ export class OrdersController {
     private readonly ordersService: OrdersService,
     private readonly ordersReadService: OrdersReadService,
     private readonly preparation: OrderPreparationService,
+    private readonly cancellation: OrderCancellationService,
   ) {}
+
+  @Patch(':id/cancel')
+  @Roles('CLIENTE')
+  @ApiOperation({
+    summary: 'Cancelar pedido propio',
+    description:
+      'Solo CLIENTE propietario. PENDIENTE o CONFIRMADO sin entrega que impida cancelar. CONFIRMADO restaura inventario una sola vez. Repetir devuelve 409; ajeno o inexistente devuelve 404. No acepta campos.',
+  })
+  @ApiParam({
+    name: 'id',
+    schema: { type: 'integer', minimum: 1, maximum: 2147483647 },
+  })
+  @ApiBody({
+    required: false,
+    schema: { type: 'object', additionalProperties: false, maxProperties: 0 },
+  })
+  @ApiResponse({ status: 200, type: OrderResponseDto })
+  @ApiProblemResponses([400, 401, 403, 404, 409, 500])
+  async cancel(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: unknown,
+  ): Promise<OrderResponseDto> {
+    if (
+      body !== undefined &&
+      (!body ||
+        typeof body !== 'object' ||
+        Array.isArray(body) ||
+        Object.keys(body).length)
+    )
+      throw new BadRequestException(
+        'Esta operación no acepta campos en el cuerpo.',
+      );
+    try {
+      return await this.cancellation.cancel(request.user, id);
+    } catch (error) {
+      rethrowOrderHttpError(error);
+    }
+  }
 
   @Patch(':id/prepare')
   @Roles('EMPRENDEDOR')
