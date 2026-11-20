@@ -1,555 +1,263 @@
-# Auditoría de seguridad — Laboratorio 7
+# Auditoría de seguridad — Laboratorio 7 y cierre de Chorotega E-Market
 
-Fecha: 3 de noviembre de 2026. Repositorio: `AaronChaves29/Chorotega-E-Market`.
-El cierre documental del Bloque 6 se conserva como evidencia histórica. La revisión
-posterior actualiza dependencias del frontend y su evidencia; no cambia lógica de
-negocio ni activa despliegues.
+**Fecha de actualización:** 19 de noviembre de 2026  
+**Proyecto:** Chorotega E-Market  
+**Repositorio:** [AaronChaves29/Chorotega-E-Market](https://github.com/AaronChaves29/Chorotega-E-Market)  
+**Versión examinada:** rama `main`, commit `e4639d5d6483896cae70806529098431e9d04a9e` (PR [#155](https://github.com/AaronChaves29/Chorotega-E-Market/pull/155))  
+**Estado del documento:** revisión consolidada del cierre, con hallazgos y riesgos pendientes explícitos. **No es una certificación de seguridad ni acredita por sí sola un despliegue automático.**
+
+> **Trazabilidad histórica.** El documento original del Laboratorio 7, fechado el 3 de noviembre de 2026, evaluó los Bloques 1–6 y conserva su evidencia en el historial de Git. Esta revisión incorpora el estado del sistema publicado el 19 de noviembre, sin presentar resultados históricos como nuevas pruebas ni atribuir correcciones a problemas que siguen abiertos. Los enlaces a commits, PR y documentación histórica permiten consultar el detalle de cada hallazgo.
 
 ## A. Resumen ejecutivo
 
-Los bloques 1–5 corrigieron dependencias vulnerables del backend, autenticación de
-cuentas inactivas, permisos desactualizados, falta de límites de autenticación,
-sobrescrituras de productos y una consulta de propiedad que adquiría otra conexión
-dentro de una transacción de entregas. Las correcciones están integradas en
-`develop`, con evidencia de CI. **No está terminado todo el Laboratorio 7**:
-`main` no contiene estas correcciones, el despliegue automático sigue deshabilitado
-y la comprobación del sistema productivo queda pendiente.
+El proyecto utiliza un frontend **Next.js/React** (Vercel), una API y panel administrativo MVC **NestJS/TypeORM/Handlebars** (Render), **PostgreSQL** (Supabase) para los datos transaccionales y **MongoDB Atlas** para la bitácora de pedidos y entregas. El acceso aplica JWT, identidad vigente desde PostgreSQL, cookies HttpOnly para el frontend y sesiones administrativas con protección CSRF.
 
-El alcance original fue el backend NestJS y sus pruebas. La corrección posterior
-del frontend, documentada en C, amplía la revisión a sus dependencias y verifica
-localmente sus flujos contra NestJS y PostgreSQL temporal.
+El proyecto ya fue integrado a `main` mediante el **PR #155**, y su [workflow de GitHub Actions #44599870798](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/44599870798) terminó en **SUCCESS**. El CI ejecutó **767/767** pruebas unitarias de backend y **877/877** pruebas de integración, además de las verificaciones de compilación y calidad incluidas en el workflow. Los dos servicios publicados corresponden al mismo SHA `e4639d5`:
 
-La comprobación posterior detecta cero paquetes señalados en los árboles de
-producción de backend y frontend. Persisten avisos de desarrollo: 40 en backend
-(39 moderados y uno bajo) y 16 moderados en frontend. Los conteos anteriores del
-Bloque 6 eran exclusivamente del backend. No se declara ausencia total de
-vulnerabilidades ni cobertura completa de OWASP.
-La regresión local del frontend aprobó diez escenarios. La integración completa
-del backend terminó 645/646 en dos ejecuciones por fallos de transporte distintos;
-esta validación sigue abierta y no se presenta como aprobada (detalle en C).
+- Render: backend `LIVE`; publicación **manual** desde el SHA anterior.
+- Vercel: frontend `READY` en Production, con el dominio principal asignado al deployment de ese SHA.
+- GitHub Actions: el trabajo `Deploy production` continúa **desactivado** mediante `false &&`; **no se ha demostrado un despliegue automático de producción realizado por Actions**.
 
-### Versión y separación de evidencias
+**Hallazgos productivos que no deben declararse corregidos:**
 
-La tabla registra la base auditada antes del commit documental del Bloque 6;
-las referencias a HEAD y la comparación de árboles corresponden a esa base.
+1. **Privilegios excesivos en PostgreSQL (prioridad crítica).** Roles web `anon` y `authenticated` conservan `TRUNCATE` efectivo sobre tablas transaccionales como `pedido`, `producto` y `tienda`, además de `typeorm_migrations`. Esta última mantiene RLS desactivado. Es un riesgo concreto que no se resuelve únicamente porque las rutas NestJS exijan JWT.
+2. **Publicación de bitácora pendiente (prioridad alta).** Se observaron tres filas de outbox en estado `FALLIDO`, con diez intentos cada una. Render emite repetidamente `outbox_publish_failed`; el motivo específico no ha sido demostrado. La persistencia de eventos en MongoDB Atlas **no está verificada de extremo a extremo en producción**.
+3. **CD automático no activado (prioridad alta para la rúbrica).** El CI está verde y el sistema fue publicado, pero el job automático de despliegue no ejecutó los pasos de Render y Vercel.
 
-| Ámbito            | Evidencia comprobada                                                                                                                | Alcance y límite                                                                                                                                                                                                                                                  |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Rama local        | `feat/lab-07-security-concurrency`, HEAD `2ff0eb98c9382b921561d924401787807373b5e1`                                                 | Solo `.gitignore` tenía una modificación local previa al cierre; se conserva intacta y sin staging.                                                                                                                                                               |
-| Integración       | `upstream/develop` en `4503e0fb83e48fc3f9c5818fc6c99f38873c65ef`                                                                    | El [PR #101](https://github.com/AaronChaves29/Chorotega-E-Market/pull/101) integró el Bloque 5 el 3 de noviembre. `HEAD...upstream/develop`: cero commits exclusivos locales y un merge remoto; los árboles versionados coinciden. No se actualizó la rama local. |
-| Publicación       | `upstream/main` en `a9f3c9df83d162dcf3d7c529a4597691306acd0c`                                                                       | Los commits de los bloques 1–5 no están en `main`. Hay 27 commits exclusivos de `develop` y cinco de `main`; no se asume un avance directo entre ambas ramas.                                                                                                     |
-| CI de integración | [Ejecución #275](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/41679190762), SHA `4503e0f`, completada con éxito | Build Backend y Build Frontend aprobados; Deploy production omitido. Sus logs confirman 533 casos Jest, 646 integraciones, nueve pruebas del artefacto, 17 de orquestación simulada y nueve escenarios Chrome.                                                    |
-| Producción        | Sin operaciones ni consultas productivas en esta auditoría                                                                          | Un CI verde de `develop` no demuestra que Render/Vercel ejecuten estas correcciones ni que la migración de versión esté aplicada.                                                                                                                                 |
+La **prueba completa de los cuatro roles en Internet** y la validación externa de MongoDB aún requieren evidencias separadas. No se han realizado escrituras productivas para preparar esta actualización documental.
 
-### Fuentes oficiales y rúbrica
+### A.1. Matriz de estado vigente
 
-Se leyeron los PDF locales `EIF509 Laboratorio 7 - Guía Completa.pdf`, páginas
-2–3, y `EIF509 Sesión 14 - Seguridad Concurrencia y Frameworks.pdf`, láminas
-6, 21–22, 25 y 28, disponibles en Downloads. Las páginas indicadas son las del
-PDF; la rúbrica está en la página PDF 3, con pie de página 2.
+| Ámbito | Estado al 19-11-2026 | Evidencia o limitación |
+|---|---|---|
+| Código final | **Integrado en `main`** | PR #155, SHA `e4639d5` |
+| Calidad automatizada | **CI verde** | [Run #44599870798](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/44599870798); backend y frontend aprobaron |
+| Concurrencia de productos | **Implementada y probada** | `producto.version`, conflictos HTTP 409, transacciones; migraciones ya registradas en producción |
+| Autenticación y permisos de la aplicación | **Implementados y probados en CI** | JWT, roles, identidad vigente, propiedad por consulta SQL, MVC/CSRF |
+| Seguridad de privilegios de PostgreSQL | **Pendiente crítico** | Consultas de permisos productivos realizadas en modo lectura |
+| Render | **Publicado (`LIVE`)** | SHA `e4639d5`; publicación manual, sin atribuirla al job de Actions |
+| Vercel | **Publicado (`READY`)** | Deployment `dpl_F9rayvPBmNffJyeVDCkFQGZSEAyf`, alias principal del mismo SHA |
+| Bitácora MongoDB | **Código/pruebas completos; operación productiva no comprobada** | Outbox PostgreSQL con tres filas `FALLIDO`; logs de Render |
+| Pipeline de despliegue automático | **Pendiente** | Condición `false &&` en `.github/workflows/ci.yml` |
+| Smoke test real de los cuatro roles | **Pendiente de evidencia completa** | Un CI verde y un deployment `READY` no sustituyen la operación funcional comprobada desde Internet |
 
-| Criterio oficial                   | Puntos | Exigencia y estado de cierre                                                                                                                                                                                                                                       |
-| ---------------------------------- | -----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Pipeline CI/CD completo            |    2,5 | Compilación, pruebas, cobertura de negocio ≥70 %, despliegue automático solo desde `main` si todo pasa y secretos en GitHub Secrets. **Parcial**: verificaciones y protección de rama comprobadas; despliegue deshabilitado y sin validación real del orquestador. |
-| Auditoría de seguridad documentada |    2,5 | Ocho puntos de la lámina 28 y categorías OWASP Top 10:2025 aplicables, con hallazgo, riesgo, corrección y commit. **Parcial**: documento consolidado; persisten avisos de desarrollo y comprobaciones productivas pendientes.                                      |
-| Concurrencia controlada            |    2,0 | Versionado de una operación con contención, migración, 409 Problem Details y prueba que provoca conflicto. **Completo en código/pruebas de integración; parcial como entrega productiva**. Falta publicar y comprobar la migración y el contrato en producción.    |
-| Observabilidad mínima              |    1,5 | JSON en stdout, eventos de login fallido/acceso denegado/conflicto sin secretos y `/actuator/health` sin detalles. **Parcial**: implementación y pruebas presentes; ruta NestJS distinta y validación productiva pendiente.                                        |
-| Conjunto de pruebas                |    1,5 | ≥40 pruebas automatizadas verdes en CI, distribuidas entre unitarias, integración/API, con 401, 403 y concurrencia. **Completo en CI de `develop`**; pendiente el CI de la versión final de entrega.                                                               |
+## B. Metodología y alcance
 
-La entrega oficial es el **5 de noviembre de 2026 a las 18:00**, con sistema
-desplegado y pipeline verde. La guía exige corregir en el repositorio y en el
-sistema desplegado; documentar un hallazgo sin corregirlo no lo vuelve cumplido.
+Esta actualización combina las **evidencias históricas documentadas en el archivo original** con comprobaciones recientes de solo lectura:
 
-El [ADR-001](docs/adr/ADR-001-Seleccion-Stack-Tecnologico.md) registra autorización
-del stack alternativo. Se usa `@VersionColumn`/TypeORM frente a `@Version`/Flyway y
-Jest/Istanbul frente a JaCoCo. El health real es `/api/database/health`, no
-`/actuator/health`. No existe evidencia en el ADR de aceptación individual de
-esa ruta o de cada equivalencia de evaluación; confirmar con el profesor.
+- GitHub: rama `main`, PR #155, contenido versionado, workflow, resultado y logs de la ejecución final.
+- Render: configuración del servicio, estado del despliegue de `e4639d5` y logs de aplicación; sin reiniciar ni redesplegar.
+- Vercel: metadatos del deployment asignado al dominio principal; sin publicar ni promover nuevos deployments.
+- Supabase/PostgreSQL: consultas de **metadatos y conteos**, sin credenciales, datos personales ni comandos de escritura; privilegios efectivos, RLS y estado de la outbox.
+- Código: guards, DTOs, servicios, repositorios, migraciones, transacciones, publicador outbox y script de privilegios.
 
-## B. Metodología
+**No se realizó** un pentest externo, no se verificaron todos los secretos ni todos los recursos de los proveedores, no se inspeccionaron documentos individuales de Atlas y no se ejecutó una restauración aislada demostrada del respaldo. Por lo tanto, el alcance de estas evidencias debe leerse literalmente.
 
-- Inspección de historial y referencias actualizadas con `git fetch upstream`,
-  pertenencia de commits, PR #101, logs de CI y ruleset de `main`, sin cambiar de
-  rama ni realizar merges.
-- Auditoría del lockfile mediante npm, separando producción de desarrollo y
-  conteos históricos de avisos publicados al consultar hoy. No se instalaron
-  paquetes ni se ejecutó `audit fix`.
-- Lectura de controladores, DTOs/mappers, guards, identidad vigente, sesiones,
-  CSRF, consultas parametrizadas, filtros de errores, configuración TLS/CORS y
-  todos los caminos de escritura del stock y las transacciones de entregas.
-- Pruebas unitarias/HTTP y PostgreSQL 16 de Testcontainers: migraciones reales,
-  `synchronize: false`, sin cargar `.env` ni usar Supabase/Atlas. Chrome prueba MVC;
-  no equivale a una prueba del frontend Next.js ni de infraestructura remota.
-- Búsqueda local de archivos sensibles versionados y patrones de secretos en
-  1.742 objetos de texto históricos alcanzables por las referencias disponibles.
-  Solo se reportan rutas/clasificación, nunca valores. No es una certificación
-  exhaustiva de todo el historial, imágenes, referencias eliminadas o secretos
-  de plataformas externas.
+### B.1. Requisitos del Laboratorio 7
 
-Los documentos de [dependencias](docs/laboratory/lab-07/dependencias-backend.md),
-[identidad vigente](docs/laboratory/lab-07/autenticacion-vigente.md),
-[rate limiting](docs/laboratory/lab-07/rate-limiting-backend.md),
-[concurrencia](docs/laboratory/lab-07/concurrencia-optimista.md) y
-[transacciones](docs/laboratory/lab-07/transacciones-entregas.md) conservan sus
-validaciones históricas. También se consultaron [pipeline](docs/laboratory/lab-07/pipeline-ci-cd.md),
-[observabilidad](docs/laboratory/lab-07/observabilidad-base.md) y
-[evidencias de pruebas](docs/laboratory/lab-07/testing-evidence.md), sin modificarlos.
-Las cifras anteriores, por ejemplo 634 integraciones antes del Bloque 5, no se
-presentan como conteos actuales ni se suman a las nuevas ejecuciones.
+| Criterio | Puntos | Resultado y condición pendiente |
+|---|---:|---|
+| CI/CD | 2,5 | Compilaciones, pruebas y cobertura verificadas en `main`; **despliegue automático pendiente** |
+| Seguridad | 2,5 | Controles auditados en el código; **privilegios productivos críticos todavía abiertos** |
+| Concurrencia | 2,0 | Bloqueo transaccional, versión optimista, conflictos y pruebas implementados |
+| Observabilidad | 1,5 | Logs JSON, eventos de seguridad y health; falta resolver/publicar bitácora y acordar seguimiento operativo |
+| Pruebas | 1,5 | Más de 40 pruebas; CI del release aprobado |
 
-## C. Hallazgos y correcciones
+La aplicación utiliza tecnología distinta de los ejemplos Java de la guía, de acuerdo con el ADR histórico del equipo. Equivalencias: TypeORM en lugar de JPA, Jest/Istanbul en lugar de JaCoCo y ruta real de salud **`/api/database/health`** en lugar de `/actuator/health`. La equivalencia académica de cada punto debe confirmarse con el profesor cuando corresponda.
 
-| Bloque                | Hallazgo y riesgo demostrado                                                                                                                                                                                                                  | Corrección aplicada y evidencia                                                                                                                                                                                                                                                                                   | Commit                                                                                                                  |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| 1 — Dependencias      | Paquetes con avisos conocidos; no se demostró explotación por HTTP. Había un aviso crítico y altos en el árbol de producción.                                                                                                                 | Actualizaciones compatibles del lockfile y overrides acotados. Se conserva NestJS 11 y no se usa `audit fix --force`. Detalle y estado actual debajo.                                                                                                                                                             | [c0025c4](https://github.com/AaronChaves29/Chorotega-E-Market/commit/c0025c4673e70f8f9466cb3fa08f729d64a44a91), PR #93  |
-| 2 — Identidad vigente | Login podía admitir cuentas inactivas y los permisos podían quedar sujetos a información antigua del token/sesión.                                                                                                                            | [AuthService](apps/backend/src/auth/auth.service.ts) rechaza credenciales incorrectas/cuentas inactivas; [CurrentIdentityService](apps/backend/src/auth/current-identity.service.ts) verifica firma/expiración y consulta PK, estado y rol persistidos en cada solicitud protegida. MVC reutiliza esta identidad. | [46d4e3c](https://github.com/AaronChaves29/Chorotega-E-Market/commit/46d4e3c95ca02545703a0730d0c223affb3da65e), PR #94  |
-| 3 — Límites           | Login REST, login MVC y registro carecían de presupuesto de solicitudes. Riesgo de automatización/consumo de recursos, sin atribuir un ataque observado.                                                                                      | [AuthRateLimitService](apps/backend/src/auth/rate-limit/auth-rate-limit.service.ts): reserva síncrona en memoria, 429 y `Retry-After`, recuperación de ventana y presupuestos separados.                                                                                                                          | [866c342](https://github.com/AaronChaves29/Chorotega-E-Market/commit/866c3429a6a8976c622d1fd5351d609cb6c5f53b), PR #96  |
-| 4 — Productos         | Dos ediciones o una edición concurrente con una compra podían sobrescribir existencias sin detectar una lectura antigua.                                                                                                                      | [ProductsRepository.updateForActor](apps/backend/src/modules/products/repositories/products.repository.ts) ejecuta UPDATE atómico por ID, propietario y versión esperada; incrementa versión y usa RETURNING. La versión desactualizada visible produce 409 mediante servicio y filtro global.                    | [1d57dfa](https://github.com/AaronChaves29/Chorotega-E-Market/commit/1d57dfa3839bafdbef740466e5d404bd17ca6817), PR #98  |
-| 5 — Entregas          | `startDelivery`/`completeDelivery` consultaban la propiedad con un repositorio global dentro de la transacción. Con pool de una conexión se reprodujo timeout al adquirir una segunda conexión. **No se demostró un deadlock de PostgreSQL**. | [DeliveriesService.assertCourierOwnsDelivery](apps/backend/src/modules/deliveries/services/deliveries.service.ts) recibe el EntityManager transaccional y construye el repositorio con él. Conserva propiedad, bloqueos y atomicidad.                                                                             | [2ff0eb9](https://github.com/AaronChaves29/Chorotega-E-Market/commit/2ff0eb98c9382b921561d924401787807373b5e1), PR #101 |
+## C. Hallazgos originales, correcciones y trazabilidad
 
-### Dependencias: resultado histórico y consulta actual
+Las siguientes correcciones pertenecen a la auditoría histórica de los Bloques 1–5. Su integración al proyecto final **ya no está pendiente**; los riesgos residuales son distintos de la falta de publicación de esos commits.
 
-| Consulta                                 | Críticas | Altas | Moderadas | Bajas | Paquetes señalados |
-| ---------------------------------------- | -------: | ----: | --------: | ----: | -----------------: |
-| Bloque 1, 28 de octubre, todas antes     |        1 |     8 |         2 |     8 |                 19 |
-| Bloque 1, todas después                  |        0 |     0 |         0 |     8 |                  8 |
-| Bloque 1, producción antes               |        1 |     3 |         3 |     0 |                  7 |
-| Bloque 1, producción después             |        0 |     0 |         0 |     0 |                  0 |
-| Cierre documental, 3 de noviembre, todas |        0 |     0 |        39 |     1 |                 40 |
-| Cierre documental, producción            |        0 |     0 |         0 |     0 |                  0 |
+| Bloque | Hallazgo histórico | Corrección aplicada | Evidencia |
+|---|---|---|---|
+| 1. Dependencias | Paquetes vulnerables en el árbol de producción | Actualizaciones compatibles, lockfile y overrides acotados | [Commit `c0025c4`](https://github.com/AaronChaves29/Chorotega-E-Market/commit/c0025c4673e70f8f9466cb3fa08f729d64a44a91), PR #93 |
+| 2. Identidad vigente | Cuentas inactivas y roles desactualizados podían conservar acceso | Verificación de hash, estado y rol vigentes de usuario en solicitudes protegidas | [Commit `46d4e3c`](https://github.com/AaronChaves29/Chorotega-E-Market/commit/46d4e3c95ca02545703a0730d0c223affb3da65e), PR #94 |
+| 3. Límites de autenticación | Login REST/MVC y registro sin presupuesto | `AuthRateLimitService`, respuestas HTTP 429 y `Retry-After` | [Commit `866c342`](https://github.com/AaronChaves29/Chorotega-E-Market/commit/866c3429a6a8976c622d1fd5351d609cb6c5f53b), PR #96 |
+| 4. Inventario concurrente | Ediciones con versión antigua podían sobrescribir existencias | `@VersionColumn`, validación de versión y escritura atómica condicional; conflicto 409 | [Commit `1d57dfa`](https://github.com/AaronChaves29/Chorotega-E-Market/commit/1d57dfa3839bafdbef740466e5d404bd17ca6817), PR #98 |
+| 5. Transacciones de entrega | Consulta de propietario desde otra conexión durante una transacción | Consulta mediante el `EntityManager` de la misma transacción, conservando rollback | [Commit `2ff0eb9`](https://github.com/AaronChaves29/Chorotega-E-Market/commit/2ff0eb98c9382b921561d924401787807373b5e1), PR #101 |
 
-Son paquetes señalados por npm, incluidos dependientes transitivos, no 40 CVE
-independientes. Se ejecutaron de nuevo, desde `apps/backend`:
+### C.1. Dependencias: evidencias con fecha
 
-```sh
-npm audit --json --ignore-scripts --package-lock-only --registry=https://registry.npmjs.org
-npm audit --json --ignore-scripts --package-lock-only --omit=dev --registry=https://registry.npmjs.org
+La auditoría histórica del **3 de noviembre** registró, después de las correcciones compatibles, **cero avisos señalados en los árboles auditados de producción** y advertencias de herramientas de desarrollo: 40 paquetes de backend y 16 de frontend, según el entorno y el lockfile de ese momento. Esos números son **históricos**, no una auditoría npm nuevamente ejecutada en esta revisión.
+
+El despliegue reciente de Render mostró **22 avisos moderados durante la instalación del árbol completo** y **0 vulnerabilidades después de `npm prune --omit=dev`**. Esta es una evidencia del build de Render, no una garantía de ausencia de vulnerabilidades futuras ni de toda la cadena de suministro. No se ejecutó `npm audit fix --force` ni se recomienda hacerlo sin pruebas de compatibilidad.
+
+La corrección histórica del frontend llevó Next.js y `eslint-config-next` a **16.4.5**, además de actualizar dependencias transitivas compatibles. El frontend compiló correctamente en el CI final. Las advertencias históricas de desarrollo se deben revaluar con un nuevo `npm audit` controlado antes de presentar cifras vigentes.
+
+### C.2. Seguridad de autenticación, sesión y autorización
+
+- **REST:** JWT con expiración y validación de identidad persistida; 401 si no hay sesión o esta es inválida, 403 si el rol vigente carece de acceso y 404 uniforme para varios recursos no visibles.
+- **Frontend:** BFF de Next.js y cookies HttpOnly; las comprobaciones de interfaz no reemplazan autorización en NestJS.
+- **MVC administrativo:** sesión cifrada, cookies configuradas según entorno, protección CSRF y patrón Post/Redirect/Get.
+- **Aislamiento:** clientes consultan pedidos propios; emprendedores gestionan sus tiendas/productos/pedidos; repartidores consultan entregas propias. El destino (`GET /api/v1/deliveries/:id/destination`) se restringe por rol, propietario y estado `ASIGNADA`/`EN_CAMINO` en PostgreSQL.
+- **Registro:** no hay autoasignación del rol ADMIN en registros públicos.
+
+Los límites de autenticación documentados inicialmente son por **operación e instancia**, no un límite distribuido por IP o por identidad. Los reinicios y las múltiples réplicas pueden alterar el comportamiento. Tampoco existe evidencia de MFA o revocación individual inmediata de todos los JWT.
+
+### C.3. Concurrencia y transacciones
+
+La entidad `producto` incluye versión optimista. Las ediciones envían la versión esperada; una escritura concurrente obsoleta puede devolver **409**. Las compras y la modificación de inventario se ejecutan bajo las transacciones y los bloqueos de PostgreSQL. La lógica de entrega conserva reglas explícitas para asignación, inicio, finalización y cancelación.
+
+La base productiva ya registra la migración `AddProductVersion1793296800000` junto con las otras cinco migraciones de la versión publicada. **No volver a ejecutar ni manipular el historial para forzar migraciones.**
+
+Estas garantías no prueban la ausencia de todos los deadlocks, errores de red o contenciones en producción. Incidentes intermitentes de `socket hang up` y Chrome quedaron documentados sin una causa definitiva; ejecuciones posteriores exitosas no demuestran su resolución.
+
+### C.4. Bitácora de pedidos: implementación posterior
+
+Los [PR #153](https://github.com/AaronChaves29/Chorotega-E-Market/pull/153) y [#154](https://github.com/AaronChaves29/Chorotega-E-Market/pull/154), integrados en el release, incorporan **PostgreSQL Transactional Outbox → MongoDB** y controles de seguridad asociados. Incluyen escritura de eventos dentro de las transacciones comerciales, secuencia por pedido, idempotencia, reintentos, conciliación y validación de esquema.
+
+Los siete tipos de evento definidos en el código son: `PEDIDO_CONFIRMADO`, `PEDIDO_CANCELADO`, `PEDIDO_PREPARANDO`, `ENTREGA_ASIGNADA`, `ENTREGA_CANCELADA`, `ENTREGA_EN_CAMINO` y `PEDIDO_ENTREGADO`. El almacenamiento documental utiliza la colección `bitacora_pedidos`. No existe transacción ACID única entre PostgreSQL y MongoDB; la outbox hace recuperable la publicación, pero requiere operación e índices adecuados.
+
+**Estado productivo:** la tabla `pedido_audit_outbox` tenía tres eventos en `FALLIDO` con diez intentos. Render registró advertencias `outbox_publish_failed`. No se ha verificado la causa ni la entrega de esos eventos a MongoDB Atlas. No afirmar que la bitácora productiva está en verde; revisar conexión autorizada, índices/validador, permisos y configuración antes de cualquier reintento manual.
+
+## D. Ocho verificaciones de seguridad solicitadas por el profesor
+
+Esta sección conserva los **ocho puntos** del documento histórico; “implementado” significa comprobación acotada por código/pruebas, no prueba de invulnerabilidad.
+
+| # | Verificación | Evidencia | Resultado y riesgo residual |
+|---:|---|---|---|
+| 1 | Un usuario no puede ver ni modificar recursos de otro | Guards, identidad vigente y filtros de propietario en consultas de pedidos, tiendas, entregas y destino | **Implementado/probado en CI**; pendiente smoke test productivo completo |
+| 2 | Ningún endpoint devuelve una entidad JPA/ORM | DTOs y mappers, contratos OpenAPI y pruebas HTTP | **Implementado/probado**; no equivale a auditar toda respuesta futura |
+| 3 | No hay consultas construidas concatenando texto no confiable | Parámetros SQL, whitelist de ordenamiento, filtros tipados MongoDB | **Revisado en caminos inspeccionados**; no es pentest exhaustivo |
+| 4 | Los errores no envían trazas al cliente | `Problem Details`, filtros globales, HTML administrativo seguro | **Implementado/probado**; errores desconocidos no deben exponer SQL ni stack |
+| 5 | CORS permite solamente los orígenes previstos | Validación de orígenes y lista permitida en NestJS | **Parcial**: no se inspeccionó el valor productivo real de la allowlist; la política soporta una lista, no fuerza un solo origen |
+| 6 | No existen secretos en repositorio ni historial | Escaneo histórico de archivos y patrones documentado el 3 de noviembre | **Parcial**: ningún secreto real identificado en aquella muestra; no certifica todo historial, binarios ni paneles |
+| 7 | Contraseñas con BCrypt y JWT con expiración | `AuthService`, configuración JWT y pruebas de identidad vigente | **Implementado/probado**; no se revisó la entropía o rotación real del secreto productivo |
+| 8 | Dependencias sin vulnerabilidades conocidas | Auditorías históricas npm y logs del build actual | **Parcial**: instalación productiva de Render sin avisos tras prune; advertencias de desarrollo y análisis de frontend requieren nueva evaluación |
+
+El problema de **privilegios de PostgreSQL identificado en producción** no queda cubierto por los guards de la fila 1: son capas diferentes y ambas requieren control.
+
+## E. Mapeo OWASP Top 10:2025 (alcance no exhaustivo)
+
+| Categoría | Control, evidencia y limitación |
+|---|---|
+| **A01 — Broken Access Control** | JWT, roles, propiedad SQL y validación de identidad vigente; **riesgo abierto de ACL PostgreSQL productivo**, independiente de rutas NestJS |
+| **A02 — Security Misconfiguration** | CORS, TLS y cookies configuradas; revisar variables reales, CORS efectivo y privilegios excesivos de tablas existentes |
+| **A03 — Software Supply Chain Failures** | Lockfiles, `npm ci`, versiones compatibles, CI; avisos residuales históricos de herramientas de desarrollo |
+| **A04 — Cryptographic Failures** | BCrypt, JWT, sesión MVC cifrada y conexiones TLS; secretos y rotación externos no inspeccionados |
+| **A05 — Injection** | Valores SQL parametrizados, validación DTO, escaping Handlebars y filtros Mongo tipados; sin pentest de todas las entradas |
+| **A06 — Insecure Design** | Precios y stock calculados/validados en backend, transacciones, versión y límites; la protección de rate limiting no es distribuida |
+| **A07 — Authentication Failures** | Rechazo de inactivos, expiración JWT, login/registro limitados y comprobación de rol persistido; sin MFA demostrada |
+| **A08 — Software or Data Integrity Failures** | CI comprueba el SHA; outbox garantiza escritura transaccional del evento en PostgreSQL; **publicación MongoDB fallida en la evidencia reciente** |
+| **A09 — Security Logging and Alerting Failures** | Logs JSON `login_failed`, `access_denied`, `concurrency_conflict`, `outbox_publish_failed`; no hay alertas proactivas verificadas |
+| **A10 — Mishandling of Exceptional Conditions** | Problem Details, rollback, 409 y reintentos outbox diseñados; se conservan fallos intermitentes no explicados y eventos en `FALLIDO` |
+
+Referencia de la clasificación: [OWASP Top 10:2025](https://top10.owasp.org/2025/). Es un mapeo de controles concretos, no una certificación OWASP o ASVS.
+
+## F. Pruebas y evidencias de la versión final
+
+### F.1. GitHub Actions, SHA `e4639d5`
+
+**Fuente verificable:** [Workflow de `main` #44599870798 — SUCCESS](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/44599870798). El log de backend confirma:
+
+| Verificación | Resultado |
+|---|---:|
+| Suites unitarias backend | **50/50** |
+| Pruebas unitarias backend | **767/767** |
+| Suites de integración backend | **36/36** |
+| Pruebas de integración backend | **877/877** |
+| Build Backend | **Success** |
+| Build Frontend | **Success** |
+| `Deploy production` | **Skipped** (bloqueo deliberado) |
+
+**Cobertura del backend reportada por ese run, para los archivos incluidos en Jest:**
+
+| Métrica | CI final | Umbral |
+|---|---:|---:|
+| Sentencias | 96,33 % | 70 % |
+| Ramas | 82,30 % | 70 % |
+| Funciones | 94,69 % | 70 % |
+| Líneas | 96,13 % | 70 % |
+
+La cobertura **no** equivale a cobertura del 100 % de los módulos, del frontend, del sistema desplegado o de seguridad. Las pruebas utilizan infraestructura temporal para integración; no efectúan una compra real en producción.
+
+Las validaciones registradas en las fases previas incluyen 359/359 pruebas unitarias de frontend, 131/131 de orquestación sin red, 42/42 de diagnóstico Chrome y 28/28 de MVC Chrome. **Esas cifras son históricas del cierre previo**, no se suman a 767/877 ni se etiquetan como nuevos runs si no aparecen en el log examinado.
+
+### F.2. Despliegue real
+
+| Proveedor | Versión | Evidencia | Limitación |
+|---|---|---|---|
+| [Render](https://chorotega-e-market.onrender.com) | `e4639d5` | Servicio `LIVE` y build exitoso, despliegue `dep-dbvkvlnf3r2c73cj68b0` | Despliegue **manual**; no prueba el job `Deploy production` |
+| [Vercel](https://chorotega-e-market-frontend.vercel.app) | `e4639d5` | Production `READY`, `dpl_F9rayvPBmNffJyeVDCkFQGZSEAyf`, alias principal asignado | Publicación puntual; la regla de Ignored Build Step fue restaurada y no demuestra automatización futura |
+| [Swagger](https://chorotega-e-market.onrender.com/docs) | Backend publicado | Ruta de documentación configurada | Debe comprobarse apertura pública desde incógnito y disponibilidad real |
+| [Salud](https://chorotega-e-market.onrender.com/api/database/health) | Backend publicado | Health configurado en Render | No prueba por sí solo MongoDB, todos los roles ni entrega de eventos |
+
+El `README.md` y las pruebas de CI documentan el sistema, pero cualquier prueba de uso público debe registrarse separadamente con capturas de datos **sintéticos**.
+
+## G. Riesgos abiertos y medidas propuestas
+
+### G.1. CRÍTICO — Privilegios excesivos de PostgreSQL productivo
+
+**Hallazgo reproducido mediante consulta de solo lectura:** para `pedido`, `producto`, `tienda` y `typeorm_migrations`, `has_table_privilege(..., 'TRUNCATE')` devuelve `true` para los roles `anon` y `authenticated`. En `typeorm_migrations` además `relrowsecurity = false`. Las tablas `pedido_audit_outbox` y `pedido_audit_sequence` presentan RLS activo y no exhiben ese permiso efectivo.
+
+**Impacto:** el permiso `TRUNCATE` es incompatible con el principio de mínimo privilegio para esos roles. **RLS no protege la operación TRUNCATE**. La presencia del privilegio no demuestra explotación, pero obliga a remediar la configuración productiva y verificar las vías efectivas de acceso.
+
+**Corrección propuesta, no aplicada:** [`docs/laboratory/lab-07/sql/release-privileges.sql`](docs/laboratory/lab-07/sql/release-privileges.sql), preparado para **`psql`**, no para pegarlo directamente en el SQL Editor. Antes de ejecutarlo:
+
+1. Confirmar el rol técnico real con el que conecta Render y los permisos que necesita.
+2. Verificar un respaldo reciente y **probar su restauración en un entorno aislado**.
+3. Probar el script y las comprobaciones de ACL/rol técnico en esa restauración.
+4. Preparar y custodiar el archivo privado de recuperación de privilegios; no compartirlo en el repositorio.
+5. Obtener **autorización expresa de cambio productivo**, ejecutar de forma coordinada y comprobar nuevamente los privilegios efectivos sin afectar la API.
+
+**Estado:** **ABIERTO**. No se hizo `REVOKE`, no se alteró RLS ni se ejecutó SQL de corrección al preparar esta revisión.
+
+### G.2. ALTO — Outbox sin publicación productiva comprobada
+
+**Hallazgo:** tres filas en `pedido_audit_outbox` permanecían `FALLIDO` con diez intentos. Render mostraba advertencias recurrentes `outbox_publish_failed`; el publicador registra mensajes sanitizados que **no identifican la causa**.
+
+**Medidas:** verificar por canal autorizado configuración de MongoDB y conectividad desde Render, colección `bitacora_pedidos`, índice único de `pedidoId`, validadores y permisos; comparar con el aprovisionador `node dist/deployment/provision-order-audits.js`. Solo después de corregir una causa demostrada, acordar recuperación/reintento supervisado y cotejar un evento sintético con PostgreSQL y Atlas. No manipular contadores o filas para forzar un estado verde.
+
+**Estado:** **ABIERTO**. No se inspeccionaron ni modificaron documentos de Atlas durante esta actualización.
+
+### G.3. ALTO para la rúbrica — Despliegue automático desactivado
+
+El workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) conserva:
+
+```yaml
+if: ${{ false && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.backend.result == 'success' && needs.frontend.result == 'success' }}
 ```
 
-Salidas: 1 para el árbol completo y 0 para producción. Los avisos actuales con
-descripción propia son `deepmerge` ([GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4)),
-`glob` ([GHSA-3g3m-2fjr-6pw4](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4)) y
-`minimatch` ([GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)).
-Alcanzan herramientas de CLI, ESLint, Jest y Testcontainers. Hay que evaluar
-correcciones compatibles en otro bloque autorizado: npm propone también cambios
-mayores/degradaciones que no se han validado. No se demostró explotación desde
-las rutas del backend; tampoco se descarta riesgo en build/CI al procesar entradas
-no confiables. Los ocho avisos bajos históricos no describen el estado actual.
+Las pruebas de orquestación verifican comportamiento **sin publicar** en plataformas externas. Render tiene Auto-Deploy desactivado y Vercel conserva una regla de build ignorado para Production; estas protecciones deben armonizarse con el mecanismo de Actions para evitar publicaciones concurrentes. Para terminar el criterio académico: validar secretos por existencia/permisos **sin revelar valores**, preflight y plan de recuperación; autorizar un release controlado, habilitar el job con restricción a `push/main` y verificar de forma real SHA, health y dominio público. **No quitar `false &&` basándose solo en el CI verde.**
 
-Actualizaciones del Bloque 1 que se mantienen:
+**Estado:** **ABIERTO**; la publicación del SHA final se realizó por otro procedimiento.
 
-| Paquete         | Antes → después                                               |
-| --------------- | ------------------------------------------------------------- |
-| body-parser     | 2.3.0 → 2.4.0                                                 |
-| proxy-addr      | 2.0.7 → 2.0.8                                                 |
-| multer          | 2.2.0 → 2.5.0, override acotado a platform-express            |
-| qs              | 6.15.3 → 6.17.1                                               |
-| js-yaml         | Swagger 5.3.0 → 5.4.1; desarrollo 3.15.1/4.3.1 → 3.15.2/4.3.2 |
-| @grpc/grpc-js   | 1.14.4 → 1.14.6                                               |
-| undici          | 8.10.2 → 8.12.3                                               |
-| brace-expansion | 1.1.18/2.1.4/5.0.9 → 1.1.21/2.1.7/5.0.12                      |
-| fast-uri        | 3.1.5 → 3.1.9                                                 |
-| content-type    | 2.0.0 → 2.1.0                                                 |
+### G.4. Riesgos adicionales y validación pendiente
 
-### Corrección posterior de dependencias del frontend — 3 de noviembre
+| Riesgo | Impacto/alcance | Próxima comprobación |
+|---|---|---|
+| Prueba funcional productiva incompleta | `READY`/`LIVE` no equivalen a compra y entrega probadas | Smoke test con los cuatro roles y datos sintéticos, sin contraseñas en evidencias |
+| Secretos y CORS efectivos no auditados completamente | Configuración externa diferente a configuración de código | Revisar solo existencia, dominios permitidos y permisos; no imprimir valores |
+| Intermitencias de integración y Chrome históricas | Resultados esporádicos `socket hang up`/Chrome | Conservar logs e investigar solo con reproducción/evidencia; no afirmar corrección por pase posterior |
+| Límites de autenticación por instancia | Posible agotamiento global y falta de coordinación entre réplicas | Evaluar aceptación de riesgo o protección distribuida en evolución futura |
+| Pruebas frente a rúbrica | Ruta real `/api/database/health` y stack diferente del ejemplo | Confirmar equivalencias técnicas con el profesor |
 
-Rama local `fix/lab-07-frontend-dependencies`, creada desde `upstream/develop`
-en `c17a354e13c719a294898632a76e4613b1480357`, que contiene los PR #101 y #102.
-Los cambios de este apartado están pendientes de commit, CI e integración;
-no están publicados en producción. La tabla de Git de A pertenece al cierre
-anterior y no describe el HEAD de esta corrección.
+## H. Matriz de cierre y conclusión
 
-Se consultaron los PR abiertos y se actualizaron referencias: no había PR abiertos
-ni cambios remotos recientes sobre estos manifiestos. Esto no permite conocer
-trabajo local no publicado de otros colaboradores; repetir la comprobación antes
-de publicar. La modificación previa de `.gitignore` se conserva intacta.
+| Requisito | Situación del código | Estado para entrega |
+|---|---|---|
+| Identidad vigente, contraseñas y roles | Implementados, en `main`, CI verde | **Cerrado en código; smoke test productivo pendiente** |
+| DTOs, errores seguros, CSRF, consultas parametrizadas | Implementados y cubiertos por pruebas | **Cerrado en alcance probado** |
+| Concurrencia, stock y rollback | Implementados y migración de versión presente en producción | **Cerrado en código y pruebas** |
+| Más de 40 pruebas y cobertura ≥70 % | CI de `main` verde, métricas verificadas | **Cerrado en CI** |
+| Bitácora MongoDB y outbox | Implementados y probados en integración temporal | **Pendiente operativo productivo** |
+| ACL de PostgreSQL y RLS de migraciones | Script de corrección preparado | **Pendiente crítico en producción** |
+| CI/CD productivo automático | Workflow construido, job bloqueado | **Pendiente de ejecución real** |
+| Publicación de la versión final | Render `LIVE`, Vercel `READY`, mismo SHA | **Publicación confirmada; operaciones de roles por verificar** |
+| Auditoría documental | Este documento actualiza hechos y riesgos al 19-11-2026 | **Preparado para revisión y aprobación del equipo** |
 
-La auditoría inicial del frontend encontró cinco paquetes señalados en producción:
-Next.js, su PostCSS anidado, Sharp, Nanoid y source-map-js. Los avisos incluyen RCE
-condicionada a características/plataformas concretas, procesamiento de imágenes,
-mapas de fuentes y disponibilidad. No se demostró explotación en el despliegue.
-No se encontraron usos de `next/image`, `next/og`, Server Actions o `use cache`
-en el código de la aplicación; esto no garantiza que toda superficie del framework
-sea inaccesible. Entre los avisos críticos de Next están
-[GHSA-2464-fhr4-w9xw](https://github.com/advisories/GHSA-2464-fhr4-w9xw) y
-[GHSA-673q-mjm6-r5xr](https://github.com/advisories/GHSA-673q-mjm6-r5xr).
+**Conclusión:** el release final está versionado, las suites principales de `main` aprobaron y ambos servicios tienen publicado el mismo commit. El proyecto demuestra controles importantes de autenticación, autorización, concurrencia y pruebas. **No sería correcto afirmar que la seguridad productiva está totalmente corregida, que la bitácora de Atlas funciona o que GitHub Actions ya realiza despliegues automáticos.** Los tres hallazgos permanecen abiertos, con procedimientos de remediación y validación descritos arriba.
 
-| Paquete                        | Versión anterior | Versión instalada y en lockfile |
-| ------------------------------ | ---------------- | ------------------------------- |
-| next                           | 16.2.12          | 16.4.5                          |
-| eslint-config-next, desarrollo | 16.2.12          | 16.4.5                          |
-| postcss, copia de Next         | 8.4.31           | 8.5.23                          |
-| sharp                          | 0.34.5           | 0.35.5                          |
-| nanoid                         | 3.3.16           | 3.3.20                          |
-| source-map-js                  | 1.2.1            | 1.2.2                           |
-| brace-expansion, desarrollo    | 1.1.18 / 5.0.9   | 1.1.21 / 5.0.12                 |
-| js-yaml, desarrollo            | 4.3.1            | 4.3.2                           |
-| zod, desarrollo                | 4.4.3            | 4.6.7                           |
+### Fuentes y documentación de respaldo
 
-React y React DOM conservan 19.2.4. La copia de PostCSS de Tailwind conserva
-8.5.25; no era la copia señalada. El lockfile incorpora los binarios y componentes
-asociados a Next/SWC y Sharp/libvips. No se agregaron dependencias directas,
-overrides, cambios mayores de Next ni cambios en el backend. Las transitivas
-seleccionadas satisfacen los rangos de sus consumidores; Next y su configuración
-ESLint se mantienen fijados y alineados.
+- [Auditoría histórica y versiones anteriores de este archivo](https://github.com/AaronChaves29/Chorotega-E-Market/commits/main/AUDITORIA-SEGURIDAD.md).
+- [PR #155 — Release final](https://github.com/AaronChaves29/Chorotega-E-Market/pull/155) y [CI #44599870798](https://github.com/AaronChaves29/Chorotega-E-Market/actions/runs/44599870798).
+- [PR #153 — Outbox](https://github.com/AaronChaves29/Chorotega-E-Market/pull/153) y [PR #154 — Hardening](https://github.com/AaronChaves29/Chorotega-E-Market/pull/154).
+- [`docs/laboratory/lab-07/`](docs/laboratory/lab-07/): documentos originales de dependencias, identidad, concurrencia, transacciones, observabilidad y pruebas.
+- [`docs/laboratory/lab-07/sql/release-privileges.sql`](docs/laboratory/lab-07/sql/release-privileges.sql): procedimiento controlado de privilegios productivos, **no ejecutado**.
+- [OWASP Top 10:2025](https://top10.owasp.org/2025/).
 
-Desde `apps/frontend`, con Node.js 22.22.0 y npm 11.20.0:
+---
 
-```sh
-npm install --save-exact --no-audit --no-fund next@16.4.5
-npm install --save-dev --save-exact --no-audit --no-fund eslint-config-next@16.4.5
-npm update brace-expansion js-yaml zod nanoid source-map-js --no-audit --no-fund
-```
-
-No se utilizó `--force`. Las auditorías siguientes se ejecutaron antes y después
-con el registro público de npm, sin modificar el backend:
-
-```sh
-npm audit --json --ignore-scripts --registry=https://registry.npmjs.org
-npm audit --json --ignore-scripts --omit=dev --registry=https://registry.npmjs.org
-```
-
-| Árbol / momento                            | Críticas | Altas | Moderadas | Bajas | Paquetes señalados | Salida |
-| ------------------------------------------ | -------: | ----: | --------: | ----: | -----------------: | -----: |
-| Frontend completo, antes                   |        1 |     7 |        15 |     0 |                 23 |      1 |
-| Frontend producción, antes                 |        1 |     4 |         0 |     0 |                  5 |      1 |
-| Frontend completo, después                 |        0 |     0 |        16 |     0 |                 16 |      1 |
-| Frontend producción, después               |        0 |     0 |         0 |     0 |                  0 |      0 |
-| Backend producción, comprobación posterior |        0 |     0 |         0 |     0 |                  0 |      0 |
-
-Los 16 paquetes del frontend corresponden a una causa raíz restante:
-`minimatch` ([GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)),
-transitivo de ESLint/configuración de Next/typescript-eslint. El consumidor
-`@next/eslint-plugin-next` actualizado también queda señalado: por eso hay 16
-paquetes moderados en vez de los 15 iniciales, sin un GHSA raíz nuevo. Los avisos
-altos y críticos iniciales ya no aparecen en los árboles locales auditados.
-No se suman paquetes transitivos como CVE independientes.
-
-El parche de minimatch comienza en 11.0.1, fuera de los rangos actuales 3/10 de
-estos consumidores. No se fuerza globalmente esa versión por sus cambios de API.
-El backend conserva los avisos de desarrollo documentados antes (deepmerge,
-glob y minimatch); no se actualizó su manifiesto ni su lockfile. Estos avisos
-permanecen pendientes, no corregidos por excluir desarrollo de una consulta.
-
-#### Regresión local de esta corrección
-
-Se utilizaron Node.js 22.22.0, el build real de Next 16.4.5, NestJS con módulos
-reales de Auth/catálogo/pedidos, las cuatro migraciones reales y PostgreSQL 16
-exclusivo de Testcontainers. No se cargaron `.env` privados, AppModule/MongoDB,
-seeds globales ni servicios productivos. El servidor Next se ejecutó desde un
-directorio temporal sin archivos de entorno, apuntando únicamente al backend
-local; se utilizaron puertos dinámicos y credenciales ficticias efímeras.
-
-El arnés temporal `/tmp/chorotega-frontdeps-regression.cjs` ejecutó diez escenarios:
-
-1. HTML público y redirecciones de `/pedidos` y `/pedidos/nuevo` sin sesión.
-2. API de pedidos con 401 sin cookie y con cookie inválida.
-3. Registro inválido sin escritura y registro válido CLIENTE con hash bcrypt.
-4. Login incorrecto 401 y correcto 200; cookie HttpOnly/Secure/SameSite Lax,
-   sin token en el body de respuesta de Next.
-5. Catálogo, filtros y paginación real de tiendas/productos, y consulta de barrios.
-6. Pedido inválido sin escritura y compra válida con importes exactos, stock,
-   versión, detalle y listado persistidos.
-7. Chrome: validación visible de registro, conservación del formulario y creación.
-8. Chrome: login incorrecto/correcto, navegación al listado e inaccesibilidad de
-   la cookie HttpOnly desde JavaScript.
-9. Chrome: selección de tienda/productos, resumen existente de compra,
-   formulario incompleto bloqueado, creación real y regreso al listado.
-10. Chrome: logout, redirección de ruta protegida y retorno de la API a 401.
-
-Son seis escenarios HTTP y cuatro de navegador: TAP 11/11 incluye una
-contenedora y no representa once escenarios funcionales. No se desactivaron
-JWT/roles ni se simuló el backend. Las escrituras se comprobaron en PostgreSQL
-con datos ficticios, incluido el incremento de versión al comprar. Esto verifica
-el flujo de selección/resumen disponible; no incorpora un carrito nuevo.
-
-El arnés y sus logs están fuera del repositorio: no se agrega una suite ni un
-script de frontend al CI. Es evidencia local reproducible durante esta sesión,
-no una prueba permanente ni una comprobación de Vercel/Render. No se probaron
-certificados HTTPS ni ajustes de proveedores. La carga del módulo nativo Sharp
-0.35.5 y una codificación PNG de un píxel también funcionaron en Node 22.22.0.
-
-| Verificación de esta corrección                           | Resultado                                                                                             |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| ESLint frontend y backend                                 | Aprobados                                                                                             |
-| TypeScript frontend y backend, sin emisión ni incremental | Aprobados                                                                                             |
-| Build frontend y backend                                  | Aprobados                                                                                             |
-| Unitarias backend y cobertura existente                   | 533/533, 43 suites                                                                                    |
-| Integración backend completa                              | Dos ejecuciones: 645/646 cada una, código 1; socket hang up en casos distintos, detallados debajo     |
-| Suites afectadas aisladas                                 | Categories 43/43 y seguridad del catálogo 88/88; subconjuntos de la integración, no casos adicionales |
-| Chrome MVC backend                                        | 9/9 escenarios; TAP 10/10 incluye la contenedora                                                      |
-| Regresión Next/Nest/PostgreSQL temporal                   | 10/10 escenarios, incluidos cuatro Chrome; TAP 11/11                                                  |
-| Sharp nativo                                              | Carga y PNG local aprobados                                                                           |
-| npm ls frontend                                           | Código 0, sin problemas en el árbol instalado                                                         |
-| Prettier y git diff --check                               | Aprobados sobre los archivos modificados                                                              |
-
-La primera integración de esta corrección terminó 645/646: el caso
-`Categorías: API real con PostgreSQL PATCH rechaza {"nombre":null}` recibió
-`socket hang up`, sin código HTTP ni Problem Details. Categories aislado aprobó
-43/43 sin cambios. La repetición completa también terminó 645/646, ahora en
-`Catálogo: seguridad de escrituras con JWT real y PostgreSQL patch categories ADMIN autorizado conserva el contrato HTTP`,
-con el mismo error de transporte y sin respuesta HTTP. No se modificaron backend,
-dependencias backend, guards, expectativas ni timeouts. Las dos ejecuciones
-completas fallaron y no se presentan como aprobadas; tampoco se suman sus casos
-para construir un resultado verde. No se identificó la causa ni se demostró
-relación con la actualización de Next. La suite de seguridad del catálogo
-aislada aprobó 88/88 después del segundo fallo, sin cambios. Los resultados
-aislados no reemplazan las dos ejecuciones completas fallidas. La incidencia
-queda pendiente antes de considerar cerrada la validación de integración.
-
-Los resultados de las tablas anteriores del Bloque 6 se conservan como
-históricos; no se presentan como nuevas ejecuciones de este cambio. La cobertura
-sigue limitada a pedidos/entregas, con los umbrales/exclusiones existentes.
-El comportamiento en Node 24 del CI frontend y las plataformas de despliegue
-queda pendiente de la publicación autorizada y sus comprobaciones remotas.
-
-### Identidad, permisos y límites
-
-Los guards [JWT](apps/backend/src/auth/guards/jwt-auth.guard.ts) y
-[roles](apps/backend/src/auth/guards/roles.guard.ts) siguen activos. Una cuenta
-eliminada/inactiva o un token inválido/expirado recibe 401; un rol vigente no
-permitido recibe 403. La identidad se consulta una vez por solicitud protegida,
-sin seleccionar hashes ni `authId`. El registro público solo crea CLIENTE:
-no permite autoasignarse ADMIN. Un error de persistencia conserva un 500 seguro,
-no se transforma artificialmente en credenciales incorrectas.
-
-MVC mantiene [sesión AES-256-GCM](apps/backend/src/admin/admin-session.service.ts),
-cookie HttpOnly/SameSite Strict/Secure en producción, rotación al autenticar y
-[CSRF ligado a sesión](apps/backend/src/admin/admin.guards.ts). Conserva
-Referrer-Policy same-origin, formularios escapados y PRG 303. La vigencia de
-permisos se vuelve a comprobar en el backend; el rol mostrado por el frontend
-no constituye autorización. No hay revocación individual de JWT: una cuenta
-reactivada puede reutilizar un token aún vigente y una solicitud ya autorizada
-no se cancela retroactivamente al cambiar su estado.
-
-| Operación limitada           | Límite predeterminado | Ventana |
-| ---------------------------- | --------------------: | ------: |
-| POST `/api/v1/auth/login`    |        60 solicitudes |    60 s |
-| POST `/admin/login`          |        20 solicitudes |    60 s |
-| POST `/api/v1/auth/register` |        10 solicitudes |    60 s |
-
-Configuración: `AUTH_RATE_LIMIT_WINDOW_MS`, `AUTH_LOGIN_MAX_REQUESTS`,
-`ADMIN_LOGIN_MAX_REQUESTS` y `AUTH_REGISTER_MAX_REQUESTS`. Se cuentan éxitos,
-fallos y entradas inválidas que alcanzan el guard. `Retry-After` indica segundos
-positivos; las denegaciones no prolongan la ventana. El 429 no revela existencia,
-estado o rol de una cuenta; el registro conserva su 409 previo de correo duplicado.
-
-**Son límites globales por operación e instancia, no por usuario ni IP, y no
-distribuidos.** No existe una cadena de proxies confiables verificada en Render;
-se ignoran X-Forwarded-For y encabezados similares para estos presupuestos.
-Falsificar una IP no abre otro contador. Reiniciar limpia memoria, las réplicas
-tienen presupuestos independientes y un atacante puede agotar el presupuesto
-compartido, afectando usuarios legítimos. El proxy Next.js conserva 429 pero no
-reenvía `Retry-After`; la prueba del encabezado corresponde al backend.
-
-### Concurrencia, inventario y transacciones
-
-[Product.version](apps/backend/src/modules/products/entities/product.entity.ts)
-usa `@VersionColumn`. La [migración 1793296800000](apps/backend/src/database/migrations/1793296800000-AddProductVersion.ts)
-agrega `version integer NOT NULL DEFAULT 1`, conservando productos existentes.
-Está registrada en [migraciones de producción](apps/backend/src/database/production-migrations.ts),
-el helper de Testcontainers y la infraestructura de navegador.
-**Debe aplicarse antes de utilizar el backend y el contrato de edición nuevos**;
-su aplicación productiva no se verificó ni se ejecutó en este cierre.
-
-PATCH `/api/v1/products/:id` requiere `version` entera positiva de 32 bits en el
-body. GET/POST/PATCH exponen la versión mediante DTO; precio conserva string.
-Un cliente debe leer la versión, enviarla al editar y recargar/conciliar ante
-409; no debe reintentar una sobrescritura automáticamente. Versión ausente o
-inválida produce 400. JWT inválido: 401; rol prohibido: 403; recurso/destino ajeno
-o inexistente: 404. El conflicto de versión se informa con 409 únicamente para
-un recurso autorizado cuya versión haya quedado desactualizada.
-Ejemplo ilustrativo del contrato probado, sin datos productivos:
-
-```json
-{
-  "type": "about:blank",
-  "title": "Conflict",
-  "status": 409,
-  "detail": "El producto cambió desde su lectura. Consulte la versión vigente antes de volver a editar.",
-  "instance": "/api/v1/products/1"
-}
-```
-
-La traducción exacta está en [ProductsService](apps/backend/src/modules/products/products.service.ts)
-y el [filtro global](apps/backend/src/common/filters/problem-details.filter.ts).
-El UPDATE verifica simultáneamente versión y propiedad de origen/destino.
-`RETURNING` obtiene el resultado de esa misma escritura. Un PATCH con solo
-versión también consume la versión. No basta la anotación del ORM.
-
-Las compras conservan [FOR UPDATE ordenado por ID](apps/backend/src/modules/products/repositories/products.repository.ts)
-y la [transacción de pedidos](apps/backend/src/modules/orders/transactions/order-transaction.ts).
-Guardar el inventario incrementa también la versión y el rollback revierte ambos.
-Se prueban los dos órdenes de ejecución compra/edición. No se modificó frontend:
-actualmente no consume PATCH de productos; cualquier consumidor futuro deberá
-enviar la precondición. DELETE no incorpora este contrato de versión.
-
-En entregas se conserva el orden de bloqueos y las cuatro operaciones
-transaccionales. Se prueba asignar/iniciar/completar con pool de una conexión,
-propiedad, cancelación, carreras y fallos posteriores a escrituras reales con
-rollback total. El uso del EntityManager elimina la segunda adquisición en la
-consulta identificada; no garantiza ausencia de cualquier saturación o deadlock
-en otras cargas. Los timeouts acotados de las regresiones son de pruebas, no una
-modificación de la configuración productiva.
-
-## D. Los ocho puntos exactos de la lista del profesor
-
-Fuente: Sesión 14, **lámina 28, “Revisión de seguridad del sistema propio”**.
-Se conserva la referencia a JPA del enunciado y se evalúa su equivalente TypeORM.
-“Completo” significa comprobado en el código/pruebas indicados; ninguna fila
-certifica por sí sola el despliegue productivo.
-
-| #   | Verificación exacta                                   | Estado                                    | Evidencia concreta y pruebas                                                                                                                                                                                                                                                                                                                                 | Hallazgo, corrección y riesgo pendiente                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| --- | ----------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Un usuario no puede ver ni modificar recursos de otro | Completo en las rutas protegidas probadas | Guards vigentes; [OrdersReadService](apps/backend/src/modules/orders/services/orders-read.service.ts), repositorios de pedidos/entregas con alcance SQL y escrituras del catálogo con propiedad. `current-identity`, `catalog-write-security`, `orders`, `deliveries` y `security` HTTP prueban 401/403/404 y propiedad.                                     | El [Bloque 2](https://github.com/AaronChaves29/Chorotega-E-Market/commit/46d4e3c95ca02545703a0730d0c223affb3da65e) corrige permisos antiguos; el [Bloque 5](https://github.com/AaronChaves29/Chorotega-E-Market/commit/2ff0eb98c9382b921561d924401787807373b5e1) conserva propiedad dentro de la transacción. ADMIN puede administrar recursos ajenos por política; GET públicos de catálogo/barrios/repartidores son excepciones intencionales, no aislamiento entre cuentas. Falta comprobación productiva. |
-| 2   | Ningún endpoint devuelve una entidad JPA              | Completo en los contratos inspeccionados  | Controladores REST devuelven DTOs, paginación de DTOs o vacío; [UserMapper](apps/backend/src/modules/users/mappers/user.mapper.ts) selecciona ocho campos y omite hash/authId/relaciones. OpenAPI, Users, Orders y catálogo HTTP verifican respuestas; MVC produce HTML escapado.                                                                            | No se encontró exposición directa de entidades por estos controladores. Métodos internos que devuelven entidades no son endpoints. Fronteras DTO preexistentes; el [Bloque 4](https://github.com/AaronChaves29/Chorotega-E-Market/commit/1d57dfa3839bafdbef740466e5d404bd17ca6817) añade versión al DTO, no una entidad pública.                                                                                                                                                                              |
-| 3   | No hay consultas construidas concatenando texto       | Completo en los caminos inspeccionados    | Repositorios usan parámetros para valores. La interpolación de nombres en Users/Orders procede de listas internas; sort usa whitelist. Mongo filtra por `pedidoId` tipado, no recibe operadores del cliente. Pruebas de filtros/orden inválido y [concurrencia real](apps/backend/test/integration/http/product-optimistic-concurrency.integration-spec.ts). | No se halló concatenación de valores no confiables en SQL ejecutado. SQL de migraciones y nombres fijos no son datos de usuario. El [Bloque 4](https://github.com/AaronChaves29/Chorotega-E-Market/commit/1d57dfa3839bafdbef740466e5d404bd17ca6817) conserva parámetros en CAS. No equivale a un pentest exhaustivo de SQL/NoSQL.                                                                                                                                                                             |
-| 4   | Los errores no envían la traza al cliente             | Completo en los casos probados            | [Problem Details](apps/backend/src/common/http/problem-details.ts), filtro global y adaptadores explícitos; se omite la query de `instance`. `http-foundation`, Users, Orders y Deliveries provocan errores y comprueban que no salen SQL, stack ni secretos.                                                                                                | 500 genérico para errores desconocidos; MVC conserva error HTML seguro. No se convierten errores desconocidos en conflictos. Implementación HTTP previa conservada y regresiones de los bloques 2/4/5; no fue necesario corregir el filtro en este cierre.                                                                                                                                                                                                                                                    |
-| 5   | CORS solo permite el dominio de la SPA                | Parcial                                   | [environment.ts](apps/backend/src/config/environment.ts) exige orígenes HTTPS exactos en producción y rechaza comodines; [configureHttp](apps/backend/src/common/http/configure-http.ts) usa allowlist. `start-http-server.spec.ts` prueba origen permitido, ajeno, null y preflight.                                                                        | El código permite una lista explícita, no obliga a un único dominio SPA: MVC del mismo origen puede requerir también el origen del backend porque CORS se aplica globalmente a POST con Origin. Sin Origin se permite acceso no navegador. No es autenticación. Configuración segura del Lab 6 conservada; valores reales de Render no inspeccionados. Confirmar alcance aceptado y lista mínima, sin desactivar CSRF/CORS.                                                                                   |
-| 6   | No hay secretos en el repositorio ni en su historial  | Parcial                                   | `git ls-files` solo detectó `.env.example` como archivo de entorno versionado; búsqueda de historial por rutas privadas sin coincidencias. Escaneo de 1.742 objetos de texto para claves privadas, tokens de proveedores/JWT y URI con credenciales.                                                                                                         | No se identificaron secretos reales en los candidatos revisados: ejemplos/localhost en README y `.env.example`, y marcadores ficticios en pruebas de diagnóstico. No se copiaron sus valores. Sin corrección nueva: búsqueda limitada, sin garantía sobre imágenes, referencias borradas, paneles o credenciales antiguas no reconocibles. No se auditó el contenido de `.env` privados. Si se descubre un secreto, revocar/rotar antes de limpiar historial.                                                 |
-| 7   | Las claves se guardan con BCrypt y el JWT expira      | Completo en código/pruebas                | [AuthService](apps/backend/src/auth/auth.service.ts) hace bcrypt hash con coste 10; [AuthModule](apps/backend/src/auth/auth.module.ts) firma con expiración 3.600 s. Registro HTTP compara el hash persistido; identidad vigente prueba tokens expirados y cuentas inactivas.                                                                                | Se mantiene criptografía existente; el [Bloque 2](https://github.com/AaronChaves29/Chorotega-E-Market/commit/46d4e3c95ca02545703a0730d0c223affb3da65e) verifica vigencia antes de autorizar. Validación productiva exige JWT_SECRET ≥32 caracteres. Longitud no demuestra entropía; no se leyeron hashes, claims o secretos productivos.                                                                                                                                                                      |
-| 8   | Las dependencias no tienen vulnerabilidades conocidas | Parcial                                   | Auditorías npm de backend y frontend; resultados anteriores y posteriores en C. Producción: cero paquetes señalados en cada aplicación. Desarrollo: 40 en backend y 16 moderados en frontend.                                                                                                                                                                | El [Bloque 1](https://github.com/AaronChaves29/Chorotega-E-Market/commit/c0025c4673e70f8f9466cb3fa08f729d64a44a91) corrigió los avisos iniciales del backend; la corrección frontend posterior está local y pendiente de commit/CI/despliegue. Los avisos residuales siguen pendientes. Dependabot no verificado.                                                                                                                                                                                             |
-
-Los archivos de integración citados están en
-[`apps/backend/test/integration/http/`](apps/backend/test/integration/http/).
-No se inventaron ocho categorías sustitutas: son las ocho filas de la fuente.
-
-## E. OWASP Top 10:2025
-
-Se contrastó la lámina 6 con la [lista oficial OWASP 2025](https://top10.owasp.org/2025/).
-La siguiente es una relación de controles concretos, no certificación OWASP/ASVS
-ni prueba de resistencia a todos los ataques de cada categoría.
-
-| Categoría                                    | Aplicación, hallazgo y control comprobado                                                                                                                                                                                       | Commit o base existente; límite                                                                                                                                                                                                                                                                           |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A01 — Broken Access Control                  | Aislamiento de pedidos/entregas, escrituras de catálogo por propietario y permisos persistidos actuales. Pruebas de otros usuarios, roles, 401/403/404.                                                                         | Bloques 2, 4 y 5, commits de C. No sustituye comprobación productiva ni revisión de futuros endpoints.                                                                                                                                                                                                    |
-| A02 — Security Misconfiguration              | Validación dev/prod, TLS con certificados verificados, CORS explícito y cookies seguras. CSP/escape para MVC.                                                                                                                   | Base del Lab 6, conservada. Swagger es público por configuración: documenta contratos, no evita guards; decidir exposición según política. No se verificaron paneles ni todas las cabeceras de REST/SPA.                                                                                                  |
-| A03 — Software Supply Chain Failures         | Actualizaciones, lockfile y `npm ci`; auditoría renovada encuentra avisos residuales de desarrollo.                                                                                                                             | Bloque 1. Pendiente evaluar parches y hardening de dependencias/actions; no se verificaron firmas/proveniencia de toda la cadena.                                                                                                                                                                         |
-| A04 — Cryptographic Failures                 | bcrypt, JWT con expiración, AES-GCM para sesión MVC y TLS verificado en configuración.                                                                                                                                          | Base criptográfica previa y Bloque 2. No se probaron remotamente certificados, rotación ni entropía de secretos.                                                                                                                                                                                          |
-| A05 — Injection                              | Parámetros SQL, whitelist de columnas, DTOs, filtros Mongo tipados y escape Handlebars. Se prueban campos adicionales/orden inválido y XSS escapado.                                                                            | Base REST/MVC y Bloque 4. No se encontró concatenación de valores revisados; no hay pentest exhaustivo ni pruebas Atlas reales.                                                                                                                                                                           |
-| A06 — Insecure Design                        | Reglas server-side, precios calculados en backend, control de versión, stock transaccional y límites de autenticación.                                                                                                          | Bloques 3–5 y proceso de pedidos previo. Presupuesto global puede agotarse y la protección no es distribuida.                                                                                                                                                                                             |
-| A07 — Authentication Failures                | Rechazo de inactivos, JWT vigente, roles actuales y límites REST/MVC/registro.                                                                                                                                                  | Bloques 2–3. No hay MFA ni revocación individual; el registro informa correo duplicado por contrato existente.                                                                                                                                                                                            |
-| A08 — Software or Data Integrity Failures    | El pipeline obtiene el SHA aprobado y comprueba SHA/metadata de despliegue; MVC verifica la autenticidad de su cookie con AES-GCM. La consistencia transaccional del stock no demuestra por sí sola autenticidad de artefactos. | Base MVC y [9f15ffb](https://github.com/AaronChaves29/Chorotega-E-Market/commit/9f15ffbc75ba4947541a9f04f0f670022ad1475d). Job de despliegue automático deshabilitado; no se ha demostrado verificación completa de firmas/proveniencia ni ejecución real del orquestador.                                |
-| A09 — Security Logging and Alerting Failures | JSON stdout para `login_failed`, `access_denied` y `concurrency_conflict`, sin errores/cuerpos arbitrarios. Pruebas de sanitización y fallo síncrono del sink.                                                                  | [927d1d5](https://github.com/AaronChaves29/Chorotega-E-Market/commit/927d1d57d198f98dc0e0c81ed5736de859306beb), [0e2b857](https://github.com/AaronChaves29/Chorotega-E-Market/commit/0e2b85790acbffa85e5703ab15128e4b9522da64). Best effort, sin persistencia garantizada/alertas operativas demostradas. |
-| A10 — Mishandling of Exceptional Conditions  | Errores seguros, 409 conocido y rollback de escrituras reales; pool pequeño y timeouts controlados.                                                                                                                             | Bloques 2, 4 y 5 y filtro previo. Se probó agotamiento del pool identificado, no imposibilidad de cualquier deadlock/fallo externo.                                                                                                                                                                       |
-
-## F. Pruebas y riesgos residuales
-
-### Comprobaciones del cierre documental del Bloque 6 (históricas)
-
-Las pruebas siguientes se ejecutaron al preparar el Bloque 6. En la revisión
-previa al commit se contrastaron sus informes, sin repetir las suites funcionales.
-Node.js **22.22.0**. Informes generados fuera del repositorio bajo `/tmp/chorotega-b6-*`;
-no se incorporan logs ni credenciales. Las ejecuciones del Bloque 5 citadas en
-su documento son históricas; la tabla siguiente corresponde a este cierre.
-
-| Comprobación                                                | Resultado local del 3 de noviembre                                               |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| ESLint completo, TypeScript sin emisión/incremental y build | Aprobados, códigos 0                                                             |
-| Jest con cobertura existente                                | 533/533, 43 suites, código 0                                                     |
-| Integración completa, primer intento                        | 645/646, 25/26 suites aprobadas, código 1, aproximadamente 103 s                 |
-| Products aislado después del fallo                          | 61/61, código 0                                                                  |
-| Integración completa, repetición                            | 646/646, 26 suites, código 0, aproximadamente 101 s                              |
-| Artefacto JavaScript compilado                              | 9/9, código 0                                                                    |
-| Chrome MVC                                                  | Nueve escenarios aprobados; TAP 10/10 incluye la contenedora, código 0           |
-| Orquestación de despliegue simulada, sin red                | 17/17, código 0; no ejecuta despliegues                                          |
-| Prettier documental, enlaces locales y `git diff --check`   | Aprobados; se verificaron los destinos locales referenciados en ambos documentos |
-
-La primera integración falló en Products, caso
-`disponible=false filtra cero stock sin confundirlo con estado`, por
-`socket hang up`: no se obtuvo código HTTP ni Problem Details. Products aislado
-aprobó luego sin cambios y la repetición completa aprobó 646/646. No se identificó
-la causa ni se presenta como corregida.
-Las pruebas específicas de identidad, límites, 409, propiedad, concurrencia,
-migración y rollback forman parte de la integración completa; no son casos
-adicionales para sumar otra vez. E2E selecciona un subconjunto HTTP de esa misma
-integración; no se ejecutó por separado en este cierre. No se ejecutó instalación
-limpia ni pruebas automatizadas del frontend.
-
-Cobertura local y CI #275, conservando umbrales/exclusiones existentes:
-
-| Métrica    | Resultado | Mínimo |
-| ---------- | --------: | -----: |
-| Statements |   97,50 % |   70 % |
-| Branches   |   84,63 % |   70 % |
-| Functions  |   92,00 % |   70 % |
-| Lines      |   97,74 % |   70 % |
-
-Mide los archivos seleccionados de pedidos/entregas: excluye entidades,
-repositorios, interfaces, módulos y tests. No mide todo backend, Auth, MVC,
-logger ni frontend. Superar esos cuatro umbrales no demuestra cobertura total
-de seguridad. El script `test:cov` hace fallar CI al incumplirlos.
-
-Comandos de validación reproducibles desde `apps/backend`, con Docker disponible:
-
-```sh
-npm run lint
-node node_modules/typescript/bin/tsc --noEmit --incremental false
-npm run build
-npm run test:cov -- --runInBand
-npm run test:integration
-npm run test:integration -- --testPathPatterns='http/products.integration-spec.ts'
-npm run test:deployment
-npm run test:browser
-node --test ../../scripts/ci/production-deploy.test.mjs
-```
-
-Los comandos de migración/arranque productivo **no** se ejecutan para esta
-auditoría. Las pruebas usan bases efímeras y eliminan sus recursos; no se utiliza
-el contenedor PostgreSQL local preexistente.
-
-`docker ps` final confirmó que no quedaron contenedores temporales de estas
-ejecuciones. Se conservó únicamente el PostgreSQL preexistente, sin operaciones
-sobre él. No se reprodujeron en este cierre el 401 de Users ni el incidente de
-inicialización de Chrome; esto no demuestra que sus causas estén resueltas.
-
-### Riesgos de seguridad, operación y pruebas
-
-| Tipo / prioridad                 | Riesgo y evidencia                                                                                                                                                        | Acción pendiente                                                                                                                                                                     |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Seguridad / media                | Backend con 40 paquetes de desarrollo señalados y frontend con 16 moderados; ambos árboles productivos auditados sin avisos.                                              | Evaluar parches compatibles en otro bloque autorizado; no forzar versiones mayores ni presentar los residuales como corregidos.                                                      |
-| Seguridad / media                | Límites compartidos por instancia, reiniciables y sin identificación fiable del cliente tras proxies.                                                                     | Aceptar expresamente el riesgo de agotamiento global o diseñar protección distribuida/proxy confiable antes de escalar.                                                              |
-| Seguridad / media                | Estado de secretos, orígenes y permisos externos no verificado; análisis histórico limitado a texto y patrones.                                                           | Revisar plataforma e historial con procedimiento seguro, sin extraer valores a la evidencia.                                                                                         |
-| Operación / alta para la entrega | Lab 7 ausente de `main`; producción y aplicación de la migración de versión no verificadas.                                                                               | Publicar solo con autorización, respaldo y comprobación de migraciones antes de utilizar PATCH con versión; validar posteriormente el SHA y contrato realmente publicados.           |
-| Operación / alta                 | Render y Vercel no forman una transacción de despliegue. Un proveedor puede actualizarse y el otro fallar; un timeout no necesariamente cancela el trabajo remoto.        | Primera liberación controlada, evitar nuevos pushes durante ella, comprobar ambos SHA/health y preparar recuperación compatible con migraciones. No revertir DDL con datos a ciegas. |
-| Operación / media                | El orquestador verifica `main` antes de fases críticas, pero existe intervalo entre verificación y acción remota.                                                         | Conservar deploy deshabilitado hasta autorizar/verificar configuración; coordinar exclusión durante la primera liberación. Tests simulados no prueban plataformas reales.            |
-| Operación / media                | Eventos best effort en stdout, sin persistencia/alertas garantizadas; health solo PostgreSQL, sin deadline propio de consulta ni comprobación Atlas.                      | Verificar recepción de eventos y health en despliegue; acordar equivalencia académica. No se afirma que se haya implantado monitorización completa.                                  |
-| Pruebas / media                  | Incidentes históricos de Chrome/Users/socket hang up; Bloque 6 observó Products y la corrección frontend observó dos socket hang up en Categories/seguridad del catálogo. | Mantener abierta la validación completa; no atribuir causas ni declarar correcciones por pases aislados. No cambiar guards, expectativas o timeouts para ocultarlos.                 |
-| Académico / media                | Health distinto a `/actuator/health` y herramientas equivalentes a las Java de la guía.                                                                                   | Confirmar aceptación específica; ADR del stack no demuestra equivalencia individual de todos los entregables.                                                                        |
-
-El [ruleset de main](https://github.com/AaronChaves29/Chorotega-E-Market/rules/26098619)
-se consultó en modo lectura: activo, dirigido a `main`, PR obligatorio, eliminación
-y force push bloqueados, checks `Build Backend`/`Build Frontend` obligatorios y
-rama actualizada exigida. Exige cero aprobaciones: PR obligatorio no equivale a
-revisión humana aprobatoria obligatoria. No se probaron intentos de bypass/escritura.
-Los seis secrets y dos variables del pipeline y los auto-deploy de proveedores
-constan como configuración reportada en el contexto, no como valores/paneles
-independientemente comprobados aquí. No se consultaron ni publicaron secretos.
-
-## G. Matriz de cierre y conclusiones
-
-| Requisito                                      | Implementación / archivo                                                          | Prueba y evidencia                                                                                                                               | Estado                                                                           |
-| ---------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| Corregir dependencias vulnerables              | Manifiestos/lockfiles backend (Bloque 1) y frontend (corrección posterior)        | Comparación de auditorías, versiones instaladas y regresiones reales de C                                                                        | Parcial: producción sin avisos locales; desarrollo y publicación pendientes      |
-| Corrección de dependencias frontend            | Next/eslint-config-next 16.4.5 y transitivas compatibles; sin cambios funcionales | Producción cero avisos, diez regresiones reales locales; dos integraciones backend incompletas                                                   | Implementada localmente; fallo de integración abierto y CI/despliegue pendientes |
-| Identidad y permisos vigentes REST/MVC         | CurrentIdentityService, AuthService, guards/sesión                                | `current-identity.integration-spec.ts` y unitarias; commit Bloque 2                                                                              | Completo en código/CI; pendiente publicación                                     |
-| Restringir automatización de autenticación     | `auth/rate-limit/`, configuración y guards                                        | `rate-limiting.integration-spec.ts`, recuperación/429/Retry-After/cabeceras falsas; Bloque 3                                                     | Completo para alcance global por instancia; riesgo compartido documentado        |
-| Edición concurrente e inventario               | Product.version, migración, ProductsRepository/Service, pedidos                   | 13 casos HTTP de concurrencia y migración incremental; Bloque 4                                                                                  | Completo en pruebas; parcial para entrega productiva                             |
-| Coherencia transaccional de entregas           | DeliveriesService usa manager para propiedad                                      | [12 casos nuevos](apps/backend/test/integration/deliveries-transactions.integration-spec.ts), asignación concurrente y rollback previo; Bloque 5 | Completo en código/CI; pendiente publicación                                     |
-| Auditoría de ocho puntos y OWASP 2025          | Este documento, secciones C–E                                                     | Fuentes oficiales localizadas, inspección, npm y pruebas                                                                                         | Parcial: puntos 5/6/8 y verificación productiva pendientes                       |
-| Justificación de contención en README          | Sección Lab 7 con enlace a diseño/auditoría                                       | Explica versión, 409 y bloqueos de compras                                                                                                       | Completo documental en este bloque; pendiente integración                        |
-| ≥40 tests, seguridad y conflicto en CI         | Jest/Testcontainers/Chrome, workflow existente                                    | CI #275: 533 Jest, 646 integración; no duplicar subconjuntos                                                                                     | Completo en `develop`                                                            |
-| Cobertura ≥70 % en negocio                     | Configuración Jest existente                                                      | Cuatro métricas superiores al umbral; reporte local y CI                                                                                         | Completo en alcance medido; equivalencia JaCoCo por confirmar                    |
-| Pipeline y main protegida                      | Workflow/scripts/ruleset, sin modificaciones en este bloque                       | Backend/frontend verdes, 17 tests simulados de orquestación                                                                                      | Parcial: deploy sigue `false`, no hay ejecución productiva automática validada   |
-| Observabilidad mínima                          | JsonLogger, filtros, repositorio, HealthModule                                    | Pruebas JSON/eventos/health; commits enlazados en E                                                                                              | Parcial: evidencia local/CI; ruta académica y despliegue pendientes              |
-| Sistema corregido desplegado y evidencia final | Publicación `develop` → `main` y proveedores                                      | No ejecutado en este cierre                                                                                                                      | Pendiente                                                                        |
-
-Los bloques 1–5 están integrados y sus regresiones constan en CI de `develop`.
-Este documento y el README completan el cierre documental local, sin modificar
-los documentos históricos de otros bloques, CI/CD, observabilidad ni `.gitignore`.
-
-Para la entrega faltan: tratar o justificar los avisos residuales sin marcarlos
-resueltos, confirmar equivalencias exigidas, publicar la versión final y aplicar
-la migración de forma autorizada, verificar producción y completar la activación
-controlada/evidencia del despliegue automático. **No activar el job ni efectuar
-operaciones productivas basándose únicamente en esta auditoría documental.**
+*Esta actualización es exclusivamente documental: no crea una nueva versión desplegada ni sustituye la autorización formal para cambiar Git, Supabase, Render, Vercel o MongoDB.*
